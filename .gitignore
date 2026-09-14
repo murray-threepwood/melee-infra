@@ -1,0 +1,26 @@
+# Archivos de sistema y entorno local
+.DS_Store
+Thumbs.db
+
+# Secretos y variables de entorno (OBLIGATORIO)
+.env
+.env.*
+!.env.example
+
+# Datos persistentes de Docker locales
+postgres_data/
+n8n_data/
+~/.openhands-state/
+.openhands-state/
+
+# Sandbox de OpenHands
+workspace/
+
+# Dependencias y caches
+node_modules/
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+*.log
