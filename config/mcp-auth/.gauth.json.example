@@ -1,0 +1,7 @@
+{
+  "installed": {
+    "client_id": "REEMPLAZAR_CON_GOOGLE_CLIENT_ID",
+    "client_secret": "REEMPLAZAR_CON_GOOGLE_CLIENT_SECRET",
+    "redirect_uris": ["http://localhost"]
+  }
+}

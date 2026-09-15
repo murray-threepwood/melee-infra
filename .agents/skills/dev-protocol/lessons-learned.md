@@ -12,6 +12,9 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 
 - **Contratos de Interfaz**: Las interfaces públicas son el límite de prueba (seam). Si una prueba requiere inspeccionar el estado interno de un módulo, la abstracción es incorrecta.
 - **Manejo de Secretos**: Ningún token, contraseña ni clave privada se escribe en código fuente ni se commitea en git. Todas las credenciales se inyectan mediante `.env` (ignorado en `.gitignore`).
+- **n8n HITL ChatID**: el filtro `$env.TELEGRAM_CHAT_ID` solo funciona si esa variable está inyectada en el servicio `n8n` de Compose. El JSON del workflow no alcanza.
+- **workspace-mcp draft-only**: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true` son invariantes. El paquete npm `@j3k0/mcp-google-workspace` no está publicado; el seam HTTP vive en `config/workspace-mcp/server.mjs` y rechaza cualquier ruta de send.
+- **OpenHands registry**: `docker.all-hands.dev` resuelve NXDOMAIN. Imagen vigente: `ghcr.io/openhands/openhands:latest` (puerto 3000, workspace `/opt/workspace_base`).
 
 ---
 
@@ -21,6 +24,8 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 
 - **Determinismo en Tests de LLM**: Las pruebas automatizadas nunca deben depender de llamadas en vivo a APIs de modelos con muestreo no determinista. Usar siempre mocks, stubs o fixtures grabados.
 - **Timeouts y Circuit Breakers**: Toda llamada HTTP saliente a servicios externos debe definir un timeout explícito y un mecanismo de corte ante fallos reiterados.
+- **Compose v5 quotes**: `docker compose config` emite `GMAIL_ALLOW_SENDING: "false"` (comillas dobles). Un grep que busque `'false'` con comillas simples falla en Compose 5.x; parsear YAML/JSON.
+- **cloudflared placeholder**: un token de ejemplo deja el proceso `running` con `Failed to get tunnel`. No es un crash; el hostname público no existe hasta H3–H4 del operador.
 
 ---
 
@@ -30,6 +35,7 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 
 - **Presupuesto de Memoria**: Validar que la huella de memoria acumulada de los servicios no exceda el límite operativo del entorno anfitrión.
 - **Persistencia Aislada**: Los volúmenes y rutas de almacenamiento persistente deben declararse explícitamente sin montar directorios raíz del anfitrión.
+- **docker stats MemUsage**: el formato es `12.5MiB / 3.8GiB`. Si el parser busca `GiB` en toda la línea, toma el **límite** y infla el total a cientos de GB. Parsear solo el primer token (uso). Medir con `docker compose stats`, no `docker stats` global.
 
 ---
 

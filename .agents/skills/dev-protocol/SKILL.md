@@ -36,7 +36,7 @@ Este `SKILL.md` es el **router liviano**: contiene lo que se necesita siempre (r
 
 La frase canónica que dispara todo el ciclo desde cero:
 
-> 🇪🇸 **`Usando dev-protocol, <qué hacer / mejorar / arreglar>`**  
+> 🇪🇸 **`Usando dev-protocol, <qué hacer / mejorar / arreglar>`**
 > 🇬🇧 **`Using dev-protocol, <do / improve / fix what>`**
 
 Invocada así, el agente corre el **ciclo estándar** end-to-end por su cuenta, parando solo en el gate de aprobación humana (paso 7):

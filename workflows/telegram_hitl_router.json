@@ -1,0 +1,207 @@
+{
+  "name": "telegram_hitl_router",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "telegram-trigger-01",
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.message ? String($json.message.chat.id) : String($json.callback_query.from.id) }}",
+              "operation": "equal",
+              "value2": "={{ $env.TELEGRAM_CHAT_ID }}"
+            }
+          ]
+        }
+      },
+      "id": "filter-admin-02",
+      "name": "Filtro Seguridad ChatID",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json.callback_query }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "switch-msg-type-03",
+      "name": "¿Es Callback de Botón?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [680, 240]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.message.chat.id }}",
+        "text": "=⚡ Solicitud recibida: \"{{ $json.message.text }}\"\n¿Desea autorizar la ejecución en el sandbox de OpenHands?",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Aprobar",
+                    "additionalFields": {
+                      "callback_data": "=APPROVE_TASK:{{ $json.message.message_id }}"
+                    }
+                  },
+                  {
+                    "text": "❌ Rechazar",
+                    "additionalFields": {
+                      "callback_data": "=REJECT_TASK:{{ $json.message.message_id }}"
+                    }
+                  },
+                  {
+                    "text": "⏸️ Pausar",
+                    "additionalFields": {
+                      "callback_data": "=PAUSE_TASK:{{ $json.message.message_id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "id": "telegram-send-buttons-04",
+      "name": "Enviar Teclado HITL",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [920, 160],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "http://openhands:3000/api/conversations",
+        "method": "POST",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "action",
+              "value": "={{ $json.callback_query.data }}"
+            },
+            {
+              "name": "authorized_by",
+              "value": "={{ $json.callback_query.from.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "http-dispatch-openhands-05",
+      "name": "Delegar a OpenHands",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 3,
+      "position": [920, 360]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.callback_query.message.chat.id }}",
+        "text": "=✅ Orden procesada: {{ $json.callback_query.data }}."
+      },
+      "id": "telegram-notify-resolution-06",
+      "name": "Notificar Resolución HITL",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1140, 360],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Filtro Seguridad ChatID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtro Seguridad ChatID": {
+      "main": [
+        [
+          {
+            "node": "¿Es Callback de Botón?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Es Callback de Botón?": {
+      "main": [
+        [
+          {
+            "node": "Delegar a OpenHands",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Enviar Teclado HITL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delegar a OpenHands": {
+      "main": [
+        [
+          {
+            "node": "Notificar Resolución HITL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

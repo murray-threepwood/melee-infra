@@ -1,0 +1,132 @@
+services:
+  postgres_db:
+    image: postgres:16-alpine
+    container_name: murray-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-n8n_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-cambiar_password_seguro}
+      POSTGRES_DB: ${POSTGRES_DB:-n8n_database}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-n8n_admin} -d ${POSTGRES_DB:-n8n_database}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - agent-net
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: murray-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN}
+    environment:
+      CLOUDFLARE_TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN}
+    networks:
+      - agent-net
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: murray-n8n
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${N8N_PORT:-5678}:5678"
+    environment:
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres_db
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${POSTGRES_DB:-n8n_database}
+      - DB_POSTGRESDB_USER=${POSTGRES_USER:-n8n_admin}
+      - DB_POSTGRESDB_PASSWORD=${POSTGRES_PASSWORD:-cambiar_password_seguro}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - WEBHOOK_URL=https://${SUBDOMINIO_PUBLICO}/
+      - N8N_WEBHOOK_URL=https://${SUBDOMINIO_PUBLICO}/
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - GENERIC_TIMEZONE=UTC
+      - EXECUTIONS_DATA_PRUNE=true
+      - EXECUTIONS_DATA_MAX_AGE=168
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/opt/workflows:ro
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:5678/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    networks:
+      - agent-net
+
+  workspace-mcp:
+    image: node:20-alpine
+    container_name: murray-workspace-mcp
+    restart: unless-stopped
+    working_dir: /opt/mcp
+    command: ["node", "/opt/mcp/server.mjs"]
+    environment:
+      - GMAIL_ALLOW_SENDING=false
+      - GMAIL_ALLOW_DRAFTS=true
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REFRESH_TOKEN=${GOOGLE_REFRESH_TOKEN}
+      - MCP_HTTP_PORT=8000
+    volumes:
+      - ./config/workspace-mcp:/opt/mcp:ro
+      - ./config/mcp-auth:/app/auth
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8000/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+    networks:
+      - agent-net
+
+  openhands:
+    image: ghcr.io/openhands/openhands:latest
+    container_name: murray-openhands
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${OPENHANDS_PORT:-3000}:3000"
+    security_opt:
+      - "no-new-privileges:true"
+    environment:
+      - SANDBOX_RUNTIME_CONTAINER_IMAGE=ghcr.io/openhands/runtime:latest
+      - WORKSPACE_MOUNT_PATH=./workspace
+      - LLM_MODEL=deepseek/deepseek-chat
+      - LLM_BASE_URL=https://api.deepseek.com/v1
+      - LLM_API_KEY=${DEEPSEEK_API_KEY}
+      - LOG_LEVEL=INFO
+      - MAX_ITERATIONS=30
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./workspace:/opt/workspace_base
+      - ~/.openhands-state:/.openhands-state
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - agent-net
+
+networks:
+  agent-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  n8n_data:
+    driver: local
