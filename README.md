@@ -44,7 +44,7 @@ flowchart TD
     N8N <==>|Persistencia de ejecuciones y estado| Postgres
     N8N <==>|Triage y Creación de Borradores| MCP
     N8N <==>|Disparo de misiones complejas| OH
-    MCP <==>|OAuth 2.0 Infranqueable (Draft Only)| GmailExt
+    MCP <==>|"OAuth 2.0 Infranqueable (Draft Only)"| GmailExt
     OH -.->|Acceso acotado sin privilegios| VolWork
 
     classDef demon fill:#2a0845,stroke:#e94560,stroke-width:2px,color:#fff;

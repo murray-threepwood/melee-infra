@@ -11,9 +11,9 @@ La documentación dentro de esta carpeta (`roadmap/`) está diseñada específic
 ```mermaid
 flowchart TD
     subgraph Exterior [Internet / Canales Externos]
-        CEO[Telegram: Administrador CEO]
-        GmailExt[Google Workspace / Gmail API]
-        CFTunnelEdge[Cloudflare Edge]
+        CEO["Telegram: Administrador CEO"]
+        GmailExt["Google Workspace / Gmail API"]
+        CFTunnelEdge["Cloudflare Edge"]
     end
 
     subgraph Host [Host Docker: murray-infra]
@@ -39,7 +39,7 @@ flowchart TD
     N8N <==>|Persistencia de estado y ejecuciones| Postgres
     N8N <==>|Disparo de tareas pesadas| OH
     N8N <==>|Triage y Creación de Borradores| MCP
-    MCP <==>|OAuth 2.0 con Guardrail (Draft Only)| GmailExt
+    MCP <==>|"OAuth 2.0 con Guardrail (Draft Only)"| GmailExt
     OH -.->|Acceso restringido a código| VolWork
 
     classDef secure fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
