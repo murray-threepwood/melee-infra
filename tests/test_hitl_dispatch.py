@@ -68,12 +68,27 @@ def test_callback_no_longer_dispatches_all():
         raise AssertionError("El callback true debe ir a ¿Aprobar OpenHands?")
 
 
+def test_telegram_send_uses_html_not_default_markdown():
+    data = load_workflow()
+    for name in ("Notificar Resolución HITL", "Enviar Teclado HITL"):
+        node = next(n for n in data["nodes"] if n["name"] == name)
+        parse_mode = (
+            node.get("parameters", {}).get("additionalFields", {}).get("parse_mode")
+        )
+        if parse_mode != "HTML":
+            raise AssertionError(
+                f"{name} parse_mode={parse_mode!r}. n8n default is Markdown; "
+                "REJECT_TASK con _ explota Telegram 400 (can't parse entities)."
+            )
+
+
 def main():
     tests = [
         test_trigger_has_stable_webhook_id,
         test_openhands_uses_v1_route,
         test_reject_skips_openhands,
         test_callback_no_longer_dispatches_all,
+        test_telegram_send_uses_html_not_default_markdown,
     ]
     for test in tests:
         test()

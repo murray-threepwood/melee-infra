@@ -45,6 +45,11 @@
 - Verificación: `bash tests/test_live_hitl_dispatch.sh` imprime `webhookId 4dae132d-912c-40e0-b048-c00b42e03250`. Un POST vacío a esa ruta ya no debe ser “unknown webhook”.
 - Mitigación: el trigger en `workflows/telegram_hitl_router.json` tiene que llevar ese `webhookId`; import + publish + restart n8n. Luego `setWebhook` a esa URL.
 
+### Incidente J: Rechazar selecciona el botón y no manda `✅ Orden procesada`
+- Causa: n8n Telegram default `parse_mode=Markdown`. `REJECT_TASK` tiene `_` y Telegram responde 400 `can't parse entities`.
+- Verificación: `python3 tests/test_hitl_dispatch.py` exige `parse_mode=HTML` en los nodos send/notify. Logs n8n: `AxiosError` 400, no 405.
+- Mitigación: `additionalFields.parse_mode=HTML` en esos nodos; import + publish + restart.
+
 ### Incidente H: n8n alerta “Upgrade to Postgres 17”
 - Causa: n8n 2.38 con `postgres:16-alpine`. Es compatibilidad, no un crash.
 - **No** subir el major del volumen sin OK humano: `docker compose down -v` destruiría datos.

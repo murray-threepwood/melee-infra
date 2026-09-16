@@ -34,6 +34,7 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 - **OAuth Playground + Desktop = `redirect_uri_mismatch`**: el Playground redirige a `https://developers.google.com/oauthplayground`. H8.4 es cliente **Web** con esa URI en **redirect URIs**, no en JavaScript origins (el origin no admite path). El `GOOGLE_REFRESH_TOKEN` nace de ese Client ID. Access type Offline en el engranaje.
 - **OAuth Playground Step 1 no tiene Add**: abrir **Gmail API v1** y tildar readonly + compose, o pegar las dos URLs en `Input your own scopes` **separadas por un espacio** y **Authorize APIs**. Un token, los dos scopes.
 - **Telegram HITL webhookId**: n8n 2.38 registra `POST /webhook/<webhookId>/webhook`. Telegram pegando `.../telegram trigger/webhook` da 404. Trigger sin `webhookId` + UUID huérfano da 500 `reading 'node'`. El JSON canónico tiene que incluir `webhookId` `4dae132d-912c-40e0-b048-c00b42e03250`.
+- **n8n Telegram Markdown por default**: `GenericFunctions.js` pone `parse_mode=Markdown` si el nodo no lo declara. `REJECT_TASK` tiene `_` → Telegram 400 `can't parse entities`. Los nodos send/notify tienen que llevar `additionalFields.parse_mode=HTML`.
 
 ---
 

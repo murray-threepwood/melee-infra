@@ -76,6 +76,17 @@
       "position": [900, 360]
     },
     {
+      "id": "telegram-send-buttons-04",
+      "name": "Enviar Teclado HITL",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [920, 160],
+      "credentials": {
+        "telegramApi": {
+          "id": "1",
+          "name": "Telegram account"
+        }
+      },
       "parameters": {
         "chatId": "={{ $json.message.chat.id }}",
         "text": "=⚡ Solicitud recibida: \"{{ $json.message.text }}\"\n¿Desea autorizar la ejecución en el sandbox de OpenHands?",
@@ -107,17 +118,10 @@
               }
             }
           ]
-        }
-      },
-      "id": "telegram-send-buttons-04",
-      "name": "Enviar Teclado HITL",
-      "type": "n8n-nodes-base.telegram",
-      "typeVersion": 1,
-      "position": [920, 160],
-      "credentials": {
-        "telegramApi": {
-          "id": "1",
-          "name": "Telegram account"
+        },
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
         }
       }
     },
@@ -142,7 +146,11 @@
     {
       "parameters": {
         "chatId": "={{ $('Telegram Trigger').item.json.callback_query.message.chat.id }}",
-        "text": "=✅ Orden procesada: {{ $('Telegram Trigger').item.json.callback_query.data }}."
+        "text": "=✅ Orden procesada: {{ $('Telegram Trigger').item.json.callback_query.data }}.",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
       },
       "id": "telegram-notify-resolution-06",
       "name": "Notificar Resolución HITL",

@@ -47,6 +47,11 @@ webhook_id = trigger.get("webhookId")
 if webhook_id != "4dae132d-912c-40e0-b048-c00b42e03250":
     raise SystemExit(f"LIVE_HITL_STALE: Telegram Trigger webhookId={webhook_id!r}")
 
+notify = next(n for n in wf.get("nodes", []) if n.get("name") == "Notificar Resolución HITL")
+parse_mode = notify.get("parameters", {}).get("additionalFields", {}).get("parse_mode")
+if parse_mode != "HTML":
+    raise SystemExit(f"LIVE_HITL_STALE: notify parse_mode={parse_mode!r} (Markdown rompe REJECT_TASK)")
+
 print("LIVE_HITL_DISPATCH_OK")
 print("nodes", ", ".join(names))
 print("webhookId", webhook_id)
