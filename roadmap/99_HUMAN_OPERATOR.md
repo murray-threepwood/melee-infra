@@ -303,20 +303,24 @@ Esa **Verificación** de abajo **no es una pantalla de Google**. Es un checklist
 
 ### H8.4 Cliente OAuth (Desktop)
 
-El archivo `.gauth.json.example` usa tipo `installed` (app de escritorio).
+Esto es solo **pedir a Google un usuario y una contraseña de app** y pegarlos en `.env`. El login en el browser es H8.5, todavía no. No hace falta verificar la app, ni URI de redirect, ni bajar un JSON de Google (eso es H9).
 
-1. En **Google Auth Platform** → **Clientes** (o **APIs y servicios** → **Credenciales**).
-2. **Create Credentials** / **Crear cliente** → **OAuth client ID**.
-3. Application type: **Desktop app** / **Aplicación de escritorio**.
-4. Name: `murray-mcp-desktop`.
+1. En **Google Auth Platform**, menú **Clientes**.
+2. Crear un cliente OAuth (**Create Credentials** / **Crear cliente** → **OAuth client ID**).
+3. Tipo: **Aplicación de escritorio** / **Desktop app**. No Web, no Android, no iOS.
+4. Nombre: `murray-mcp-desktop` (o el que quieras).
 5. **Create**.
-6. Copiá **Client ID** y **Client secret**.
-7. Pegá en `.env`:
+6. Google muestra dos textos. Copialos:
+   - **Client ID** (termina en `.apps.googleusercontent.com`)
+   - **Client secret** (suele empezar con `GOCSPX-`)
+7. Pegá en `.env` (no lo mandes al chat ni a git):
 
 ```bash
 GOOGLE_CLIENT_ID=.....apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-...
 ```
+
+**Listo H8.4.** El archivo `.gauth.json` se arma en H9 con estos mismos dos valores.
 
 ### H8.5 Refresh token
 
