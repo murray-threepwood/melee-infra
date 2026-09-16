@@ -33,6 +33,11 @@
 - Causa: `CLOUDFLARE_TUNNEL_TOKEN` sigue siendo el placeholder de `.env.example`.
 - Solución: completar H3–H4 de `roadmap/99_HUMAN_OPERATOR.md` y `docker compose restart cloudflared`.
 
+### Incidente G: Botón HITL de Telegram da 405 / AxiosError
+- Causa: el flujo publicado pegaba `POST /api/conversations` (ruta SPA de OpenHands 1.11).
+- Verificación: `bash tests/test_live_hitl_dispatch.sh` debe imprimir `LIVE_HITL_DISPATCH_OK`.
+- Mitigación: importar `workflows/telegram_hitl_router.json`, `n8n publish:workflow --id=<id>`, `docker compose restart n8n`. Rechazar/Pausar no deben llamar a OpenHands.
+
 ### Incidente F: workspace-mcp en Restarting
 - Causa histórica: el paquete npm `@j3k0/mcp-google-workspace` no existe en el registry (404).
 - Estado actual: el servicio corre un shim HTTP local (`config/workspace-mcp/server.mjs`) que **nunca envía correo**. Si alguien vuelve a poner `npm install -g @j3k0/mcp-google-workspace`, el contenedor entra en crash-loop.

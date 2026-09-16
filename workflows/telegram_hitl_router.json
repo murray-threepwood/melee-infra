@@ -58,6 +58,24 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.callback_query.data }}",
+              "operation": "startsWith",
+              "value2": "APPROVE_TASK"
+            }
+          ]
+        }
+      },
+      "id": "if-approve-07",
+      "name": "¿Aprobar OpenHands?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [900, 360]
+    },
+    {
+      "parameters": {
         "chatId": "={{ $json.message.chat.id }}",
         "text": "=⚡ Solicitud recibida: \"{{ $json.message.text }}\"\n¿Desea autorizar la ejecución en el sandbox de OpenHands?",
         "replyMarkup": "inlineKeyboard",
@@ -104,41 +122,32 @@
     },
     {
       "parameters": {
-        "url": "http://openhands:3000/api/conversations",
         "method": "POST",
+        "url": "http://openhands:3000/api/v1/app-conversations",
         "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "action",
-              "value": "={{ $json.callback_query.data }}"
-            },
-            {
-              "name": "authorized_by",
-              "value": "={{ $json.callback_query.from.id }}"
-            }
-          ]
-        },
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ title: 'HITL ' + $json.callback_query.data, initial_message: { role: 'user', content: [{ type: 'text', text: String($json.callback_query.data) }] } }) }}",
         "options": {
-          "timeout": 5000
+          "timeout": 10000
         }
       },
       "id": "http-dispatch-openhands-05",
       "name": "Delegar a OpenHands",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [920, 360]
+      "typeVersion": 4,
+      "position": [1120, 280],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "chatId": "={{ $json.callback_query.message.chat.id }}",
-        "text": "=✅ Orden procesada: {{ $json.callback_query.data }}."
+        "chatId": "={{ $('Telegram Trigger').item.json.callback_query.message.chat.id }}",
+        "text": "=✅ Orden procesada: {{ $('Telegram Trigger').item.json.callback_query.data }}."
       },
       "id": "telegram-notify-resolution-06",
       "name": "Notificar Resolución HITL",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [1140, 360],
+      "position": [1340, 360],
       "credentials": {
         "telegramApi": {
           "id": "1",
@@ -174,7 +183,7 @@
       "main": [
         [
           {
-            "node": "Delegar a OpenHands",
+            "node": "¿Aprobar OpenHands?",
             "type": "main",
             "index": 0
           }
@@ -182,6 +191,24 @@
         [
           {
             "node": "Enviar Teclado HITL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Aprobar OpenHands?": {
+      "main": [
+        [
+          {
+            "node": "Delegar a OpenHands",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Notificar Resolución HITL",
             "type": "main",
             "index": 0
           }

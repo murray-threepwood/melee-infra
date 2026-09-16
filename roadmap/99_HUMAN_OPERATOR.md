@@ -33,17 +33,17 @@ Hasta que completes H3, `cloudflared` corre pero loguea `Failed to get tunnel`. 
 
 ## Checklist maestro
 
-- [ ] **H1.** Generar claves locales (Postgres + n8n) y pegarlas en `.env`
-- [ ] **H2.** Dominio en Cloudflare
-- [ ] **H3.** Túnel Zero Trust + token en `.env`
-- [ ] **H4.** Hostname público apuntando a n8n (`http://n8n:5678`)
-- [ ] **H5.** Bot de Telegram + token en `.env`
-- [ ] **H6.** `TELEGRAM_CHAT_ID` en `.env`
-- [ ] **H7.** API key de DeepSeek en `.env`
+- [x] **H1.** Generar claves locales (Postgres + n8n) y pegarlas en `.env`
+- [x] **H2.** Dominio en Cloudflare
+- [x] **H3.** Túnel Zero Trust + token en `.env`
+- [x] **H4.** Hostname público apuntando a n8n (`http://n8n:5678`)
+- [x] **H5.** Bot de Telegram + token en `.env`
+- [x] **H6.** `TELEGRAM_CHAT_ID` en `.env`
+- [x] **H7.** API key de DeepSeek en `.env`
 - [ ] **H8.** Proyecto Google Cloud + OAuth (Gmail draft-only)
 - [ ] **H9.** Copiar `config/mcp-auth/.gauth.json.example` → `.gauth.json` y completar
-- [ ] **H10.** Reiniciar el stack y crear el usuario dueño de n8n
-- [ ] **H11.** Importar workflows y credencial de Telegram en n8n
+- [x] **H10.** Reiniciar el stack y crear el usuario dueño de n8n
+- [x] **H11.** Importar workflows y credencial de Telegram en n8n
 - [ ] **H12.** Probar el bot (mensaje → botones HITL)
 
 ---

@@ -1,6 +1,6 @@
 # Estado de Avance del Proyecto
 
-Última actualización: 2026-09-15 00:40 (UTC)
+Última actualización: 2026-09-16 12:00 (UTC)
 Agente ejecutor: Cursor
 
 ## Fases y Tareas
@@ -30,4 +30,6 @@ Agente ejecutor: Cursor
   - [x] Tarea 5.4: Runbook operativo y de fallas
 
 ## Acciones humanas pendientes
-Ver [roadmap/99_HUMAN_OPERATOR.md](./roadmap/99_HUMAN_OPERATOR.md). Placeholders en `.env`: el túnel Cloudflare no registra (`Failed to get tunnel`), Telegram/OAuth/DeepSeek no están vivos. El stack local (Postgres, n8n, shim MCP, OpenHands) está verde. E2E 5/5.
+- H8–H9 Google OAuth / `.gauth.json` (Gmail draft-only).
+- H12: mandar un mensaje al bot y tocar **Rechazar** (el flujo publicado ya es v1).
+- Túnel `ceo.threepwood.uy`, Telegram y DeepSeek: cerrados. HITL reimportado y publicado (versión 2).

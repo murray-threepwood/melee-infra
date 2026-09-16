@@ -28,6 +28,12 @@ run_test "PostgreSQL Health & Connection" "bash tests/test_postgres.sh"
 # 2. Test Schemas Workflows n8n
 run_test "Validación de Esquemas JSON n8n" "python3 tests/test_workflows_schema.py"
 
+# 2b. Contrato HITL en el JSON del repo
+run_test "Contrato HITL OpenHands v1" "python3 tests/test_hitl_dispatch.py"
+
+# 2c. Workflow publicado en n8n (requiere stack arriba)
+run_test "HITL publicado en n8n" "bash tests/test_live_hitl_dispatch.sh"
+
 # 3. Test Guardrails MCP Google Workspace (Draft-only)
 run_test "Guardrails MCP (Draft-only)" "python3 tests/test_mcp_draft_only.py"
 
@@ -40,7 +46,7 @@ run_test "Presupuesto de Memoria RAM (<4.5GB)" "bash tests/check_memory_budget.s
 echo ""
 echo "================================================================="
 if [ $FAILURES -eq 0 ]; then
-  echo "  RESULTADO FINAL: TODOS LOS TESTS PASARON EXITOSAMENTE (5/5)"
+  echo "  RESULTADO FINAL: TODOS LOS TESTS PASARON EXITOSAMENTE"
   echo "  E2E_VERIFICACION_COMPLETA_OK"
   echo "================================================================="
   exit 0

@@ -12,9 +12,11 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 
 - **Contratos de Interfaz**: Las interfaces públicas son el límite de prueba (seam). Si una prueba requiere inspeccionar el estado interno de un módulo, la abstracción es incorrecta.
 - **Manejo de Secretos**: Ningún token, contraseña ni clave privada se escribe en código fuente ni se commitea en git. Todas las credenciales se inyectan mediante `.env` (ignorado en `.gitignore`).
-- **n8n HITL ChatID**: el filtro `$env.TELEGRAM_CHAT_ID` solo funciona si esa variable está inyectada en el servicio `n8n` de Compose. El JSON del workflow no alcanza.
+- **n8n HITL ChatID**: el filtro `$env.TELEGRAM_CHAT_ID` solo funciona si esa variable está inyectada en el servicio `n8n` de Compose. El JSON del workflow no alcanza. En n8n 2.x también hace falta `N8N_BLOCK_ENV_ACCESS_IN_NODE=false`.
 - **workspace-mcp draft-only**: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true` son invariantes. El paquete npm `@j3k0/mcp-google-workspace` no está publicado; el seam HTTP vive en `config/workspace-mcp/server.mjs` y rechaza cualquier ruta de send.
 - **OpenHands registry**: `docker.all-hands.dev` resuelve NXDOMAIN. Imagen vigente: `ghcr.io/openhands/openhands:latest` (puerto 3000, workspace `/opt/workspace_base`).
+- **OpenHands HITL**: el UI local responde HTML en `/api/conversations` (POST → 405). Crear conversación: `POST /api/v1/app-conversations`. Rechazar/Pausar no deben pegarle a OpenHands.
+- **n8n no recarga `./workflows`**: el mount es referencia. Un JSON nuevo no cambia el flujo publicado. Import + `publish:workflow` + `docker compose restart n8n`. `import:workflow --userId` y `--projectId` son mutuamente excluyentes.
 
 ---
 

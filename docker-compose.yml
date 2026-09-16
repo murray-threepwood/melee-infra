@@ -50,6 +50,7 @@ services:
       - EXECUTIONS_DATA_PRUNE=true
       - EXECUTIONS_DATA_MAX_AGE=168
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - N8N_BLOCK_ENV_ACCESS_IN_NODE=false
     volumes:
       - n8n_data:/home/node/.n8n
       - ./workflows:/opt/workflows:ro
