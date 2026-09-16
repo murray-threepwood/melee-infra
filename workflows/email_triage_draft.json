@@ -22,13 +22,13 @@
       "parameters": {
         "url": "http://workspace-mcp:8000/gmail/unread",
         "options": {
-          "timeout": 10000
+          "timeout": 20000
         }
       },
       "id": "fetch-unread-emails-02",
       "name": "Consultar Correos No Leídos",
       "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
+      "typeVersion": 4,
       "position": [420, 300]
     },
     {
@@ -51,67 +51,61 @@
     },
     {
       "parameters": {
+        "fieldToSplitOut": "messages"
+      },
+      "id": "split-messages-03b",
+      "name": "Separar Mensajes",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [860, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.seen = staticData.seen || {};\nconst id = $json.id;\nif (!id || staticData.seen[id]) {\n  return [];\n}\nstaticData.seen[id] = Date.now();\nreturn [$json];\n"
+      },
+      "id": "dedup-seen-03c",
+      "name": "Deduplicar Ya Vistos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://workspace-mcp:8000/gmail/drafts",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messageId: $json.id, threadId: $json.threadId, to: $json.sender, subject: $json.subject, inReplyTo: $json.inReplyTo }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "mcp-create-draft-node-05",
+      "name": "Crear Borrador MCP (No Send)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1300, 240]
+    },
+    {
+      "parameters": {
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "=📬 **Nuevo correo de alta prioridad detectado**\n\n**De:** {{ $json.sender }}\n**Asunto:** {{ $json.subject }}\n**Resumen IA:** {{ $json.summary }}\n\n¿Desea que prepare el borrador de respuesta en Gmail?",
-        "replyMarkup": "inlineKeyboard",
-        "inlineKeyboard": {
-          "rows": [
-            {
-              "row": {
-                "buttons": [
-                  {
-                    "text": "📝 Crear Borrador en Gmail",
-                    "additionalFields": {
-                      "callback_data": "=DRAFT_GMAIL:{{ $json.id }}"
-                    }
-                  },
-                  {
-                    "text": "🗑️ Descartar",
-                    "additionalFields": {
-                      "callback_data": "=DISCARD_EMAIL:{{ $json.id }}"
-                    }
-                  }
-                ]
-              }
-            }
-          ]
+        "text": "=📬 <b>Borrador creado en Gmail (no enviado)</b>\n\n<b>De:</b> {{ $('Separar Mensajes').item.json.senderHtml }}\n<b>Asunto:</b> {{ $('Separar Mensajes').item.json.subjectHtml }}\n<b>Resumen:</b> {{ $('Separar Mensajes').item.json.summaryHtml }}\n<b>Draft:</b> {{ $json.id }}\n\nEditá y enviá desde Gmail. Murray no manda correo.",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
         }
       },
       "id": "telegram-alert-triage-04",
       "name": "Notificar Triage a Telegram",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [880, 240],
+      "position": [1520, 240],
       "credentials": {
         "telegramApi": {
-          "id": "1",
+          "id": "9IhWvhoAHuzho5J5",
           "name": "Telegram account"
         }
       }
-    },
-    {
-      "parameters": {
-        "url": "http://workspace-mcp:8000/gmail/drafts",
-        "method": "POST",
-        "sendBody": true,
-        "bodyParameters": {
-          "parameters": [
-            {
-              "name": "threadId",
-              "value": "={{ $json.threadId }}"
-            },
-            {
-              "name": "replyBody",
-              "value": "={{ $json.draftBody }}"
-            }
-          ]
-        }
-      },
-      "id": "mcp-create-draft-node-05",
-      "name": "Crear Borrador MCP (No Send)",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 3,
-      "position": [1120, 240]
     }
   ],
   "connections": {
@@ -141,14 +135,25 @@
       "main": [
         [
           {
-            "node": "Notificar Triage a Telegram",
+            "node": "Separar Mensajes",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Notificar Triage a Telegram": {
+    "Separar Mensajes": {
+      "main": [
+        [
+          {
+            "node": "Deduplicar Ya Vistos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicar Ya Vistos": {
       "main": [
         [
           {
@@ -158,9 +163,20 @@
           }
         ]
       ]
+    },
+    "Crear Borrador MCP (No Send)": {
+      "main": [
+        [
+          {
+            "node": "Notificar Triage a Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
-  "active": false,
+  "active": true,
   "settings": {
     "executionOrder": "v1"
   }

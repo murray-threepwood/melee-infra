@@ -23,7 +23,7 @@ El agente ya crea (o va a crear) esto en el repo:
 - Workflows n8n en `workflows/`
 - Tests en `tests/`
 - `RUNBOOK.md` para incidentes
-- Shim HTTP `config/workspace-mcp/server.mjs` (Gmail draft-only, **nunca send**). El paquete npm del roadmap original no existe.
+- Shim HTTP `config/workspace-mcp/server.mjs` + `gmail-client.mjs` (Gmail API draft-only, **nunca send**). El paquete npm del roadmap original no existe.
 
 Lo que **no** puede hacer el agente: cuentas externas, OAuth en el browser, tokens reales.
 
@@ -44,7 +44,7 @@ Hasta que completes H3, `cloudflared` corre pero loguea `Failed to get tunnel`. 
 - [x] **H9.** Copiar `config/mcp-auth/.gauth.json.example` → `.gauth.json` y completar
 - [x] **H10.** Reiniciar el stack y crear el usuario dueño de n8n
 - [x] **H11.** Importar workflows y credencial de Telegram en n8n
-- [ ] **H12.** Probar el bot (mensaje → botones HITL)
+- [x] **H12.** Probar el bot (mensaje → botones HITL)
 
 ---
 
@@ -468,6 +468,8 @@ Si no llega nada:
 4. `bash tests/test_live_hitl_dispatch.sh` tiene que decir `LIVE_HITL_DISPATCH_OK` (nodo `¿Aprobar OpenHands?` en el publicado).
 
 OpenHands (botón **Aprobar**) solo tiene sentido con H7 completo y el servicio `openhands` healthy. Si OpenHands no responde, el nodo HTTP puede fallar; el resto del HITL igual tiene que mostrar los botones.
+
+**Cerrado 2026-09-16 ~20:34 UY:** el operador tocó **Rechazar** y Telegram respondió `✅ Orden procesada: REJECT_TASK:16`. No re-pedir este click.
 
 ---
 

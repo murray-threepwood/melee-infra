@@ -1,6 +1,6 @@
 # Estado de Avance del Proyecto
 
-Última actualización: 2026-09-16 22:30 (UTC)
+Última actualización: 2026-09-16 23:40 (UTC)
 Agente ejecutor: Cursor
 
 ## Fases y Tareas
@@ -30,6 +30,6 @@ Agente ejecutor: Cursor
   - [x] Tarea 5.4: Runbook operativo y de fallas
 
 ## Acciones humanas pendientes
-- H8–H9: OAuth + `.gauth.json` locales (gitignore). Shim Gmail API real todavía no; `GMAIL_ALLOW_SENDING=false`.
-- **H12**: mandar un mensaje al bot y tocar **Rechazar**. Esperado: `✅ Orden procesada: REJECT_TASK:...` y cero Axios 405 desde el último restart de n8n.
+- H1–H12: cerrados. H12 (2026-09-16 ~20:34 UY): Rechazar → `✅ Orden procesada: REJECT_TASK:16`.
+- **Gmail OAuth mismatch (bloquea triage Active)**: Google respondió `unauthorized_client`. El `refresh_token` no es del cliente Web de `.env`. Reautorizar en Playground con ese cliente; después `docker compose up -d --force-recreate workspace-mcp`. No activé `email_triage_draft` en n8n.
 - Postgres 16: alerta de n8n 2.38 ignorada a propósito (no upgrade de major).

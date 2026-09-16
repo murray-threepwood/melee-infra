@@ -75,7 +75,8 @@ Cada contenedor opera bajo el principio de menor privilegio dentro de la red pri
 
 La inteligencia de este repositorio está dividida con precisión quirúrgica:
 
-1. **[roadmap/](./roadmap/) — La Hoja de Ruta de Implementación**:
+1. **[architecture_spec.md](./architecture_spec.md) — Contratos vivos**: red, HTTP de `workspace-mcp`, HITL Telegram, guardrails y presupuesto RAM. Se actualiza cuando cambia un contrato.
+2. **[roadmap/](./roadmap/) — La Hoja de Ruta de Implementación**:
    - [roadmap/README.md](./roadmap/README.md): Índice maestro y prompt de arranque para agentes de IA.
    - [roadmap/00_AGENT_PROTOCOL.md](./roadmap/00_AGENT_PROTOCOL.md): Reglas inquebrantables de determinismo, manejo de secretos y control de fallas (`BLOCKER.md`).
    - [roadmap/01_ENVIRONMENT_AND_NETWORKING.md](./roadmap/01_ENVIRONMENT_AND_NETWORKING.md): Fase 1 (Carpetas, `.env`, Postgres y Cloudflared).
@@ -85,7 +86,7 @@ La inteligencia de este repositorio está dividida con precisión quirúrgica:
    - [roadmap/05_INTEGRATION_AND_E2E_VERIFICATION.md](./roadmap/05_INTEGRATION_AND_E2E_VERIFICATION.md): Fase 5 (Validación completa de RAM < 4.5 GB, suite E2E y Runbook).
    - [roadmap/99_HUMAN_OPERATOR.md](./roadmap/99_HUMAN_OPERATOR.md): **Lo que tenés que hacer vos** (tokens, túnel, bot, OAuth). Click a click, sin decidir arquitectura.
 
-2. **[.agents/](./.agents/) — Reglas y Habilidades Supremas**:
+3. **[.agents/](./.agents/) — Reglas y Habilidades Supremas**:
    - [.agents/rules/murray.md](./.agents/rules/murray.md): Directiva fundacional del Demonic Sysadmin Supreme.
    - [.agents/rules/estilo-comunicacion.md](./.agents/rules/estilo-comunicacion.md): Calibración cognitiva de alta densidad (formato sándwich, anti-dispersión, TDAH/TEA/AACC).
    - [.agents/skills/dev-protocol/](./.agents/skills/dev-protocol/): Skill estándar de ingeniería de software (deep modules, vertical slices, loop de debugging de 6 fases y ciclo de entrega git con gate humano).

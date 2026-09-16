@@ -54,6 +54,12 @@
 - Causa: n8n 2.38 con `postgres:16-alpine`. Es compatibilidad, no un crash.
 - **No** subir el major del volumen sin OK humano: `docker compose down -v` destruiría datos.
 
+### Incidente K: `/gmail/unread` devuelve 0 y parece “sin correo”
+- Causa histórica: el shim respondía `unread_count=0` + `status: awaiting_oauth` aunque OAuth ya estaba.
+- Contrato vivo: `status=ok` es Gmail API (0 puede ser inbox vacía). `503 gmail_oauth_missing` es falta de `GOOGLE_*`. `503 gmail_oauth_client_mismatch` es `unauthorized_client` (refresh token de otro Client ID, Desktop vs Web). `503 gmail_oauth_failed` es `invalid_grant`. `502 gmail_api_failed` es la API.
+- Verificación: `bash tests/test_live_gmail_shim.sh` → `LIVE_GMAIL_SHIM_OK`. No imprimir asuntos.
+- Trampa: `docker compose restart workspace-mcp` **no** recarga `.env`. Hace falta `docker compose up -d --force-recreate workspace-mcp`.
+
 ### Incidente F: workspace-mcp en Restarting
 - Causa histórica: el paquete npm `@j3k0/mcp-google-workspace` no existe en el registry (404).
-- Estado actual: el servicio corre un shim HTTP local (`config/workspace-mcp/server.mjs`) que **nunca envía correo**. Si alguien vuelve a poner `npm install -g @j3k0/mcp-google-workspace`, el contenedor entra en crash-loop.
+- Estado actual: el servicio corre `server.mjs` + `gmail-client.mjs` (Gmail API draft-only, **nunca send**). Si alguien vuelve a poner `npm install -g @j3k0/mcp-google-workspace`, el contenedor entra en crash-loop.

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 — Gmail API draft-only (workspace-mcp)
+
+- El shim deja de fingir `unread_count=0` / `awaiting_oauth`. `GET /gmail/unread` y `POST /gmail/drafts` hablan Gmail API. Cero send.
+- Inbox vacía: `status=ok`. OAuth ausente: `503 gmail_oauth_missing`.
+- `email_triage_draft`: split + dedup + draft + Telegram HTML. Sin Telegram Trigger (un bot = un webhook).
+- `architecture_spec.md` pasa a ser contrato vivo (ya no documenta el stub).
+
 ## 0.1.1 — HITL Telegram vs OpenHands 1.11
 
 - `telegram_hitl_router`: Rechazar/Pausar no llaman a OpenHands. Aprobar pega `POST /api/v1/app-conversations`.

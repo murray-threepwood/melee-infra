@@ -11,6 +11,7 @@ cumplan estrictamente con los guardrails de la arquitectura:
 import json
 import subprocess
 import sys
+from pathlib import Path
 
 try:
     import yaml
@@ -73,6 +74,39 @@ def test_compose_guardrails():
         "  [OK] Guardrail verificado: GMAIL_ALLOW_SENDING=false, GMAIL_ALLOW_DRAFTS=true"
     )
 
+    pg = services.get("postgres_db") or {}
+    image = str(pg.get("image") or "")
+    if "postgres:16" not in image:
+        raise AssertionError(
+            f"Postgres tiene que seguir en 16 (imagen={image!r}). No subir major sin OK humano."
+        )
+    if "postgres:17" in image:
+        raise AssertionError("Postgres 17 prohibido sin OK humano: rompe el volumen.")
+    print("  [OK] Postgres major clavado en 16")
+
+
+def test_source_has_no_stub_and_no_send_url():
+    print("==> Verificando que el shim ya no es stub y no tiene URL de send...")
+    server = Path("config/workspace-mcp/server.mjs").read_text(encoding="utf-8")
+    client = Path("config/workspace-mcp/gmail-client.mjs").read_text(encoding="utf-8")
+    for needle in ("awaiting_oauth", "stub_until_oauth"):
+        if needle in server:
+            raise AssertionError(f"server.mjs todavía finge stub con {needle}")
+    if "users/me/messages/send" in client or "users/me/drafts/send" in client:
+        raise AssertionError("gmail-client.mjs no puede contener URL de send")
+    if "GMAIL_PATHS.send" in client:
+        raise AssertionError("no existe GMAIL_PATHS.send")
+    spec = Path("architecture_spec.md").read_text(encoding="utf-8")
+    if "awaiting_oauth" in spec or "stub_until_oauth" in spec:
+        raise AssertionError(
+            "architecture_spec.md documenta el stub; el contrato vivo es status=ok / created"
+        )
+    if '"gmail_mode"' not in spec and "gmail_mode" not in spec:
+        raise AssertionError(
+            "architecture_spec.md tiene que declarar gmail_mode en /healthz"
+        )
+    print("  [OK] Contrato live: status=ok / drafts created; cero send en el client")
+
 
 def simulate_guardrail_logic():
     print("==> Simulando intento de ejecución de herramientas Gmail...")
@@ -97,6 +131,7 @@ def simulate_guardrail_logic():
 def main():
     try:
         test_compose_guardrails()
+        test_source_has_no_stub_and_no_send_url()
         simulate_guardrail_logic()
         print("TODOS LOS TESTS DE GUARDRAIL MCP PASARON EXITOSAMENTE.")
         sys.exit(0)

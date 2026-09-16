@@ -13,7 +13,7 @@ Red bridge Docker interna. Postgres, n8n, cloudflared, workspace-mcp y OpenHands
 Conector del túnel Cloudflare Zero Trust. El origen interno de n8n es `http://n8n:5678`, nunca `localhost` desde ese contenedor.
 
 ## workspace-mcp
-Servicio de Gmail/Calendar con guardrail draft-only: puede leer y crear borradores; no puede enviar. Hoy es un shim HTTP local hasta OAuth real.
+Servicio de Gmail draft-only: lee y crea borradores vía Gmail API; no puede enviar. HTTP en `workspace-mcp:8000`. Inbox vacía (`status=ok`, `unread_count=0`) no es stub; OAuth ausente es `503`.
 
 ## Draft-Only
 Invariante: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true`. El clic de envío ocurre en Gmail, en manos del CEO.
