@@ -17,6 +17,7 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 - **OpenHands registry**: `docker.all-hands.dev` resuelve NXDOMAIN. Imagen vigente: `ghcr.io/openhands/openhands:latest` (puerto 3000, workspace `/opt/workspace_base`).
 - **OpenHands HITL**: el UI local responde HTML en `/api/conversations` (POST → 405). Crear conversación: `POST /api/v1/app-conversations`. Rechazar/Pausar no deben pegarle a OpenHands.
 - **n8n no recarga `./workflows`**: el mount es referencia. Un JSON nuevo no cambia el flujo publicado. Import + `publish:workflow` + `docker compose restart n8n`. `import:workflow --userId` y `--projectId` son mutuamente excluyentes.
+- **405 fósil en logs de n8n**: `docker compose logs --tail=50 n8n` mezcla Axios 405 de *antes* del SIGTERM con el proceso actual. H12 / HITL vivo se verifica con `docker compose logs --since "$(docker inspect -f '{{.State.StartedAt}}' murray-n8n)"` y/o `execution_entity.startedAt` posterior al publish. El grafo publicado tiene que tener el nodo `¿Aprobar OpenHands?`.
 
 ---
 
@@ -27,7 +28,8 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 - **Determinismo en Tests de LLM**: Las pruebas automatizadas nunca deben depender de llamadas en vivo a APIs de modelos con muestreo no determinista. Usar siempre mocks, stubs o fixtures grabados.
 - **Timeouts y Circuit Breakers**: Toda llamada HTTP saliente a servicios externos debe definir un timeout explícito y un mecanismo de corte ante fallos reiterados.
 - **Compose v5 quotes**: `docker compose config` emite `GMAIL_ALLOW_SENDING: "false"` (comillas dobles). Un grep que busque `'false'` con comillas simples falla en Compose 5.x; parsear YAML/JSON.
-- **cloudflared placeholder**: un token de ejemplo deja el proceso `running` con `Failed to get tunnel`. No es un crash; el hostname público no existe hasta H3–H4 del operador.
+- **cloudflared placeholder**: un token de ejemplo deja el proceso `running` con `Failed to get tunnel`. No es un crash; el hostname público no existe hasta H3–H4 del operador. El token real de este stack ya está: si *vuelve* ese log, el túnel está mal, no es “esperado”.
+- **Postgres 16 vs n8n 2.38**: n8n alerta `Upgrade to Postgres 17`. No subir de major sin OK humano: rompe el volumen `postgres_data`.
 
 ---
 

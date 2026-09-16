@@ -44,3 +44,16 @@ if "http://openhands:3000/api/v1/app-conversations" not in joined_urls:
 print("LIVE_HITL_DISPATCH_OK")
 print("nodes", ", ".join(names))
 PY
+
+echo "==> Chequeando Axios 405 vivos (desde el último start de n8n, no el tail fósil)..."
+N8N_STARTED_AT="$(docker inspect -f '{{.State.StartedAt}}' murray-n8n)"
+HITL_405_SINCE_RESTART="$(
+  docker compose logs --since "$N8N_STARTED_AT" n8n 2>/dev/null \
+    | grep -c 'AxiosError: Request failed with status code 405' \
+    || true
+)"
+if [ "${HITL_405_SINCE_RESTART}" -gt 0 ]; then
+  echo "LIVE_HITL_405_SINCE_RESTART count=${HITL_405_SINCE_RESTART}" >&2
+  exit 1
+fi
+echo "LIVE_HITL_NO_405_SINCE_RESTART"

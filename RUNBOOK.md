@@ -35,8 +35,13 @@
 
 ### Incidente G: Botón HITL de Telegram da 405 / AxiosError
 - Causa: el flujo publicado pegaba `POST /api/conversations` (ruta SPA de OpenHands 1.11).
-- Verificación: `bash tests/test_live_hitl_dispatch.sh` debe imprimir `LIVE_HITL_DISPATCH_OK`.
+- Verificación: `bash tests/test_live_hitl_dispatch.sh` debe imprimir `LIVE_HITL_DISPATCH_OK` y `LIVE_HITL_NO_405_SINCE_RESTART`.
+- Trampa: un `logs --tail=50` puede mostrar 405 de *antes* del último restart. Eso es fósil. Contar Axios 405 solo desde `docker inspect -f '{{.State.StartedAt}}' murray-n8n`.
 - Mitigación: importar `workflows/telegram_hitl_router.json`, `n8n publish:workflow --id=<id>`, `docker compose restart n8n`. Rechazar/Pausar no deben llamar a OpenHands.
+
+### Incidente H: n8n alerta “Upgrade to Postgres 17”
+- Causa: n8n 2.38 con `postgres:16-alpine`. Es compatibilidad, no un crash.
+- **No** subir el major del volumen sin OK humano: `docker compose down -v` destruiría datos.
 
 ### Incidente F: workspace-mcp en Restarting
 - Causa histórica: el paquete npm `@j3k0/mcp-google-workspace` no existe en el registry (404).

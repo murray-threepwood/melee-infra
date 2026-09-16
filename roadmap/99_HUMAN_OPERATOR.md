@@ -425,9 +425,10 @@ Esperado: `"url"` apuntando a `https://<SUBDOMINIO_PUBLICO>/webhook/...`. Si `ur
 
 Si no llega nada:
 
-1. `docker compose logs --tail=50 n8n`
+1. `docker compose logs --since "$(docker inspect -f '{{.State.StartedAt}}' murray-n8n)" n8n` (un `--tail=50` puede mostrar un 405 fósil de *antes* del último restart)
 2. `docker compose logs --tail=50 cloudflared`
 3. Repetí `getWebhookInfo` de H11.
+4. `bash tests/test_live_hitl_dispatch.sh` tiene que decir `LIVE_HITL_DISPATCH_OK` (nodo `¿Aprobar OpenHands?` en el publicado).
 
 OpenHands (botón **Aprobar**) solo tiene sentido con H7 completo y el servicio `openhands` healthy. Si OpenHands no responde, el nodo HTTP puede fallar; el resto del HITL igual tiene que mostrar los botones.
 

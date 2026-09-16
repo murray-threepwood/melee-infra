@@ -1,6 +1,6 @@
 # Estado de Avance del Proyecto
 
-Última actualización: 2026-09-16 12:00 (UTC)
+Última actualización: 2026-09-16 22:30 (UTC)
 Agente ejecutor: Cursor
 
 ## Fases y Tareas
@@ -30,6 +30,7 @@ Agente ejecutor: Cursor
   - [x] Tarea 5.4: Runbook operativo y de fallas
 
 ## Acciones humanas pendientes
-- H8–H9 Google OAuth / `.gauth.json` (Gmail draft-only).
-- H12: mandar un mensaje al bot y tocar **Rechazar** (el flujo publicado ya es v1).
-- Túnel `ceo.threepwood.uy`, Telegram y DeepSeek: cerrados. HITL reimportado y publicado (versión 2).
+- **BLOCKER Gmail**: no existe `config/mcp-auth/.gauth.json` (H9). El shim sigue en stub (`unread_count=0`). No se importó `email_triage_draft` ni se tocó OAuth. No poner `GMAIL_ALLOW_SENDING=true`.
+- **H12**: grafo publicado **verde** (`LIVE_HITL_DISPATCH_OK`, nodo `¿Aprobar OpenHands?`, 0 Axios 405 desde el restart 12:46 UTC). El click de las 12:32 UTC pegó a `/api/conversations` (grafo viejo) y **no cuenta**. No hay ejecución HITL posterior al publish; no se re-pide el click.
+- Túnel `ceo.threepwood.uy`, Telegram y DeepSeek: cerrados. HITL publicado con IF de aprobación.
+- Postgres 16: alerta de n8n 2.38 ignorada a propósito (no upgrade de major).
