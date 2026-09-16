@@ -338,23 +338,25 @@ Google no te da el `GOOGLE_REFRESH_TOKEN` al crear el cliente. Hay que loguearse
    - Pegá el Client ID y Client secret **del cliente Web** (los de `.env` ahora).
    - **Access type**: Offline (si no, no sale `refresh_token`).
 3. Cerrá el engranaje.
-4. Step 1: no alcanza con pegar un scope en el buscador de abajo. Agregá **los dos** (tienen que quedar listados/tildados, no solo en el recuadro):
+4. Step 1: los **dos** scopes tienen que quedar **seleccionados a la vez** (listados/tildados en el panel de la izquierda). No autorices uno, saques token, y después el otro: sale **un solo** `refresh_token` que cubre los dos.
 
 ```text
 https://www.googleapis.com/auth/gmail.readonly
 https://www.googleapis.com/auth/gmail.compose
 ```
 
-5. **Authorize APIs** → `murray@threepwood.uy` (test user de H8.3) → **Allow**.
+5. **Authorize APIs** (un click) → `murray@threepwood.uy` → **Allow** (un consentimiento que lista lectura **y** borradores).
 6. Si ves `redirect_uri_mismatch`: el Playground está usando el cliente Desktop o le falta la URI de H8.4. Volvé a H8.4.
-7. **Exchange authorization code for tokens**.
-8. Copiá `refresh_token` (empieza con `1//`) a `.env`:
+7. **Exchange authorization code for tokens** (un click). En el JSON de la derecha, `"scope"` tiene que mencionar **readonly y compose**. Si solo dice `gmail.readonly`, volvé a Step 1, tildá los dos, engranaje → **Force prompt: consent**, y repetí 5 y 7.
+8. Copiá **ese** `refresh_token` (empieza con `1//`) a `.env`. **No** lo pegues al chat ni saques screenshot del panel de tokens.
 
 ```bash
 GOOGLE_REFRESH_TOKEN=1//...pegá-acá...
 ```
 
-**Verificación**: las tres `GOOGLE_*` en `.env` son las del cliente **Web**. No las mandes al chat.
+Los puntos 5–8 **no** se repiten por cada scope. Una autorización, un exchange, un token.
+
+**Verificación**: en el JSON, `"scope"` incluye `gmail.readonly` y `gmail.compose`. Las tres `GOOGLE_*` en `.env` son del cliente **Web**.
 
 ---
 
