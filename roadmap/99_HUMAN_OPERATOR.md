@@ -301,53 +301,58 @@ Esa **Verificación** de abajo **no es una pantalla de Google**. Es un checklist
 | Un test user: tu Gmail (ej. el de `threepwood.uy` o `@gmail.com`) | **Público** → **Usuarios de prueba** |
 | Scopes solo `gmail.readonly` + `gmail.compose` (+ calendar opcional). Sin `gmail.send` ni `gmail.modify`. | **Acceso a los datos** (no está en Público) |
 
-### H8.4 Cliente OAuth (Desktop)
+### H8.4 Cliente OAuth (Web, para el Playground)
 
-Esto es solo **pedir a Google un usuario y una contraseña de app** y pegarlos en `.env`. El login en el browser es H8.5, todavía no. No hace falta verificar la app, ni URI de redirect, ni bajar un JSON de Google (eso es H9).
+H8.5 usa [OAuth 2.0 Playground](https://developers.google.com/oauthplayground/). Ese sitio redirige a `https://developers.google.com/oauthplayground`. Un cliente **Desktop** solo admite `http://localhost` → Google responde **`Error 400: redirect_uri_mismatch`**. Por eso acá el tipo es **Aplicación web**, no escritorio.
 
-1. En **Google Auth Platform**, menú **Clientes**.
-2. Crear un cliente OAuth (**Create Credentials** / **Crear cliente** → **OAuth client ID**).
-3. Tipo: **Aplicación de escritorio** / **Desktop app**. No Web, no Android, no iOS.
-4. Nombre: `murray-mcp-desktop` (o el que quieras).
-5. **Create**.
-6. Google muestra dos textos. Copialos:
-   - **Client ID** (termina en `.apps.googleusercontent.com`)
-   - **Client secret** (suele empezar con `GOCSPX-`)
-7. Pegá en `.env` (no lo mandes al chat ni a git):
+Si ya creaste un cliente Desktop: no lo borres. Creá **otro** cliente Web y pegá *esos* ID/secret en `.env`. El refresh token tiene que nacer del mismo cliente que queda en `.env`.
+
+1. **Google Auth Platform** → **Clientes** → crear cliente → **OAuth client ID**.
+2. Tipo: **Aplicación web** / **Web application**.
+3. Nombre: `murray-mcp-playground`.
+4. **URIs de redirección autorizados** / Authorized redirect URIs → **Add URI**:
+
+```text
+https://developers.google.com/oauthplayground
+```
+
+5. **Create**. Copiá **Client ID** y **Client secret**.
+6. Pegá en `.env` (reemplazá los del Desktop si los habías puesto; no los mandes al chat ni a git):
 
 ```bash
 GOOGLE_CLIENT_ID=.....apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-...
 ```
 
-**Listo H8.4.** El archivo `.gauth.json` se arma en H9 con estos mismos dos valores.
+**Listo H8.4.** El `.gauth.json` de H9 usa estos mismos dos valores (los del Web).
 
 ### H8.5 Refresh token
 
-La primera vez Google no te da un refresh token “para copiar”: hay que hacer el login una vez.
-
-Opción simple (OAuth Playground):
+Google no te da el `GOOGLE_REFRESH_TOKEN` al crear el cliente. Hay que loguearse **una vez** con el cliente Web de H8.4.
 
 1. Entrá a [https://developers.google.com/oauthplayground/](https://developers.google.com/oauthplayground/).
-2. Engranaje (arriba a la derecha) → tildá **Use your own OAuth credentials**.
-3. Pegá el Client ID y Client secret de H8.4.
-4. A la izquierda, en Step 1, pegá estos scopes (uno por línea):
+2. Engranaje (arriba a la derecha):
+   - Tildá **Use your own OAuth credentials**.
+   - Pegá el Client ID y Client secret **del cliente Web** (los de `.env` ahora).
+   - **Access type**: Offline (si no, no sale `refresh_token`).
+3. Cerrá el engranaje.
+4. Step 1: no alcanza con pegar un scope en el buscador de abajo. Agregá **los dos** (tienen que quedar listados/tildados, no solo en el recuadro):
 
 ```text
 https://www.googleapis.com/auth/gmail.readonly
 https://www.googleapis.com/auth/gmail.compose
 ```
 
-5. **Authorize APIs** → elegí tu cuenta de test user → **Allow**.
-6. **Exchange authorization code for tokens**.
-7. Copiá `refresh_token` (empieza con `1//`).
-8. Pegalo en `.env`:
+5. **Authorize APIs** → `murray@threepwood.uy` (test user de H8.3) → **Allow**.
+6. Si ves `redirect_uri_mismatch`: el Playground está usando el cliente Desktop o le falta la URI de H8.4. Volvé a H8.4.
+7. **Exchange authorization code for tokens**.
+8. Copiá `refresh_token` (empieza con `1//`) a `.env`:
 
 ```bash
 GOOGLE_REFRESH_TOKEN=1//...pegá-acá...
 ```
 
-**Verificación**: las tres variables `GOOGLE_*` en `.env` ya no dicen `ejemplo`.
+**Verificación**: las tres `GOOGLE_*` en `.env` son las del cliente **Web**. No las mandes al chat.
 
 ---
 
@@ -360,7 +365,7 @@ cd /Users/hbauzan/treepwood/MURRAY/murray-infra
 cp config/mcp-auth/.gauth.json.example config/mcp-auth/.gauth.json
 ```
 
-2. Abrí `config/mcp-auth/.gauth.json` y reemplazá:
+2. Abrí `config/mcp-auth/.gauth.json` y reemplazá (mismos valores del **cliente Web** de H8.4, no los del Desktop):
 
 | Placeholder | Valor |
 | :--- | :--- |
