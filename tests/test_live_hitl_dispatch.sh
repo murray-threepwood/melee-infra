@@ -41,8 +41,15 @@ if "¿Aprobar OpenHands?" not in names:
     raise SystemExit(f"LIVE_HITL_STALE: falta el IF ¿Aprobar OpenHands?. Nodos={names}")
 if "http://openhands:3000/api/v1/app-conversations" not in joined_urls:
     raise SystemExit(f"LIVE_HITL_STALE: falta POST v1. urls={urls}")
+
+trigger = next(n for n in wf.get("nodes", []) if n.get("name") == "Telegram Trigger")
+webhook_id = trigger.get("webhookId")
+if webhook_id != "4dae132d-912c-40e0-b048-c00b42e03250":
+    raise SystemExit(f"LIVE_HITL_STALE: Telegram Trigger webhookId={webhook_id!r}")
+
 print("LIVE_HITL_DISPATCH_OK")
 print("nodes", ", ".join(names))
+print("webhookId", webhook_id)
 PY
 
 echo "==> Chequeando Axios 405 vivos (desde el último start de n8n, no el tail fósil)..."

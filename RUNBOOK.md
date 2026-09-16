@@ -39,6 +39,12 @@
 - Trampa: un `logs --tail=50` puede mostrar 405 de *antes* del último restart. Eso es fósil. Contar Axios 405 solo desde `docker inspect -f '{{.State.StartedAt}}' murray-n8n`.
 - Mitigación: importar `workflows/telegram_hitl_router.json`, `n8n publish:workflow --id=<id>`, `docker compose restart n8n`. Rechazar/Pausar no deben llamar a OpenHands.
 
+### Incidente I: El bot no responde (silencio total)
+- Causa 1: Telegram pega `.../telegram trigger/webhook` (nombre del nodo). n8n 2.38 solo registra el UUID `webhookId`. `setWebhook` tiene que apuntar a `https://${SUBDOMINIO_PUBLICO}/webhook/<webhookId>/webhook`.
+- Causa 2: el JSON del flujo sin `webhookId` deja un UUID huérfano → POST 500 `Cannot read properties of undefined (reading 'node')`.
+- Verificación: `bash tests/test_live_hitl_dispatch.sh` imprime `webhookId 4dae132d-912c-40e0-b048-c00b42e03250`. Un POST vacío a esa ruta ya no debe ser “unknown webhook”.
+- Mitigación: el trigger en `workflows/telegram_hitl_router.json` tiene que llevar ese `webhookId`; import + publish + restart n8n. Luego `setWebhook` a esa URL.
+
 ### Incidente H: n8n alerta “Upgrade to Postgres 17”
 - Causa: n8n 2.38 con `postgres:16-alpine`. Es compatibilidad, no un crash.
 - **No** subir el major del volumen sin OK humano: `docker compose down -v` destruiría datos.

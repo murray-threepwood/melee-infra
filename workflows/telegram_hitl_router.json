@@ -14,6 +14,7 @@
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1,
       "position": [240, 300],
+      "webhookId": "4dae132d-912c-40e0-b048-c00b42e03250",
       "credentials": {
         "telegramApi": {
           "id": "1",

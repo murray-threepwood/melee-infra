@@ -14,6 +14,18 @@ def load_workflow():
     return json.loads(WORKFLOW.read_text(encoding="utf-8"))
 
 
+def test_trigger_has_stable_webhook_id():
+    data = load_workflow()
+    trigger = next(n for n in data["nodes"] if n["name"] == "Telegram Trigger")
+    webhook_id = trigger.get("webhookId")
+    if not webhook_id:
+        raise AssertionError(
+            "Telegram Trigger sin webhookId: n8n registra un UUID huérfano y el POST explota con reading 'node'."
+        )
+    if webhook_id != "4dae132d-912c-40e0-b048-c00b42e03250":
+        raise AssertionError(f"webhookId inesperado: {webhook_id}")
+
+
 def test_openhands_uses_v1_route():
     data = load_workflow()
     dispatch = next(n for n in data["nodes"] if n["name"] == "Delegar a OpenHands")
@@ -58,6 +70,7 @@ def test_callback_no_longer_dispatches_all():
 
 def main():
     tests = [
+        test_trigger_has_stable_webhook_id,
         test_openhands_uses_v1_route,
         test_reject_skips_openhands,
         test_callback_no_longer_dispatches_all,

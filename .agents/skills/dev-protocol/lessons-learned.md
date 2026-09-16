@@ -33,6 +33,7 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 - **Gmail en Google Cloud**: habilitar **Gmail API**, nunca **Gmail MCP API**. El MCP de este stack es `workspace-mcp`, no un producto de Google. Consent OAuth 2026: **Google Auth Platform** → **Público** → **Usuarios externos** (Gmail personal). **Interno** solo con Google Workspace. No verificar ni publicar la app; test user = el CEO.
 - **OAuth Playground + Desktop = `redirect_uri_mismatch`**: el Playground redirige a `https://developers.google.com/oauthplayground`. H8.4 es cliente **Web** con esa URI en **redirect URIs**, no en JavaScript origins (el origin no admite path). El `GOOGLE_REFRESH_TOKEN` nace de ese Client ID. Access type Offline en el engranaje.
 - **OAuth Playground Step 1 no tiene Add**: abrir **Gmail API v1** y tildar readonly + compose, o pegar las dos URLs en `Input your own scopes` **separadas por un espacio** y **Authorize APIs**. Un token, los dos scopes.
+- **Telegram HITL webhookId**: n8n 2.38 registra `POST /webhook/<webhookId>/webhook`. Telegram pegando `.../telegram trigger/webhook` da 404. Trigger sin `webhookId` + UUID huérfano da 500 `reading 'node'`. El JSON canónico tiene que incluir `webhookId` `4dae132d-912c-40e0-b048-c00b42e03250`.
 
 ---
 
