@@ -310,7 +310,9 @@ Si ya creaste un cliente Desktop: no lo borres. Creá **otro** cliente Web y peg
 1. **Google Auth Platform** → **Clientes** → crear cliente → **OAuth client ID**.
 2. Tipo: **Aplicación web** / **Web application**.
 3. Nombre: `murray-mcp-playground`.
-4. **URIs de redirección autorizados** / Authorized redirect URIs → **Add URI**:
+4. Hay **dos** listas. No las mezcles:
+   - **Orígenes de JavaScript** / Authorized JavaScript origins: **dejalo vacío**. Si Google lo exige, solo `https://developers.google.com` (sin path). Si pegás `/oauthplayground` acá, dice *«Los URI no deben contener una ruta»*.
+   - **URIs de redirección autorizados** / Authorized redirect URIs → **Add URI** (esta es la lista correcta):
 
 ```text
 https://developers.google.com/oauthplayground

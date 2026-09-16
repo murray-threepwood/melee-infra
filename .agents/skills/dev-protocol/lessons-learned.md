@@ -31,7 +31,7 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 - **cloudflared placeholder**: un token de ejemplo deja el proceso `running` con `Failed to get tunnel`. No es un crash; el hostname público no existe hasta H3–H4 del operador. El token real de este stack ya está: si *vuelve* ese log, el túnel está mal, no es “esperado”.
 - **Postgres 16 vs n8n 2.38**: n8n alerta `Upgrade to Postgres 17`. No subir de major sin OK humano: rompe el volumen `postgres_data`.
 - **Gmail en Google Cloud**: habilitar **Gmail API**, nunca **Gmail MCP API**. El MCP de este stack es `workspace-mcp`, no un producto de Google. Consent OAuth 2026: **Google Auth Platform** → **Público** → **Usuarios externos** (Gmail personal). **Interno** solo con Google Workspace. No verificar ni publicar la app; test user = el CEO.
-- **OAuth Playground + Desktop = `redirect_uri_mismatch`**: el Playground redirige a `https://developers.google.com/oauthplayground`. H8.4 tiene que ser cliente **Web** con esa URI autorizada. El `GOOGLE_REFRESH_TOKEN` nace de ese mismo Client ID. Access type Offline en el engranaje, si no no hay refresh token.
+- **OAuth Playground + Desktop = `redirect_uri_mismatch`**: el Playground redirige a `https://developers.google.com/oauthplayground`. H8.4 tiene que ser cliente **Web** con esa URI en **redirect URIs**, no en JavaScript origins (el origin no admite path; Google dice “Los URI no deben contener una ruta”). El `GOOGLE_REFRESH_TOKEN` nace de ese mismo Client ID. Access type Offline en el engranaje, si no no hay refresh token.
 
 ---
 
