@@ -338,12 +338,19 @@ Google no te da el `GOOGLE_REFRESH_TOKEN` al crear el cliente. Hay que loguearse
    - Pegá el Client ID y Client secret **del cliente Web** (los de `.env` ahora).
    - **Access type**: Offline (si no, no sale `refresh_token`).
 3. Cerrá el engranaje.
-4. Step 1: los **dos** scopes tienen que quedar **seleccionados a la vez** (listados/tildados en el panel de la izquierda). No autorices uno, saques token, y después el otro: sale **un solo** `refresh_token` que cubre los dos.
+4. Step 1: **no hay botón Add**. Los dos scopes a la vez, un solo Authorize. Dos formas que andan:
+
+   **A (la que se ve):** en la lista de la izquierda scrolleá hasta **Gmail API v1** → clic para abrir → tildá:
+   - `https://www.googleapis.com/auth/gmail.readonly`
+   - `https://www.googleapis.com/auth/gmail.compose`
+
+   **B:** en **Input your own scopes** pegá las dos URLs **en la misma caja, un espacio en el medio** (una sola línea), después **Authorize APIs**:
 
 ```text
-https://www.googleapis.com/auth/gmail.readonly
-https://www.googleapis.com/auth/gmail.compose
+https://www.googleapis.com/auth/gmail.readonly https://www.googleapis.com/auth/gmail.compose
 ```
+
+   No autorices un scope, saques token, y después el otro: sale **un solo** `refresh_token` que cubre los dos.
 
 5. **Authorize APIs** (un click) → `murray@threepwood.uy` → **Allow** (un consentimiento que lista lectura **y** borradores).
 6. Si ves `redirect_uri_mismatch`: el Playground está usando el cliente Desktop o le falta la URI de H8.4. Volvé a H8.4.
