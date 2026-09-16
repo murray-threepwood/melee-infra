@@ -263,19 +263,24 @@ Objetivo: que el MCP pueda **leer** y **crear borradores**. El envío directo qu
 
 ### H8.2 APIs
 
-1. Menú ☰ → **APIs & Services** → **Library**.
-2. Buscá `Gmail API` → **Enable**.
-3. Volvé a Library. Buscá `Google Calendar API` → **Enable**.
+1. Menú ☰ → **APIs & Services** → **Library** (o **APIs y servicios** → **Biblioteca**).
+2. Buscá exactamente **`Gmail API`** → **Enable** / **Habilitar**.
+3. Si la Library también lista **Gmail MCP API**: **no la habilites**. Ese producto de Google no es el MCP de este repo. El MCP nuestro es el contenedor Docker `workspace-mcp`.
+4. Volvé a Library. Buscá **`Google Calendar API`** → **Enable**.
 
-### H8.3 Pantalla de consentimiento
+### H8.3 Pantalla de consentimiento (Google Auth Platform)
 
-1. **APIs & Services** → **OAuth consent screen**.
-2. User type: **External** → **Create**.
-3. App name: `Murray Infra`.
-4. User support email: tu Gmail.
-5. Developer contact: tu Gmail.
-6. **Save and Continue**.
-7. Scopes → **Add or Remove Scopes**. Agregá **solo**:
+La consola ya no dice “OAuth consent screen → User type External”. Ahora es **Google Auth Platform** (a veces bajo **APIs y servicios** → **Pantalla de consentimiento de OAuth**, que redirige al wizard).
+
+1. Entrá a [Google Auth Platform](https://console.cloud.google.com/auth/overview) con el proyecto `murray-infra` seleccionado arriba.
+2. Si pide **Información de la app** / branding: nombre `Murray Infra`, correo de soporte = tu Gmail. **Siguiente**.
+3. **Público** (Audience). Elegí **Usuarios externos** (External), no **Interno**.
+   - **Usuarios externos**: Gmail personal, 1-Person CEO. La app queda en **modo prueba** y solo entran las cuentas que agregues como test users.
+   - **Interno**: solo si tenés Google Workspace de una organización. Con Gmail `@gmail.com` no sirve.
+4. **Siguiente**.
+5. **Información de contacto**: tu mismo Gmail. Aceptá los términos si aparecen. **Crear** / **Finish**.
+6. **No** mandes la app a producción ni al centro de verificación. Dejala en prueba.
+7. Menú izquierdo → **Acceso a los datos** (Data access) → **Add or remove scopes** / agregar permisos. Agregá **solo**:
 
 | Scope | Para qué |
 | :--- | :--- |
@@ -283,16 +288,20 @@ Objetivo: que el MCP pueda **leer** y **crear borradores**. El envío directo qu
 | `https://www.googleapis.com/auth/gmail.compose` | Crear borradores (no send) |
 | `https://www.googleapis.com/auth/calendar.readonly` | Leer calendar (opcional) |
 
-8. **Save and Continue**.
-9. Test users → **Add users** → tu misma dirección de Gmail → **Save**.
+Si no ves el path completo, buscá `gmail.readonly` y `gmail.compose`. **No** tildes `gmail.send` ni `gmail.modify`.
+
+8. **Save**.
+9. Menú → **Público** → **Usuarios de prueba** / Test users → **Add users** → tu misma dirección de Gmail → **Save**.
+
+**Verificación**: Audience = Usuarios externos, un test user (vos), scopes solo readonly + compose. Sin `gmail.send`.
 
 ### H8.4 Cliente OAuth (Desktop)
 
 El archivo `.gauth.json.example` usa tipo `installed` (app de escritorio).
 
-1. **APIs & Services** → **Credentials**.
-2. **Create Credentials** → **OAuth client ID**.
-3. Application type: **Desktop app**.
+1. En **Google Auth Platform** → **Clientes** (o **APIs y servicios** → **Credenciales**).
+2. **Create Credentials** / **Crear cliente** → **OAuth client ID**.
+3. Application type: **Desktop app** / **Aplicación de escritorio**.
 4. Name: `murray-mcp-desktop`.
 5. **Create**.
 6. Copiá **Client ID** y **Client secret**.

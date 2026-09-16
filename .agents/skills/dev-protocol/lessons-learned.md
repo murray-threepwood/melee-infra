@@ -30,6 +30,7 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 - **Compose v5 quotes**: `docker compose config` emite `GMAIL_ALLOW_SENDING: "false"` (comillas dobles). Un grep que busque `'false'` con comillas simples falla en Compose 5.x; parsear YAML/JSON.
 - **cloudflared placeholder**: un token de ejemplo deja el proceso `running` con `Failed to get tunnel`. No es un crash; el hostname público no existe hasta H3–H4 del operador. El token real de este stack ya está: si *vuelve* ese log, el túnel está mal, no es “esperado”.
 - **Postgres 16 vs n8n 2.38**: n8n alerta `Upgrade to Postgres 17`. No subir de major sin OK humano: rompe el volumen `postgres_data`.
+- **Gmail en Google Cloud**: habilitar **Gmail API**, nunca **Gmail MCP API**. El MCP de este stack es `workspace-mcp`, no un producto de Google. Consent OAuth 2026: **Google Auth Platform** → **Público** → **Usuarios externos** (Gmail personal). **Interno** solo con Google Workspace. No verificar ni publicar la app; test user = el CEO.
 
 ---
 
