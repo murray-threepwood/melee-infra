@@ -293,7 +293,13 @@ Si no ves el path completo, buscá `gmail.readonly` y `gmail.compose`. **No** ti
 8. **Save**.
 9. Menú → **Público** → **Usuarios de prueba** / Test users → **Add users** → tu misma dirección de Gmail → **Save**.
 
-**Verificación**: Audience = Usuarios externos, un test user (vos), scopes solo readonly + compose. Sin `gmail.send`.
+Esa **Verificación** de abajo **no es una pantalla de Google**. Es un checklist tuyo: mirá tres lugares del menú izquierdo y confirmá.
+
+| Qué tiene que quedar | Dónde se ve en Google Auth Platform |
+| :--- | :--- |
+| Audience = Usuarios externos (modo **Prueba**). No pulses **Marcar como interno**. | **Público** |
+| Un test user: tu Gmail (ej. el de `threepwood.uy` o `@gmail.com`) | **Público** → **Usuarios de prueba** |
+| Scopes solo `gmail.readonly` + `gmail.compose` (+ calendar opcional). Sin `gmail.send` ni `gmail.modify`. | **Acceso a los datos** (no está en Público) |
 
 ### H8.4 Cliente OAuth (Desktop)
 
