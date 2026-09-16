@@ -40,8 +40,8 @@ Hasta que completes H3, `cloudflared` corre pero loguea `Failed to get tunnel`. 
 - [x] **H5.** Bot de Telegram + token en `.env`
 - [x] **H6.** `TELEGRAM_CHAT_ID` en `.env`
 - [x] **H7.** API key de DeepSeek en `.env`
-- [ ] **H8.** Proyecto Google Cloud + OAuth (Gmail draft-only)
-- [ ] **H9.** Copiar `config/mcp-auth/.gauth.json.example` → `.gauth.json` y completar
+- [x] **H8.** Proyecto Google Cloud + OAuth (Gmail draft-only)
+- [x] **H9.** Copiar `config/mcp-auth/.gauth.json.example` → `.gauth.json` y completar
 - [x] **H10.** Reiniciar el stack y crear el usuario dueño de n8n
 - [x] **H11.** Importar workflows y credencial de Telegram en n8n
 - [ ] **H12.** Probar el bot (mensaje → botones HITL)
@@ -369,6 +369,8 @@ Los puntos 5–8 **no** se repiten por cada scope. Una autorización, un exchang
 
 ## H9. Archivo OAuth local del MCP
 
+Si `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` ya están en `.env`, este archivo se puede generar sin volver a copiar a mano. **No** va a git.
+
 1. En el repo:
 
 ```bash
@@ -376,7 +378,7 @@ cd /Users/hbauzan/treepwood/MURRAY/murray-infra
 cp config/mcp-auth/.gauth.json.example config/mcp-auth/.gauth.json
 ```
 
-2. Abrí `config/mcp-auth/.gauth.json` y reemplazá (mismos valores del **cliente Web** de H8.4, no los del Desktop):
+2. Abrí `config/mcp-auth/.gauth.json` y pegá los valores del **cliente Web** de H8.4 (no los del Desktop). Con Playground el JSON queda tipo `web` y redirect `https://developers.google.com/oauthplayground`.
 
 | Placeholder | Valor |
 | :--- | :--- |

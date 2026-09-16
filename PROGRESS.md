@@ -30,7 +30,6 @@ Agente ejecutor: Cursor
   - [x] Tarea 5.4: Runbook operativo y de fallas
 
 ## Acciones humanas pendientes
-- **BLOCKER Gmail**: no existe `config/mcp-auth/.gauth.json` (H9). El shim sigue en stub (`unread_count=0`). No se importó `email_triage_draft` ni se tocó OAuth. No poner `GMAIL_ALLOW_SENDING=true`.
-- **H12**: grafo publicado **verde** (`LIVE_HITL_DISPATCH_OK`, nodo `¿Aprobar OpenHands?`, 0 Axios 405 desde el restart 12:46 UTC). El click de las 12:32 UTC pegó a `/api/conversations` (grafo viejo) y **no cuenta**. No hay ejecución HITL posterior al publish; no se re-pide el click.
-- Túnel `ceo.threepwood.uy`, Telegram y DeepSeek: cerrados. HITL publicado con IF de aprobación.
+- H8–H9: OAuth + `.gauth.json` locales (gitignore). Shim Gmail API real todavía no; `GMAIL_ALLOW_SENDING=false`.
+- **H12**: mandar un mensaje al bot y tocar **Rechazar**. Esperado: `✅ Orden procesada: REJECT_TASK:...` y cero Axios 405 desde el último restart de n8n.
 - Postgres 16: alerta de n8n 2.38 ignorada a propósito (no upgrade de major).
