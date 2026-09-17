@@ -84,6 +84,39 @@ def test_compose_guardrails():
         raise AssertionError("Postgres 17 prohibido sin OK humano: rompe el volumen.")
     print("  [OK] Postgres major clavado en 16")
 
+    working_dir = str(mcp.get("working_dir") or mcp.get("workingDir") or "").rstrip("/")
+    if not working_dir:
+        raise AssertionError(
+            "workspace-mcp necesita working_dir writable. El command sigue siendo "
+            "node /opt/mcp/server.mjs; el cwd no puede ser el bind :ro."
+        )
+    for vol in mcp.get("volumes") or []:
+        if not isinstance(vol, dict):
+            continue
+        target = str(vol.get("target") or vol.get("destination") or "").rstrip("/")
+        read_only = bool(vol.get("read_only") or vol.get("readOnly"))
+        if read_only and target and working_dir == target:
+            raise AssertionError(
+                f"working_dir={working_dir} es el bind :ro. Docker Desktop aborta "
+                "healthcheck/exec (cwd outside mount namespace, exit=-1). "
+                "Usá working_dir=/tmp."
+            )
+    print(f"  [OK] working_dir={working_dir} no es un bind :ro")
+
+    agent = services.get("murray-agent")
+    if not agent:
+        raise AssertionError(
+            "Servicio 'murray-agent' no definido en docker-compose.yml"
+        )
+    agent_cwd = str(agent.get("working_dir") or agent.get("workingDir") or "").rstrip(
+        "/"
+    )
+    if agent_cwd != "/tmp":
+        raise AssertionError(
+            f"murray-agent working_dir={agent_cwd!r} tiene que ser /tmp (bind :ro mata healthcheck)."
+        )
+    print("  [OK] murray-agent working_dir=/tmp")
+
 
 def test_source_has_no_stub_and_no_send_url():
     print("==> Verificando que el shim ya no es stub y no tiene URL de send...")

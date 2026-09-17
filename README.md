@@ -27,6 +27,7 @@ flowchart TD
             N8N["⚙️ n8n (Altar de Automatización)"]
             Postgres[("🗄️ postgres_db (PostgreSQL 16)")]
             MCP["📜 workspace-mcp (Google MCP - Draft Only)"]
+            Murray["💀 murray-agent (Chat DeepSeek)"]
             OH["🤖 openhands (Sandbox de Ejecución IA)"]
         end
 
@@ -43,6 +44,7 @@ flowchart TD
     CEO <==>|Comandos y Teclado HITL| N8N
     N8N <==>|Persistencia de ejecuciones y estado| Postgres
     N8N <==>|Triage y Creación de Borradores| MCP
+    N8N <==>|Chat y ops HITL| Murray
     N8N <==>|Disparo de misiones complejas| OH
     MCP <==>|"OAuth 2.0 Infranqueable (Draft Only)"| GmailExt
     OH -.->|Acceso acotado sin privilegios| VolWork
@@ -50,7 +52,7 @@ flowchart TD
     classDef demon fill:#2a0845,stroke:#e94560,stroke-width:2px,color:#fff;
     classDef storage fill:#1a1a2e,stroke:#0f3460,stroke-width:2px,color:#fff;
     classDef mortal fill:#16213e,stroke:#533483,stroke-width:2px,color:#fff;
-    class CFDaemon,N8N,Postgres,MCP,OH demon;
+    class CFDaemon,N8N,Postgres,MCP,Murray,OH demon;
     class VolPG,VolN8N,VolMCP,VolWork storage;
     class CEO,GmailExt,CFEdge mortal;
 ```
@@ -67,6 +69,7 @@ Cada contenedor opera bajo el principio de menor privilegio dentro de la red pri
 | **`postgres_db`** | **El Sarcófago Transaccional** | PostgreSQL 16 Alpine respaldado por volumen persistente dedicado. Cero corrupción de datos; migraciones idempotentes y healthchecks nativos con `pg_isready`. |
 | **`n8n`** | **El Orquestador Supremo** | Centro neurálgico conectado a Telegram. Si un mortal sin credenciales intenta enviar comandos, el filtro de `TELEGRAM_CHAT_ID` lo arroja al foso de los leones sin emitir respuesta. |
 | **`workspace-mcp`** | **El Guardrail Infranqueable** | Servidor Model Context Protocol para Google Workspace. Por decreto demoníaco inmutable: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true`. La IA puede leer y redactar borradores, pero **el clic final de envío pertenece exclusivamente al dedo del CEO humano**. |
+| **`murray-agent`** | **La Calavera en Telegram** | DeepSeek Chat en el mismo bot. Diagnóstico y ops con HITL. No es Cursor; no edita el repo; no envía Gmail. |
 | **`openhands`** | **El Coliseo de Ejecución Sandbox** | Entorno de desarrollo autónomo confinado en `./workspace` con `security_opt: ["no-new-privileges:true"]`. Impulsado por DeepSeek vía LiteLLM porque *"nunca debes pagar más de 20 pavos por un juego de ordenador"* (ni por un millón de tokens inflados). |
 
 ---
@@ -75,8 +78,9 @@ Cada contenedor opera bajo el principio de menor privilegio dentro de la red pri
 
 La inteligencia de este repositorio está dividida con precisión quirúrgica:
 
-1. **[architecture_spec.md](./architecture_spec.md) — Contratos vivos**: red, HTTP de `workspace-mcp`, HITL Telegram, guardrails y presupuesto RAM. Se actualiza cuando cambia un contrato.
-2. **[roadmap/](./roadmap/) — La Hoja de Ruta de Implementación**:
+1. **[architecture_spec.md](./architecture_spec.md) — Contratos vivos**: red, HTTP de `workspace-mcp` / `murray-agent`, HITL Telegram, guardrails y presupuesto RAM. Se actualiza cuando cambia un contrato.
+2. **[HANDOFF.md](./HANDOFF.md) — Arranque para la próxima IA**: invariantes, trampas pagadas, dónde tocar. Cero secretos.
+3. **[roadmap/](./roadmap/) — Hoja de ruta de implementación**:
    - [roadmap/README.md](./roadmap/README.md): Índice maestro y prompt de arranque para agentes de IA.
    - [roadmap/00_AGENT_PROTOCOL.md](./roadmap/00_AGENT_PROTOCOL.md): Reglas inquebrantables de determinismo, manejo de secretos y control de fallas (`BLOCKER.md`).
    - [roadmap/01_ENVIRONMENT_AND_NETWORKING.md](./roadmap/01_ENVIRONMENT_AND_NETWORKING.md): Fase 1 (Carpetas, `.env`, Postgres y Cloudflared).
@@ -86,7 +90,7 @@ La inteligencia de este repositorio está dividida con precisión quirúrgica:
    - [roadmap/05_INTEGRATION_AND_E2E_VERIFICATION.md](./roadmap/05_INTEGRATION_AND_E2E_VERIFICATION.md): Fase 5 (Validación completa de RAM < 4.5 GB, suite E2E y Runbook).
    - [roadmap/99_HUMAN_OPERATOR.md](./roadmap/99_HUMAN_OPERATOR.md): **Lo que tenés que hacer vos** (tokens, túnel, bot, OAuth). Click a click, sin decidir arquitectura.
 
-3. **[.agents/](./.agents/) — Reglas y Habilidades Supremas**:
+4. **[.agents/](./.agents/) — Reglas y Habilidades Supremas**:
    - [.agents/rules/murray.md](./.agents/rules/murray.md): Directiva fundacional del Demonic Sysadmin Supreme.
    - [.agents/rules/estilo-comunicacion.md](./.agents/rules/estilo-comunicacion.md): Calibración cognitiva de alta densidad (formato sándwich, anti-dispersión, TDAH/TEA/AACC).
    - [.agents/skills/dev-protocol/](./.agents/skills/dev-protocol/): Skill estándar de ingeniería de software (deep modules, vertical slices, loop de debugging de 6 fases y ciclo de entrega git con gate humano).

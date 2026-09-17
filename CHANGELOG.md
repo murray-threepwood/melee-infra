@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.4 — Murray por Telegram (chat + ops HITL)
+
+- Servicio `murray-agent`: DeepSeek chat, `/status` `/health` `/logs`, Gmail meta sin asuntos, compose allowlist.
+- Router Telegram: texto libre → Murray. `/oh` y `sandbox:` → OpenHands con el texto original. `APPROVE_OPS` no pega a OpenHands.
+- `POST /ops/execute` exige `approval_id` de un uso. Cero send de Gmail.
+
+## 0.1.3 — Healthcheck MCP + lecciones OAuth
+
+- `workspace-mcp` usa `working_dir: /tmp` (el bind `/opt/mcp:ro` como cwd dejaba `unhealthy` falso y rompía `compose exec`).
+- Lecciones: trampas OAuth Playground, refresh token ~7 días en app Testing, secretos nunca en chat, import n8n exige `"id"` raíz.
+- `PROGRESS.md` deja de listar el mismatch OAuth como bloqueo: Gmail live, triage Active.
+
 ## 0.1.2 — Gmail API draft-only (workspace-mcp)
 
 - El shim deja de fingir `unread_count=0` / `awaiting_oauth`. `GET /gmail/unread` y `POST /gmail/drafts` hablan Gmail API. Cero send.

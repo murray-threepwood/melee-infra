@@ -1,23 +1,21 @@
 {
+  "id": "20uYWal9fr2bWwVV",
   "name": "telegram_hitl_router",
   "nodes": [
     {
       "parameters": {
-        "updates": [
-          "message",
-          "callback_query"
-        ],
+        "updates": ["message", "callback_query"],
         "additionalFields": {}
       },
       "id": "telegram-trigger-01",
       "name": "Telegram Trigger",
       "type": "n8n-nodes-base.telegramTrigger",
       "typeVersion": 1,
-      "position": [240, 300],
+      "position": [160, 320],
       "webhookId": "4dae132d-912c-40e0-b048-c00b42e03250",
       "credentials": {
         "telegramApi": {
-          "id": "1",
+          "id": "9IhWvhoAHuzho5J5",
           "name": "Telegram account"
         }
       }
@@ -38,7 +36,7 @@
       "name": "Filtro Seguridad ChatID",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [460, 300]
+      "position": [380, 320]
     },
     {
       "parameters": {
@@ -55,7 +53,75 @@
       "name": "¿Es Callback de Botón?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [680, 240]
+      "position": [600, 260]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.callback_query.data }}",
+              "operation": "contains",
+              "value2": "_OPS:"
+            }
+          ]
+        }
+      },
+      "id": "if-callback-ops-08",
+      "name": "¿Callback Ops?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [820, 360]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.callback_query.data }}",
+              "operation": "startsWith",
+              "value2": "APPROVE_OPS"
+            }
+          ]
+        }
+      },
+      "id": "if-approve-ops-09",
+      "name": "¿Aprobar Ops?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1040, 420]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://murray-agent:8080/ops/execute",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ approval_id: String($json.callback_query.data).replace(/^APPROVE_OPS:/, '') }) }}",
+        "options": { "timeout": 60000 }
+      },
+      "id": "http-ops-execute-10",
+      "name": "Ejecutar Ops",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1260, 360],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://murray-agent:8080/ops/reject",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ approval_id: String($json.callback_query.data).replace(/^REJECT_OPS:/, '') }) }}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "http-ops-reject-11",
+      "name": "Rechazar Ops",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1260, 500],
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -73,23 +139,107 @@
       "name": "¿Aprobar OpenHands?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 1,
-      "position": [900, 360]
+      "position": [1040, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst data = String($json.callback_query.data || '');\nconst id = data.split(':')[1] || '';\nconst missions = staticData.missions || {};\nconst text = missions[id] || ('Misión HITL ' + id);\nreturn [{ json: { mission_text: text, mission_id: id, callback_query: $json.callback_query } }];\n"
+      },
+      "id": "code-load-mission-12",
+      "name": "Recuperar Texto Misión",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1260, 180]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://openhands:3000/api/v1/app-conversations",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ title: 'HITL ' + $json.mission_id, initial_message: { role: 'user', content: [{ type: 'text', text: String($json.mission_text) }] } }) }}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "http-dispatch-openhands-05",
+      "name": "Delegar a OpenHands",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1480, 180],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.callback_query.message.chat.id }}",
+        "text": "={{ $json.reply || ('✅ Orden procesada: ' + $('Telegram Trigger').item.json.callback_query.data + '.') }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "telegram-notify-resolution-06",
+      "name": "Notificar Resolución HITL",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1720, 320],
+      "credentials": {
+        "telegramApi": {
+          "id": "9IhWvhoAHuzho5J5",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const text = String($json.message && $json.message.text ? $json.message.text : '').trim();\nconst is_sandbox = /^(?:\\/oh(?:\\s|$)|sandbox:)/i.test(text);\nreturn [{ json: { ...$json, is_sandbox, message_text: text } }];\n"
+      },
+      "id": "code-classify-13",
+      "name": "Clasificar mensaje",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [820, 80]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_sandbox }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-sandbox-14",
+      "name": "¿Misión sandbox?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1040, 80]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.missions = staticData.missions || {};\nconst id = String($json.message.message_id);\nstaticData.missions[id] = String($json.message.text || '');\nreturn [$json];\n"
+      },
+      "id": "code-save-mission-15",
+      "name": "Guardar Texto Misión",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1260, 20]
     },
     {
       "id": "telegram-send-buttons-04",
       "name": "Enviar Teclado HITL",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [920, 160],
+      "position": [1480, 20],
       "credentials": {
         "telegramApi": {
-          "id": "1",
+          "id": "9IhWvhoAHuzho5J5",
           "name": "Telegram account"
         }
       },
       "parameters": {
         "chatId": "={{ $json.message.chat.id }}",
-        "text": "=⚡ Solicitud recibida: \"{{ $json.message.text }}\"\n¿Desea autorizar la ejecución en el sandbox de OpenHands?",
+        "text": "=⚡ Misión sandbox: \"{{ $json.message.text }}\"\n¿Autorizar ejecución en OpenHands?",
         "replyMarkup": "inlineKeyboard",
         "inlineKeyboard": {
           "rows": [
@@ -128,111 +278,164 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://openhands:3000/api/v1/app-conversations",
+        "url": "http://murray-agent:8080/chat",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ title: 'HITL ' + $json.callback_query.data, initial_message: { role: 'user', content: [{ type: 'text', text: String($json.callback_query.data) }] } }) }}",
-        "options": {
-          "timeout": 10000
-        }
+        "jsonBody": "={{ JSON.stringify({ chat_id: String($('Telegram Trigger').item.json.message.chat.id), text: String($('Telegram Trigger').item.json.message.text || ''), message_id: $('Telegram Trigger').item.json.message.message_id }) }}",
+        "options": { "timeout": 60000 }
       },
-      "id": "http-dispatch-openhands-05",
-      "name": "Delegar a OpenHands",
+      "id": "http-murray-chat-16",
+      "name": "Consultar Murray",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1120, 280],
+      "position": [1260, 120],
       "onError": "continueRegularOutput"
     },
     {
       "parameters": {
-        "chatId": "={{ $('Telegram Trigger').item.json.callback_query.message.chat.id }}",
-        "text": "=✅ Orden procesada: {{ $('Telegram Trigger').item.json.callback_query.data }}.",
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ !!$json.needs_hitl }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-murray-hitl-17",
+      "name": "¿Murray pide HITL?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1480, 120]
+    },
+    {
+      "id": "telegram-ops-buttons-18",
+      "name": "Enviar Teclado Ops",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1700, 60],
+      "credentials": {
+        "telegramApi": {
+          "id": "9IhWvhoAHuzho5J5",
+          "name": "Telegram account"
+        }
+      },
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.reply }}",
+        "replyMarkup": "inlineKeyboard",
+        "inlineKeyboard": {
+          "rows": [
+            {
+              "row": {
+                "buttons": [
+                  {
+                    "text": "✅ Aprobar",
+                    "additionalFields": {
+                      "callback_data": "=APPROVE_OPS:{{ $json.hitl.approval_id }}"
+                    }
+                  },
+                  {
+                    "text": "❌ Rechazar",
+                    "additionalFields": {
+                      "callback_data": "=REJECT_OPS:{{ $json.hitl.approval_id }}"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        },
         "additionalFields": {
           "parse_mode": "HTML",
           "appendAttribution": false
         }
-      },
-      "id": "telegram-notify-resolution-06",
-      "name": "Notificar Resolución HITL",
+      }
+    },
+    {
+      "id": "telegram-reply-murray-19",
+      "name": "Responder Murray",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [1340, 360],
+      "position": [1700, 160],
       "credentials": {
         "telegramApi": {
-          "id": "1",
+          "id": "9IhWvhoAHuzho5J5",
           "name": "Telegram account"
+        }
+      },
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.reply }}",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
         }
       }
     }
   ],
   "connections": {
     "Telegram Trigger": {
-      "main": [
-        [
-          {
-            "node": "Filtro Seguridad ChatID",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "Filtro Seguridad ChatID", "type": "main", "index": 0 }]]
     },
     "Filtro Seguridad ChatID": {
-      "main": [
-        [
-          {
-            "node": "¿Es Callback de Botón?",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{ "node": "¿Es Callback de Botón?", "type": "main", "index": 0 }]]
     },
     "¿Es Callback de Botón?": {
       "main": [
-        [
-          {
-            "node": "¿Aprobar OpenHands?",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Enviar Teclado HITL",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "¿Callback Ops?", "type": "main", "index": 0 }],
+        [{ "node": "Clasificar mensaje", "type": "main", "index": 0 }]
       ]
+    },
+    "¿Callback Ops?": {
+      "main": [
+        [{ "node": "¿Aprobar Ops?", "type": "main", "index": 0 }],
+        [{ "node": "¿Aprobar OpenHands?", "type": "main", "index": 0 }]
+      ]
+    },
+    "¿Aprobar Ops?": {
+      "main": [
+        [{ "node": "Ejecutar Ops", "type": "main", "index": 0 }],
+        [{ "node": "Rechazar Ops", "type": "main", "index": 0 }]
+      ]
+    },
+    "Ejecutar Ops": {
+      "main": [[{ "node": "Notificar Resolución HITL", "type": "main", "index": 0 }]]
+    },
+    "Rechazar Ops": {
+      "main": [[{ "node": "Notificar Resolución HITL", "type": "main", "index": 0 }]]
     },
     "¿Aprobar OpenHands?": {
       "main": [
-        [
-          {
-            "node": "Delegar a OpenHands",
-            "type": "main",
-            "index": 0
-          }
-        ],
-        [
-          {
-            "node": "Notificar Resolución HITL",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Recuperar Texto Misión", "type": "main", "index": 0 }],
+        [{ "node": "Notificar Resolución HITL", "type": "main", "index": 0 }]
       ]
     },
+    "Recuperar Texto Misión": {
+      "main": [[{ "node": "Delegar a OpenHands", "type": "main", "index": 0 }]]
+    },
     "Delegar a OpenHands": {
+      "main": [[{ "node": "Notificar Resolución HITL", "type": "main", "index": 0 }]]
+    },
+    "Clasificar mensaje": {
+      "main": [[{ "node": "¿Misión sandbox?", "type": "main", "index": 0 }]]
+    },
+    "¿Misión sandbox?": {
       "main": [
-        [
-          {
-            "node": "Notificar Resolución HITL",
-            "type": "main",
-            "index": 0
-          }
-        ]
+        [{ "node": "Guardar Texto Misión", "type": "main", "index": 0 }],
+        [{ "node": "Consultar Murray", "type": "main", "index": 0 }]
+      ]
+    },
+    "Guardar Texto Misión": {
+      "main": [[{ "node": "Enviar Teclado HITL", "type": "main", "index": 0 }]]
+    },
+    "Consultar Murray": {
+      "main": [[{ "node": "¿Murray pide HITL?", "type": "main", "index": 0 }]]
+    },
+    "¿Murray pide HITL?": {
+      "main": [
+        [{ "node": "Enviar Teclado Ops", "type": "main", "index": 0 }],
+        [{ "node": "Responder Murray", "type": "main", "index": 0 }]
       ]
     }
   },

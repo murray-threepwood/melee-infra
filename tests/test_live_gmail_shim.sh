@@ -4,8 +4,15 @@ set -euo pipefail
 echo "==> workspace-mcp Gmail live (sin imprimir asuntos ni remitentes)..."
 
 eval_json() {
-  docker compose exec -T workspace-mcp node -e "$1"
+  docker compose exec -T -w /tmp workspace-mcp node -e "$1"
 }
+
+DOCKER_HEALTH="$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' murray-workspace-mcp)"
+if [[ "$DOCKER_HEALTH" != "healthy" ]]; then
+  echo "LIVE_GMAIL_DOCKER_UNHEALTHY status=${DOCKER_HEALTH}" >&2
+  exit 1
+fi
+echo "  [OK] docker health=${DOCKER_HEALTH}"
 
 HEALTH="$(eval_json 'fetch("http://127.0.0.1:8000/healthz").then(async(r)=>{const b=await r.json(); if(!r.ok) process.exit(1); if(b.gmail_allow_sending!==false) process.exit(2); console.log(b.gmail_mode||"missing");})')"
 if [[ "$HEALTH" != "live" && "$HEALTH" != "unconfigured" ]]; then
