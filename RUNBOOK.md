@@ -3,7 +3,8 @@
 ## 1. Comandos Frecuentes
 - **Ver estado general**: `docker compose ps`
 - **Ver logs en tiempo real**: `docker compose logs -f [servicio]`
-- **Reiniciar un servicio específico**: `docker compose restart [servicio]`
+- **Reiniciar un proceso (mismo env)**: `docker compose restart [servicio]`
+- **Recargar `.env` / `working_dir` / command**: `docker compose up -d --force-recreate [servicio]` (`restart` **no** recarga env)
 - **Detener stack completo**: `docker compose down`
 - **Actualizar imágenes**: `docker compose pull && docker compose up -d`
 
@@ -25,13 +26,16 @@
 - Mitigación: Reiniciar OpenHands para limpiar sandboxes huérfanos:
   `docker compose restart openhands`
 
-### Incidente D: Error 401/403 en Google Workspace MCP
-- Causa: Expiración del refresh token de Google Cloud OAuth.
-- Mitigación: Regenerar el token en Google Cloud Console e inyectar el nuevo valor en `GOOGLE_REFRESH_TOKEN` en `.env`.
+### Incidente D: Gmail OAuth 401 / 403 / 503
+- `unauthorized_client` / `gmail_oauth_client_mismatch`: el `refresh_token` no es del Client ID Web de `.env` (casi siempre nació del cliente Desktop). Reautorizar en [OAuth Playground](https://developers.google.com/oauthplayground/) con el cliente Web, Access type Offline, canje inmediato. Pegar el token nuevo **solo** en `.env`.
+- `invalid_client` / “The OAuth client was not found”: typo en `GOOGLE_CLIENT_ID` **o** el Playground sigue mandando el ID viejo de localStorage (engranaje ⚙️).
+- `invalid_grant` / `gmail_oauth_failed`: (a) `code=4/...` de ~60s reutilizado; (b) refresh token de app en **Prueba** caducó (~7 días). Reautorizar Playground → `.env` → `docker compose up -d --force-recreate workspace-mcp`.
+- No regenerar el token en “Google Cloud Console” a ciegas: Console rota el **secret**, Playground emite el **refresh_token**.
 
 ### Incidente E: cloudflared loguea `Failed to get tunnel`
 - Causa: `CLOUDFLARE_TUNNEL_TOKEN` sigue siendo el placeholder de `.env.example`.
 - Solución: completar H3–H4 de `roadmap/99_HUMAN_OPERATOR.md` y `docker compose restart cloudflared`.
+- Si el log es `dial tcp …:5678: connect: connection refused` justo después de recrear n8n: gap de restart. Verificar `curl -I https://ceo.threepwood.uy/healthz`.
 
 ### Incidente G: Botón HITL de Telegram da 405 / AxiosError
 - Causa: el flujo publicado pegaba `POST /api/conversations` (ruta SPA de OpenHands 1.11).
@@ -63,3 +67,12 @@
 ### Incidente F: workspace-mcp en Restarting
 - Causa histórica: el paquete npm `@j3k0/mcp-google-workspace` no existe en el registry (404).
 - Estado actual: el servicio corre `server.mjs` + `gmail-client.mjs` (Gmail API draft-only, **nunca send**). Si alguien vuelve a poner `npm install -g @j3k0/mcp-google-workspace`, el contenedor entra en crash-loop.
+
+### Incidente L: `workspace-mcp` figura `unhealthy` pero Gmail responde
+- Causa: `working_dir` era `/opt/mcp` (bind `:ro`). Docker Desktop aborta el healthcheck/`compose exec` (`exit=-1`, *cwd outside mount namespace*). El proceso HTTP sigue en `:8000`.
+- Verificación: `wget` a `http://workspace-mcp:8000/healthz` **desde n8n** da `gmail_mode=live`. `docker inspect` Health.Status `unhealthy` + FailingStreak alto.
+- Mitigación: `working_dir: /tmp` en Compose, command `node /opt/mcp/server.mjs`, tests con `-w /tmp`. Recrear: `docker compose up -d --force-recreate workspace-mcp`. Esperar `healthy`.
+
+### Incidente M: `n8n import:workflow` aborta por `id` NULL
+- Causa: el JSON no trae `"id"` en la raíz. Postgres 16: `null value in column "id" of relation "workflow_entity"`.
+- Mitigación: asignar un id estable en `workflows/*.json` (triage: `Z8f9K2mP1qRt5vWx`) e importar con `--projectId` **o** `--userId`, nunca los dos.

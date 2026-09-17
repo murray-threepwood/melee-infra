@@ -1,6 +1,6 @@
 # Estado de Avance del Proyecto
 
-Última actualización: 2026-09-16 23:40 (UTC)
+Última actualización: 2026-09-17 00:55 (UTC)
 Agente ejecutor: Cursor
 
 ## Fases y Tareas
@@ -31,5 +31,10 @@ Agente ejecutor: Cursor
 
 ## Acciones humanas pendientes
 - H1–H12: cerrados. H12 (2026-09-16 ~20:34 UY): Rechazar → `✅ Orden procesada: REJECT_TASK:16`.
-- **Gmail OAuth mismatch (bloquea triage Active)**: Google respondió `unauthorized_client`. El `refresh_token` no es del cliente Web de `.env`. Reautorizar en Playground con ese cliente; después `docker compose up -d --force-recreate workspace-mcp`. No activé `email_triage_draft` en n8n.
+- Gmail OAuth **live** (cliente Web + refresh_token de Playground). `GET /gmail/unread` → `status=ok`. Workflows n8n **activos**: `telegram_hitl_router` (`20uYWal9fr2bWwVV`), `email_triage_draft` (`Z8f9K2mP1qRt5vWx`).
 - Postgres 16: alerta de n8n 2.38 ignorada a propósito (no upgrade de major).
+- **Operador (no bloquea código)**:
+  1. Rotar `GOOGLE_CLIENT_SECRET` en Cloud Console (se pegó en un chat). Actualizar `.env` + `.gauth.json` → `docker compose up -d --force-recreate workspace-mcp`. No pegar el valor en chat.
+  2. App OAuth en **Prueba**: el refresh token caduca ~7 días. Reautorizar en Playground cuando `/gmail/unread` dé `gmail_oauth_failed`.
+  3. Primer unread real: mandate un mail y esperá el cron de 15 min (o Execute workflow). Esperado: draft en Gmail + alerta Telegram HTML.
+  4. Botón **Aprobar** (OpenHands + DeepSeek): H12 solo cubrió Rechazar.

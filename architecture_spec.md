@@ -159,7 +159,7 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
 | `postgres_data` (Docker Named Volume) | `/var/lib/postgresql/data` | Persistencia transaccional de `n8n`. Major 16; no migrar a 17 sin OK. |
 | `n8n_data` (Docker Named Volume) | `/home/node/.n8n` | Claves criptográficas locales y configuraciones de `n8n`. |
 | `./workflows` (Bind Mount, RO) | `/opt/workflows:ro` | JSON versionado. El mount **no** recarga flujos publicados. |
-| `./config/workspace-mcp` (Bind Mount, RO) | `/opt/mcp:ro` | `server.mjs` + `gmail-client.mjs`. |
+| `./config/workspace-mcp` (Bind Mount, RO) | `/opt/mcp:ro` | `server.mjs` + `gmail-client.mjs`. **`working_dir` del contenedor es `/tmp`**, no `/opt/mcp`: un cwd sobre bind `:ro` hace que Docker Desktop mate healthcheck/`compose exec` (`exit=-1`) aunque el proceso HTTP siga vivo. |
 | `./config/mcp-auth` (Bind Mount) | `/app/auth` | `.gauth.json` OAuth (gitignore). |
 | `./workspace` (Bind Mount) | `/opt/workspace_base` | Área aislada de `openhands`. |
 

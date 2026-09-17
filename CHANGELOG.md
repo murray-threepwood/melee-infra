@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.3 — Healthcheck MCP + lecciones OAuth
+
+- `workspace-mcp` usa `working_dir: /tmp` (el bind `/opt/mcp:ro` como cwd dejaba `unhealthy` falso y rompía `compose exec`).
+- Lecciones: trampas OAuth Playground, refresh token ~7 días en app Testing, secretos nunca en chat, import n8n exige `"id"` raíz.
+- `PROGRESS.md` deja de listar el mismatch OAuth como bloqueo: Gmail live, triage Active.
+
 ## 0.1.2 — Gmail API draft-only (workspace-mcp)
 
 - El shim deja de fingir `unread_count=0` / `awaiting_oauth`. `GET /gmail/unread` y `POST /gmail/drafts` hablan Gmail API. Cero send.

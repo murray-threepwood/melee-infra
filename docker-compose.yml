@@ -70,7 +70,7 @@ services:
     image: node:20-alpine
     container_name: murray-workspace-mcp
     restart: unless-stopped
-    working_dir: /opt/mcp
+    working_dir: /tmp
     command: ["node", "/opt/mcp/server.mjs"]
     environment:
       - GMAIL_ALLOW_SENDING=false

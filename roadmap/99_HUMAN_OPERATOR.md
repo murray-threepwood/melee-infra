@@ -365,6 +365,10 @@ Los puntos 5–8 **no** se repiten por cada scope. Una autorización, un exchang
 
 **Verificación**: en el JSON, `"scope"` incluye `gmail.readonly` y `gmail.compose`. Las tres `GOOGLE_*` en `.env` son del cliente **Web**.
 
+**Caducidad**: la app queda en **Prueba**. Google mata ese `refresh_token` ~7 días → `503 gmail_oauth_failed`. Volvé a H8.5 (engranaje Web, canje inmediato) y `docker compose up -d --force-recreate workspace-mcp`. No pegues Client secret ni refresh token al chat.
+
+**localStorage del Playground**: el engranaje ⚙️ guarda el Client ID viejo en el navegador. Si `.env` ya está bien y Google sigue diciendo `invalid_client`, reabrí el engranaje y pegá otra vez el par Web.
+
 ---
 
 ## H9. Archivo OAuth local del MCP
@@ -491,5 +495,6 @@ Esperado: `E2E_VERIFICACION_COMPLETA_OK`.
 
 - No pongas `GMAIL_ALLOW_SENDING=true`.
 - No mapees puertos de Postgres al `0.0.0.0`.
-- No commitees `.env`, `.gauth.json` ni tokens.
+- No commitees `.env`, `.gauth.json` ni tokens. **Tampoco los pegues en chat ni en un handoff.**
 - No cambies `N8N_ENCRYPTION_KEY` una vez que n8n ya guardó credenciales.
+- `docker compose restart` no recarga `.env`. Para secretos: `docker compose up -d --force-recreate <servicio>`.
