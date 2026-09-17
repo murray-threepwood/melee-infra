@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.7 — Panel de control y observabilidad local (el_corazon_de_Murray.sh)
+
+- Panel de control y observabilidad interactivo CLI en un único script autónomo (`el_corazon_de_Murray.sh`), 100% self-hosted en consola.
+- Capa 1: Observabilidad del agente (memoria viva de chat `memory.json`, sesión de código `session.json`, jobs async `jobs.json`, ping interactivo a `/chat` y sandboxes de OpenHands).
+- Capa 2: Observabilidad de infraestructura (sondeo de salud en tiempo real, streaming de logs coloreado con sed, monitor de presupuesto de memoria RAM < 4.5 GB).
+- Capa 3: Observabilidad de workflows y errores (auditoría de ejecuciones de n8n en Postgres y escáner automático de incidentes de RUNBOOK.md).
+- Menú de limpiezas granulares (workspace, memoria de Murray, sandboxes huérfanos, rebuilds y reset total).
+
 ## 0.1.6 — Git de dev + borrar ./workspace
 
 - Murray lista y borra paths bajo `./workspace` (HITL `APPROVE_DELETE`). Jail realpath; wipe del mount, no de murray-infra.

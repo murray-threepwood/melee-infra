@@ -120,6 +120,17 @@ docker compose up -d
 docker compose ps
 ```
 
+### 2.1. Panel de Control y Observabilidad Integral (El Corazón de Murray)
+Para operar, inspeccionar y monitorear todo el stack (Capas 1, 2 y 3) de manera interactiva y 100% self-hosted en tu consola:
+```bash
+./el_corazon_de_Murray.sh
+```
+Desde este panel interactivo podés:
+- **Capa 1 (Agente)**: Ver la memoria viva del chat (`memory.json`), la sesión de código activa (`session.json`), la cola de jobs (`jobs.json`) y hacer ping/diagnóstico directo a Murray.
+- **Capa 2 (Infraestructura)**: Monitorear el estado de salud (`healthy`/`sick`/`down`), seguir logs en vivo coloreados por servicio y vigilar el presupuesto de RAM (<4.5 GB).
+- **Capa 3 (Workflows & Errores)**: Inspeccionar ejecuciones de n8n en Postgres y ejecutar el scanner automático de incidentes del RUNBOOK.
+- **Mantenimiento**: Limpiezas quirúrgicas de repos, reinicio de memoria del agente, purga de sandboxes de OpenHands o reconstrucción total del stack.
+
 ### 3. Ejecutar la Suite de Pruebas End-to-End
 ```bash
 # Validar que ningún servicio agonice en CrashLoopBackOff

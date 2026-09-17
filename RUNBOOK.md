@@ -1,6 +1,7 @@
 # RUNBOOK: Operación y Mantenimiento del Sistema
 
 ## 1. Comandos Frecuentes
+- **Panel de control y observabilidad integral (Recomendado)**: `./el_corazon_de_Murray.sh`
 - **Ver estado general**: `docker compose ps`
 - **Ver logs en tiempo real**: `docker compose logs -f [servicio]`
 - **Reiniciar un proceso (mismo env)**: `docker compose restart [servicio]`
