@@ -1,5 +1,11 @@
 import { chunkTelegram, escapeHtml, redact } from "./redact.mjs";
 
+export function looksLikeHitlCopy(text) {
+  return /pido aprobar|toc[aá] aprobar|teclado (?:de )?hitl|botones (?:de )?hitl/i.test(
+    String(text || "")
+  );
+}
+
 export function packReply(text, extra = {}) {
   const reply = redact(escapeHtml(text)).slice(0, 3900);
   return {

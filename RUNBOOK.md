@@ -94,6 +94,11 @@
 - Verificación: `python3 tests/test_hitl_dispatch.py` y `bash tests/test_live_workspace_clone.sh`.
 - Mitigación: import + publish `telegram_hitl_router.json`; `docker compose up -d --build --force-recreate murray-agent`.
 
+### Incidente R: Murray dice «Tocá Aprobar» y no hay botones
+- Causa: el LLM escribió prosa HITL sin `needs_hitl=true`. n8n IF `!!$json.needs_hitl` va a **Responder Murray** (texto), no a **Enviar Teclado Ops**.
+- Verificación: el mensaje de misión tiene que incluir `Comando: …` (pytest/npm test/etc.) con repo activo; Murray debe devolver teclado Aprobar/Rechazar. `node --test tests/test_murray_agent_http.mjs` cubre el repro.
+- Mitigación: `docker compose up -d --force-recreate murray-agent`. No reimportar n8n por este síntoma: el router está bien.
+
 ### Incidente O: Murray no contesta / 403 en ops
 - Causa 1: `murray-agent` unhealthy o n8n no publicado con `/chat`.
 - Causa 2: `POST /ops/execute` sin `approval_id` vigente (15 min, un uso).

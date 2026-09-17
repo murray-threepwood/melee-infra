@@ -175,6 +175,8 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
   - `200`: `{ reply, replies, parse_mode:"HTML", needs_hitl, hitl?, needs_job?, job_id? }`
   - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`, `/workspace`
   - Clone sin URL, mutate sin repo activo, o delete sin path: pregunta, no HITL, no LLM
+  - Misión de código con repo activo + comando de test extraíble (`Comando: …` / `corré npm test`): intercept HITL `kind=code` **sin LLM**. Preguntas al repo (sin comando de test) siguen al LLM.
+  - Copy que pide Aprobar / Tocá Aprobar **sin** `needs_hitl=true` + `hitl.approve_data` es inválida: n8n rutea a texto plano y no hay teclado. `/chat` descarta esa prosa (o recupera HITL de código si hay comando de test).
   - `needs_hitl=true` + `hitl.approval_id` (16 hex) + `hitl.kind` (`ops`|`clone`|`code`|`delete`|`push`) + `hitl.approve_data`/`reject_data`
 - **`POST /ops/execute`** y **`POST /ops/reject`**: `{ approval_id }` solo `kind=ops`
   - `200` con `reply` HTML

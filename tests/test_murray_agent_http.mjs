@@ -526,6 +526,60 @@ test("clone HITL + execute encola job y no pushea", async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test("misión de código con Comando: arma HITL sin LLM", async () => {
+  let llmHits = 0;
+  const { engine, session, root } = codingStack({
+    llm: {
+      complete: async () => {
+        llmHits += 1;
+        return {
+          content: "Pido Aprobar la misión de código. Tocá Aprobar.",
+          tool_calls: [],
+        };
+      },
+    },
+  });
+  session.patch("110", {
+    slug: "hbauzan-semantic-firewall",
+    url: "https://github.com/hbauzan/semantic-firewall.git",
+  });
+  const body = await engine.handleChat({
+    chat_id: "110",
+    text: [
+      "OK confirmado. No hay harness de Etapa 6: creá backend/tests/test_embedder_determinism.py.",
+      "",
+      "Comando: cd backend && uv run pytest -q tests/test_embedder_determinism.py",
+    ].join("\n"),
+  });
+  assert.equal(body.needs_hitl, true);
+  assert.equal(body.hitl.kind, "code");
+  assert.match(body.hitl.approve_data, /^APPROVE_CODE:[a-f0-9]{16}$/);
+  assert.equal(llmHits, 0);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("prosa Pido Aprobar del LLM sin tool no manda teclado falso", async () => {
+  const { engine, session, root } = codingStack({
+    llm: {
+      complete: async () => ({
+        content: "Pido Aprobar la misión de código. Tocá Aprobar.",
+        tool_calls: [],
+      }),
+    },
+  });
+  session.patch("111", {
+    slug: "hbauzan-semantic-firewall",
+    url: "https://github.com/hbauzan/semantic-firewall.git",
+  });
+  const body = await engine.handleChat({
+    chat_id: "111",
+    text: "¿dónde está el main?",
+  });
+  assert.equal(body.needs_hitl, false);
+  assert.equal(/pido aprobar|toc[aá] aprobar/i.test(body.reply), false);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test("code HITL no llama OpenHands hasta Aprobar; reject tampoco", async () => {
   const starts = [];
   const { engine, session, root } = codingStack({

@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectStuck, isAgentDone, summarizeEvents } from "../config/murray-agent/openhands.mjs";
-import { classifyUserText, extractDeletePath } from "../config/murray-agent/intent.mjs";
+import {
+  classifyUserText,
+  extractDeletePath,
+  extractTestCommand,
+} from "../config/murray-agent/intent.mjs";
 import { parseWorkspaceCallback } from "../config/murray-agent/coding.mjs";
+import { looksLikeHitlCopy } from "../config/murray-agent/reply.mjs";
 
 test("classify: clone sin URL pregunta; mutate sin repo pregunta", () => {
   assert.equal(classifyUserText("cloná algo").action, "clarify_clone_url");
@@ -27,6 +32,23 @@ test("classify: borrar / push / pull / commit", () => {
   assert.equal(classifyUserText('commiteá "feat: disco"').message, "feat: disco");
   assert.equal(classifyUserText("checkout -b feat/limpieza").action, "checkout");
   assert.equal(classifyUserText("cambiá de rama feat/limpieza").branch, "feat/limpieza");
+});
+
+test("extractTestCommand: Comando: explícito; no dispara por mencionar pytest", () => {
+  assert.equal(
+    extractTestCommand(
+      "OK confirmado. creá backend/tests/test_embedder_determinism.py.\n\nComando: cd backend && uv run pytest -q tests/test_embedder_determinism.py"
+    ),
+    "cd backend && uv run pytest -q tests/test_embedder_determinism.py"
+  );
+  assert.equal(extractTestCommand("mejorá el README y corré npm test"), "npm test");
+  assert.equal(extractTestCommand("¿pytest está en el repo?"), "");
+  assert.equal(extractTestCommand("agregá un healthcheck"), "");
+});
+
+test("looksLikeHitlCopy detecta prosa de Aprobar sin flag", () => {
+  assert.equal(looksLikeHitlCopy("Pido Aprobar la misión de código. Tocá Aprobar."), true);
+  assert.equal(looksLikeHitlCopy("Núcleo: leí el README."), false);
 });
 
 test("callback workspace cabe en 64 bytes y parsea", () => {

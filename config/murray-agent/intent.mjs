@@ -46,6 +46,30 @@ export function extractCommitMessage(text) {
   return match ? match[1].trim() : "";
 }
 
+const TEST_RUNNER =
+  /(?:uv run pytest|npm test|pnpm test|yarn test|bun test|cargo test|go test|make test|pytest(?:\s+(?:-|\/|\.\/)))/i;
+
+export function extractTestCommand(text) {
+  const t = String(text || "");
+  const labeled = t.match(
+    /(?:^|\n)\s*(?:comando(?:\s+de\s+test)?|test[_ ]command)\s*[:\-]\s*(.+)/i
+  );
+  if (labeled) {
+    return labeled[1].trim().split(/\n/)[0].trim();
+  }
+  const runPhrase = t.match(
+    /\b(?:corré|corre|ejecut[áa]|run)\s+((?:cd\s+\S+\s*&&\s*)?.+)/i
+  );
+  if (runPhrase && TEST_RUNNER.test(runPhrase[1])) {
+    const cmd = runPhrase[1].trim().split(/\n/)[0].trim();
+    const runner = cmd.match(
+      /((?:cd\s+\S+\s*&&\s*)?(?:uv run pytest|npm test|pnpm test|yarn test|bun test|cargo test|go test|make test|pytest)[^\n]*)/i
+    );
+    return (runner ? runner[1] : cmd).trim();
+  }
+  return "";
+}
+
 export function extractBranchName(text) {
   const t = String(text || "").trim();
   const dashed = t.match(/checkout\s+-b\s+([A-Za-z0-9._/-]+)/i);
