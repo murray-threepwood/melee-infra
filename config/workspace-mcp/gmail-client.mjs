@@ -176,7 +176,12 @@ export function createGmailClient({
     const data = await readJson(response);
     if (!response.ok) {
       const googleError = data.error?.message || data.error || `HTTP ${response.status}`;
-      const errorCode = String(data.error?.message || data.error || "");
+      const errorCode =
+        data.error?.status ||
+        data.error?.code ||
+        (typeof data.error === "string" ? data.error : "") ||
+        `HTTP ${response.status}`;
+      console.error(`gmail-client HTTP ${response.status} code=${errorCode}`);
       if (errorCode === "unauthorized_client") {
         throw new GmailApiError(
           "unauthorized_client: el refresh_token no pertenece a este GOOGLE_CLIENT_ID (Desktop vs Web).",

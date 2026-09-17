@@ -138,7 +138,7 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
 - **Telegram HITL Router** (`workflows/telegram_hitl_router.json`, id publicado `20uYWal9fr2bWwVV`):
   - Trigger con `webhookId` `4dae132d-912c-40e0-b048-c00b42e03250`. Sin ese campo: 500 `reading 'node'`.
   - Credencial Telegram: nombre `Telegram account` (id vivo `9IhWvhoAHuzho5J5`).
-- **Email Triage Draft** (`workflows/email_triage_draft.json`):
+- **Email Triage Draft** (`workflows/email_triage_draft.json`, id publicado `Z8f9K2mP1qRt5vWx`):
   - Schedule 15 min → `GET http://workspace-mcp:8000/gmail/unread` → IF `unread_count > 0` → split `messages` → dedup por `id` (static data) → `POST /gmail/drafts` → notify Telegram HTML.
   - **No** lleva `telegramTrigger` (no se puede robar el webhook del HITL).
   - **No** crea drafts en el schedule sin dedup (si no, cada 15 min duplica).

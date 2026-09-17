@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Murray Infra — Diagramas de Arquitectura y Ciclo de Vida</title>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg: #0d1117;
+      --card-bg: #161b22;
+      --border: #30363d;
+      --text: #c9d1d9;
+      --accent: #f85149;
+      --accent-alt: #58a6ff;
+    }
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 2rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+    header {
+      max-width: 1000px;
+      width: 100%;
+      margin-bottom: 2rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+    }
+    h1 {
+      color: var(--accent);
+      margin: 0 0 0.5rem 0;
+      font-size: 1.8rem;
+    }
+    p {
+      color: #8b949e;
+      margin: 0;
+      font-size: 0.95rem;
+    }
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+      max-width: 1100px;
+      width: 100%;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+      overflow-x: auto;
+    }
+    .card h2 {
+      margin-top: 0;
+      color: var(--accent-alt);
+      font-size: 1.3rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    .mermaid {
+      display: flex;
+      justify-content: center;
+      margin-top: 1rem;
+    }
+  </style>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        darkMode: true,
+        background: '#161b22',
+        primaryColor: '#21262d',
+        primaryTextColor: '#c9d1d9',
+        primaryBorderColor: '#58a6ff',
+        lineColor: '#58a6ff',
+        secondaryColor: '#30363d',
+        tertiaryColor: '#161b22'
+      }
+    });
+  </script>
+</head>
+<body>
+  <header>
+    <h1>💀 Murray Infra — Visor Oficial de Arquitectura</h1>
+    <p>Renderizado en vivo de los contratos e invariantes de <code>architecture_spec.md</code>.</p>
+  </header>
+
+  <section class="card">
+    <h2>2.1. Diagrama de Secuencia: Ciclo de Vida y Flujo HITL</h2>
+    <div class="mermaid">
+sequenceDiagram
+    autonumber
+    actor CEO as 👑 CEO (Telegram)
+    participant N8N as ⚙️ n8n (Orquestador)
+    participant MCP as 📜 workspace-mcp (:8000)
+    participant OH as 🤖 openhands (:3000)
+    participant FS as 📁 ./workspace (Host Mac)
+
+    Note over N8N,MCP: 1. Triage Periódico (Schedule 15 min)
+    N8N->>MCP: GET /gmail/unread
+    MCP-->>N8N: 200 OK (unread_count, messages)
+    opt Mensajes no leídos > 0
+        N8N->>MCP: POST /gmail/drafts (crea borrador draft-only)
+        MCP-->>N8N: 200 OK (draft: true, sent: false)
+        N8N->>CEO: Alerta Telegram HTML (Borrador listo para revisión en Gmail)
+    end
+
+    Note over CEO,N8N: 2. Decisión HITL (Telegram Webhook)
+    CEO->>N8N: Callback Query [APROBAR / RECHAZAR / PAUSAR]
+    alt Acción = APROBAR
+        N8N->>OH: POST /api/v1/app-conversations (Disparo de misión)
+        OH->>FS: Escribe y ejecuta en ./workspace (Sandbox no-new-privileges)
+        FS-->>OH: Salida / Código generado
+        OH-->>N8N: Misión finalizada (exit code 0)
+        N8N->>CEO: Mensaje Telegram HTML: Tarea completada
+    else Acción = RECHAZAR o PAUSAR
+        N8N->>N8N: Registra log y aborta (sin llamada a OpenHands)
+        N8N->>CEO: Mensaje Telegram HTML: Tarea descartada / pausada
+    end
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>1. Topología de Red y Perímetro (Zero Trust)</h2>
+    <div class="mermaid">
+flowchart TD
+    subgraph Internet [Perímetro Externo]
+        UserTelegram["Telegram API (Bot Client)"]
+        CFEdge["Cloudflare Edge (Zero Trust)"]
+        GmailCloud["Google Gmail API"]
+    end
+
+    subgraph Host [Docker Host: agent-net]
+        CFDaemon["cloudflared (Tunnel Ingress)"]
+        N8N["n8n (Orquestador :5678)"]
+        Postgres["postgres_db (:5432)"]
+        MCP["workspace-mcp (:8000)"]
+        OpenHands["openhands (:3000)"]
+    end
+
+    CFEdge <==>|Túnel cifrado sin puertos entrantes| CFDaemon
+    CFDaemon -->|HTTP: http://n8n:5678| N8N
+    UserTelegram <==>|Webhook único vía CF| N8N
+    N8N <==>|TCP 5432| Postgres
+    N8N <==>|HTTP :8000| MCP
+    N8N <==>|HTTP :3000| OpenHands
+    MCP <==>|HTTPS OAuth 2.0 (Draft-Only)| GmailCloud
+    </div>
+  </section>
+</body>
+</html>
