@@ -116,12 +116,21 @@ services:
       - COMPOSE_PROJECT_DIR=/opt/stack
       - GMAIL_MCP_URL=http://workspace-mcp:8000
       - N8N_HEALTH_URL=http://n8n:5678/healthz
-      - OPENHANDS_HEALTH_URL=http://openhands:3000/api/health
+      - OPENHANDS_HEALTH_URL=http://openhands:3000/health
+      - OPENHANDS_URL=http://openhands:3000
       - MURRAY_MEMORY_PATH=/var/lib/murray-agent/memory.json
+      - MURRAY_SESSION_PATH=/var/lib/murray-agent/session.json
+      - MURRAY_JOBS_PATH=/var/lib/murray-agent/jobs.json
+      - MURRAY_WORKSPACE_ROOT=/opt/workspace
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - GITLAB_TOKEN=${GITLAB_TOKEN:-}
     volumes:
       - ./config/murray-agent:/opt/agent:ro
       - ./docker-compose.yml:/opt/stack/docker-compose.yml:ro
       - ./.env:/opt/stack/.env:ro
+      - ./workspace:/opt/workspace
       - ./RUNBOOK.md:/opt/docs/RUNBOOK.md:ro
       - ./architecture_spec.md:/opt/docs/architecture_spec.md:ro
       - ./.agents/skills/dev-protocol/lessons-learned.md:/opt/docs/lessons-learned.md:ro

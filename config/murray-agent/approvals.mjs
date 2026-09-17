@@ -14,6 +14,15 @@ export function createApprovalStore({ ttlMs = 15 * 60 * 1000 } = {}) {
     return id;
   }
 
+  function peek(id) {
+    const key = String(id || "");
+    const item = items.get(key);
+    if (!item || item.used || item.expiresAt < Date.now()) {
+      return null;
+    }
+    return { ...item };
+  }
+
   function take(id) {
     const key = String(id || "");
     const item = items.get(key);
@@ -24,5 +33,5 @@ export function createApprovalStore({ ttlMs = 15 * 60 * 1000 } = {}) {
     return { ...item };
   }
 
-  return { issue, take };
+  return { issue, peek, take };
 }

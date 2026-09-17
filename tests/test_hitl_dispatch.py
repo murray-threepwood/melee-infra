@@ -10,6 +10,7 @@ OLD_DEAD_ROUTE = "http://openhands:3000/api/conversations"
 NEW_ROUTE = "http://openhands:3000/api/v1/app-conversations"
 MURRAY_CHAT = "http://murray-agent:8080/chat"
 MURRAY_OPS = "http://murray-agent:8080/ops/execute"
+MURRAY_WS = "http://murray-agent:8080/workspace/hitl"
 
 
 def load_workflow():
@@ -82,6 +83,39 @@ def test_callback_ops_before_openhands():
         raise AssertionError("El callback no es el teclado HITL.")
     if "¿Callback Ops?" not in callback_true:
         raise AssertionError("El callback true debe ir a ¿Callback Ops?.")
+
+
+def test_workspace_callback_does_not_hit_openhands():
+    data = load_workflow()
+    ops_false = targets(data, "¿Callback Ops?", 1)
+    if "Clasificar callback workspace" not in ops_false:
+        raise AssertionError(
+            "Callbacks no-ops deben clasificarse (CLONE/CODE/STUCK) antes de OpenHands."
+        )
+    ws_true = targets(data, "¿Callback Workspace?", 0)
+    ws_false = targets(data, "¿Callback Workspace?", 1)
+    if "Resolver HITL Workspace" not in ws_true:
+        raise AssertionError(
+            "APPROVE_CLONE/CODE debe pegar a murray-agent /workspace/hitl"
+        )
+    if "Delegar a OpenHands" in ws_true:
+        raise AssertionError("HITL workspace no puede pegar crudo a OpenHands.")
+    if "¿Aprobar OpenHands?" not in ws_false:
+        raise AssertionError("/oh APPROVE_TASK sigue yendo a OpenHands.")
+    resolver = nodes_by_name(data)["Resolver HITL Workspace"]
+    if MURRAY_WS not in resolver["parameters"].get("url", ""):
+        raise AssertionError("Resolver HITL Workspace debe POST /workspace/hitl")
+
+
+def test_ops_keyboard_uses_hitl_callback_pair():
+    data = load_workflow()
+    node = nodes_by_name(data)["Enviar Teclado Ops"]
+    blob = json.dumps(node)
+    if "hitl.approve_data" not in blob or "hitl.reject_data" not in blob:
+        raise AssertionError(
+            "El teclado HITL de Murray tiene que usar hitl.approve_data/reject_data "
+            "(CLONE/CODE/OPS), no APPROVE_OPS hardcodeado."
+        )
 
 
 def test_approve_ops_does_not_hit_openhands():
@@ -163,6 +197,8 @@ def main():
         test_openhands_uses_v1_route,
         test_reject_skips_openhands,
         test_callback_ops_before_openhands,
+        test_workspace_callback_does_not_hit_openhands,
+        test_ops_keyboard_uses_hitl_callback_pair,
         test_approve_ops_does_not_hit_openhands,
         test_free_text_goes_to_murray_not_hitl_keyboard,
         test_sandbox_prefix_goes_to_hitl,

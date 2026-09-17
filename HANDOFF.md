@@ -8,10 +8,13 @@ Leé esto **antes** de tocar código. Fuente de invariantes: [`.agents/skills/de
 
 ## Estado (2026-09-17)
 
-- Rama de trabajo integrada a `main`. Stack Compose: `postgres_db`, `cloudflared`, `n8n`, `workspace-mcp`, `murray-agent`, `openhands`.
-- Verificación: `bash tests/test_e2e_stack.sh` → `E2E_VERIFICACION_COMPLETA_OK`. RAM idle ~1.1 GiB (techo 4.5 GiB).
+- Rama `feat/telegram-coding-sessions` (push/merge a `main` solo con OK humano). Stack Compose: 6 servicios.
+- Coding sessions: clone HITL + Q&A + misión OpenHands + stuck/opciones. Import del router n8n pendiente en el host si el publicado no tiene `/workspace/hitl`.
+- Verificación: `bash tests/test_e2e_stack.sh` → `E2E_VERIFICACION_COMPLETA_OK`. RAM idle ~1.2 GiB (techo 4.5 GiB).
 - Gmail live draft-only. `GET /gmail/unread` → `status=ok`. Send → 403.
-- Telegram: un bot, un webhook. Texto libre = Murray (DeepSeek en `murray-agent`). `/oh` o `sandbox:` = OpenHands. Ops mutate = HITL `APPROVE_OPS`.
+- Telegram: un bot, un webhook. Texto libre = Murray (DeepSeek en `murray-agent`). `/oh` o `sandbox:` = OpenHands crudo. Ops = `APPROVE_OPS`. Clone/código = `APPROVE_CLONE` / `APPROVE_CODE` → `/workspace/hitl`. Stuck = `STUCK_*`.
+- Murray **no** edita `murray-infra`. Clona a `./workspace/<slug>`. No hay git push desde el bot. OpenHands es el obrero.
+- OpenHands 1.11: health `GET /health` (`"OK"`). Follow-up `POST /api/v1/app-conversations/{id}/send-message`. `execution_status` incluye `stuck`. `/api/health` es SPA HTML.
 - Workflows n8n activos: `telegram_hitl_router` (`20uYWal9fr2bWwVV`), `email_triage_draft` (`Z8f9K2mP1qRt5vWx`).
 - Murray-en-Telegram **no es Cursor**. No edita este repo. No hay git push desde el bot.
 
@@ -33,12 +36,13 @@ Leé esto **antes** de tocar código. Fuente de invariantes: [`.agents/skills/de
 | :--- | :--- |
 | Gmail | `GMAIL_ALLOW_SENDING=false`. No hay `send()` en `gmail-client.mjs`. |
 | Telegram | Un `telegramTrigger`. WebhookId `4dae132d-912c-40e0-b048-c00b42e03250`. `parse_mode=HTML`. |
-| Chat vs sandbox | Texto libre → `POST murray-agent:8080/chat`. OpenHands solo `/oh` o `sandbox:`. |
+| Chat vs sandbox | Texto libre → `POST murray-agent:8080/chat`. OpenHands crudo solo `/oh` o `sandbox:`. Código pedido a Murray → HITL clone/code, obrero OpenHands. |
+| Coding | `./workspace/<slug>` only. https GitHub/GitLab. Privados: `GITHUB_TOKEN` en `.env`. Cero `git push`. |
 | Ops | `restart`/`recreate` de un servicio: `approval_id` de un uso. `callback_data` ≤64 bytes. |
+| OpenHands | Imagen `ghcr.io/openhands/openhands:latest`. Alta `POST /api/v1/app-conversations`. Follow-up `.../send-message`. Health `GET /health`. Rechazar/Pausar `/oh` no llaman. |
 | Compose env | `docker compose restart` **no** recarga `.env`. Usar `up -d --force-recreate`. |
 | CWD | `working_dir: /tmp` si el código está en bind `:ro`. Si no, healthcheck `exit=-1` falso. |
 | Postgres | `postgres:16-alpine`. No 17 sin migración humana (`down -v` borra el volumen). |
-| OpenHands | Imagen `ghcr.io/openhands/openhands:latest`. API `POST /api/v1/app-conversations`. Rechazar/Pausar no llaman. |
 | n8n JSON | Import CLI exige `"id"` raíz. `--projectId` xor `--userId`. El mount no publica el flujo. |
 | Secretos | Solo `.env` + `config/mcp-auth/.gauth.json`. Rotar secret si se pegó en un chat. |
 
@@ -74,6 +78,8 @@ Después de cambiar `GOOGLE_*`: `docker compose up -d --force-recreate workspace
 - Compose 5.x emite `GMAIL_ALLOW_SENDING: "false"` con comillas dobles.
 - `exec` y healthcheck: `docker compose exec -T -w /tmp <svc>`.
 - Tests LLM: mock. Live `/status` no llama a DeepSeek. No imprimir asuntos de Gmail.
+- OpenHands `GET /api/health` = SPA HTML 200. Health de verdad: `GET /health`.
+- n8n `Consultar Murray` timeout 45s. Clone/OpenHands van por jobs + `sendMessage` del mismo bot.
 
 ---
 
@@ -83,6 +89,7 @@ Después de cambiar `GOOGLE_*`: `docker compose up -d --force-recreate workspace
 | :--- | :--- | :--- |
 | Gmail HTTP | `config/workspace-mcp/*.mjs` | `tests/test_workspace_mcp_http.mjs`, `test_live_gmail_shim.sh` |
 | Chat / ops Telegram | `config/murray-agent/*.mjs` | `tests/test_murray_agent_http.mjs`, `test_live_murray_agent.sh` |
+| Clone / Q&A / code HITL | `config/murray-agent/workspace.mjs`, `coding.mjs` | `tests/test_workspace.mjs`, `test_coding_session.mjs`, `test_live_workspace_clone.sh` |
 | Router Telegram | `workflows/telegram_hitl_router.json` | `tests/test_hitl_dispatch.py` + import/publish/activar/restart n8n + `test_live_hitl_dispatch.sh` |
 | Triage mail | `workflows/email_triage_draft.json` | `tests/test_email_triage_draft.py` (sin `telegramTrigger`) |
 | Compose / RAM | `docker-compose.yml` | `tests/test_mcp_draft_only.py`, `tests/check_memory_budget.sh` |
@@ -96,7 +103,8 @@ n8n projectId de import: `RtVLhOyjbwQ3l5th`. Credencial Telegram nombre `Telegra
 
 - Rotar `GOOGLE_CLIENT_SECRET` si se filtró en un chat. Pegar solo en `.env` + `.gauth.json`. Recreate `workspace-mcp`.
 - Reautorizar Playground cuando Gmail dé `gmail_oauth_failed` (~7 días en Testing).
-- Probar Telegram: texto libre; recreate con Aprobar ops; `/oh` para sandbox. H12 cubrió Rechazar, no Aprobar OpenHands.
+- Probar Telegram: texto libre; recreate con Aprobar ops; `cloná https://github.com/...` + Aprobar; preguntar por el repo; pedido de cambio + test + Aprobar código. `/oh` sigue como sandbox crudo.
+- Tras este slice: import + publish + reactivar `telegram_hitl_router` (nodos `¿Callback Workspace?` / `/workspace/hitl`) y `docker compose up -d --build --force-recreate murray-agent`.
 - Primer unread real → draft en Gmail + alerta (el cron es 15 min).
 
 ---
@@ -106,5 +114,5 @@ n8n projectId de import: `RtVLhOyjbwQ3l5th`. Credencial Telegram nombre `Telegra
 - Segundo bot / segundo webhook.
 - `GMAIL_ALLOW_SENDING=true`.
 - Postgres 17.
-- Hacer de Murray-Telegram un Cursor (editar `murray-infra`, git push).
+- Editar `murray-infra` o `git push` desde el bot.
 - Publicar la app OAuth (scopes Gmail = verificación Google).

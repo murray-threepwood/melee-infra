@@ -69,7 +69,7 @@ Cada contenedor opera bajo el principio de menor privilegio dentro de la red pri
 | **`postgres_db`** | **El Sarcófago Transaccional** | PostgreSQL 16 Alpine respaldado por volumen persistente dedicado. Cero corrupción de datos; migraciones idempotentes y healthchecks nativos con `pg_isready`. |
 | **`n8n`** | **El Orquestador Supremo** | Centro neurálgico conectado a Telegram. Si un mortal sin credenciales intenta enviar comandos, el filtro de `TELEGRAM_CHAT_ID` lo arroja al foso de los leones sin emitir respuesta. |
 | **`workspace-mcp`** | **El Guardrail Infranqueable** | Servidor Model Context Protocol para Google Workspace. Por decreto demoníaco inmutable: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true`. La IA puede leer y redactar borradores, pero **el clic final de envío pertenece exclusivamente al dedo del CEO humano**. |
-| **`murray-agent`** | **La Calavera en Telegram** | DeepSeek Chat en el mismo bot. Diagnóstico y ops con HITL. No es Cursor; no edita el repo; no envía Gmail. |
+| **`murray-agent`** | **La Calavera en Telegram** | DeepSeek Chat en el mismo bot. Diagnóstico, ops HITL, clone/Q&A de `./workspace`. OpenHands es el obrero. Cero git push. Cero send de Gmail. |
 | **`openhands`** | **El Coliseo de Ejecución Sandbox** | Entorno de desarrollo autónomo confinado en `./workspace` con `security_opt: ["no-new-privileges:true"]`. Impulsado por DeepSeek vía LiteLLM porque *"nunca debes pagar más de 20 pavos por un juego de ordenador"* (ni por un millón de tokens inflados). |
 
 ---
@@ -87,7 +87,7 @@ La inteligencia de este repositorio está dividida con precisión quirúrgica:
    - [roadmap/02_N8N_AND_TELEGRAM_HITL.md](./roadmap/02_N8N_AND_TELEGRAM_HITL.md): Fase 2 (n8n, Telegram Router y validación de esquemas).
    - [roadmap/03_GOOGLE_WORKSPACE_MCP_GUARDRAILS.md](./roadmap/03_GOOGLE_WORKSPACE_MCP_GUARDRAILS.md): Fase 3 (MCP Google Workspace y workflow de triage).
    - [roadmap/04_OPENHANDS_RUNTIME_SANDBOX.md](./roadmap/04_OPENHANDS_RUNTIME_SANDBOX.md): Fase 4 (OpenHands Sandbox, DeepSeek LiteLLM y detección de bucles infinitos).
-   - [roadmap/05_INTEGRATION_AND_E2E_VERIFICATION.md](./roadmap/05_INTEGRATION_AND_E2E_VERIFICATION.md): Fase 5 (Validación completa de RAM < 4.5 GB, suite E2E y Runbook).
+   - [roadmap/06_TELEGRAM_CODING_SESSIONS.md](./roadmap/06_TELEGRAM_CODING_SESSIONS.md): Fase 6 (clone/Q&A/misiones código por Telegram).
    - [roadmap/99_HUMAN_OPERATOR.md](./roadmap/99_HUMAN_OPERATOR.md): **Lo que tenés que hacer vos** (tokens, túnel, bot, OAuth). Click a click, sin decidir arquitectura.
 
 4. **[.agents/](./.agents/) — Reglas y Habilidades Supremas**:

@@ -1,6 +1,6 @@
 # Estado de Avance del Proyecto
 
-Última actualización: 2026-09-17 16:30 (UTC)
+Última actualización: 2026-09-17 20:20 (UTC)
 Agente ejecutor: Cursor
 
 ## Fases y Tareas
@@ -30,15 +30,18 @@ Agente ejecutor: Cursor
   - [x] Tarea 5.4: Runbook operativo y de fallas
 - [x] Fase 6: Murray por Telegram (v1 chat + ops HITL)
   - [x] Servicio `murray-agent` + router n8n (texto libre ≠ teclado OpenHands)
+- [x] Fase 6b: Coding sessions (clone/Q&A/OpenHands obrero)
+  - [x] Spike OpenHands follow-up + jobs async
+  - [x] HITL clone + tree/read/grep
+  - [x] propose_code_mission + stuck options + Murray pregunta antes
 
 ## Acciones humanas pendientes
 - H1–H12: cerrados. H12 (2026-09-16 ~20:34 UY): Rechazar → `✅ Orden procesada: REJECT_TASK:16`.
 - Gmail OAuth **live**. Workflows n8n **activos**: HITL `20uYWal9fr2bWwVV`, triage `Z8f9K2mP1qRt5vWx`.
 - Postgres 16: alerta de n8n 2.38 ignorada a propósito (no upgrade de major).
 - **Operador (no bloquea código)**:
-  1. Telegram: mandá texto normal (“estado del stack” o `/status`). Esperado: respuesta Murray **sin** botones OpenHands.
-  2. Si pedís recreate de `workspace-mcp`, tocá Aprobar en el teclado ops.
-  3. `/oh` o `sandbox:` queda para OpenHands.
-  4. Rotar `GOOGLE_CLIENT_SECRET` (se pegó en un chat). No pegar el valor en chat.
-  5. Refresh token de app en **Prueba** caduca ~7 días.
-  6. Primer unread real → draft + alerta. Botón **Aprobar** OpenHands aún no se tocó en H12.
+  1. Import + publish + reactivar `telegram_hitl_router` (nodos workspace HITL) y `docker compose up -d --build --force-recreate murray-agent`.
+  2. Telegram: `cloná https://github.com/owner/repo` → Aprobar. Preguntá por el código. Pedí un cambio con comando de test → Aprobar código.
+  3. Recreate de un servicio del stack sigue pidiendo Aprobar ops.
+  4. `/oh` queda para sandbox crudo.
+  5. Rotar `GOOGLE_CLIENT_SECRET` si se pegó en un chat. Refresh token Testing ~7 días.

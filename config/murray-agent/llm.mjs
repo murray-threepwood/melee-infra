@@ -75,6 +75,76 @@ export const TOOL_DEFS = [
       },
     },
   },
+  {
+    type: "function",
+    function: {
+      name: "workspace_session",
+      description: "Repo activo en ./workspace para este chat (slug, url). No es murray-infra.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_tree",
+      description: "Lista archivos del repo activo (cap). Solo ./workspace/<slug>.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_read",
+      description: "Lee un archivo de texto del repo activo. Path relativo. No binarios.",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string" } },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_grep",
+      description: "Busca un texto en el repo activo. No shell.",
+      parameters: {
+        type: "object",
+        properties: { pattern: { type: "string" } },
+        required: ["pattern"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_clone",
+      description:
+        "Pide HITL para git clone https GitHub/GitLab shallow en ./workspace. NO clona hasta Aprobar. Nunca push.",
+      parameters: {
+        type: "object",
+        properties: { url: { type: "string" } },
+        required: ["url"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_code_mission",
+      description:
+        "Pide HITL para que OpenHands edite/testee el repo activo. NO ejecuta. Requiere instrucción y comando de test. Cero git push.",
+      parameters: {
+        type: "object",
+        properties: {
+          instruction: { type: "string" },
+          test_command: { type: "string" },
+          files_plan: { type: "string" },
+        },
+        required: ["instruction", "test_command"],
+      },
+    },
+  },
 ];
 
 export function createLlm({

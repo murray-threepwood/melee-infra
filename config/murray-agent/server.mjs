@@ -5,11 +5,17 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createApprovalStore } from "./approvals.mjs";
 import { createChatEngine } from "./chat.mjs";
+import { createCodingSession } from "./coding.mjs";
 import { readDoc } from "./docs.mjs";
 import { fetchGmailMeta } from "./gmail-meta.mjs";
+import { createJobStore, createJobWorker } from "./jobs.mjs";
 import { createLlm } from "./llm.mjs";
 import { createMemory } from "./memory.mjs";
+import { createOpenHandsClient } from "./openhands.mjs";
 import { createOps } from "./ops.mjs";
+import { createSessionStore } from "./session.mjs";
+import { createTelegramNotifier } from "./telegram.mjs";
+import { createWorkspace } from "./workspace.mjs";
 
 function sendJson(res, status, body) {
   const payload = JSON.stringify(body);
@@ -87,6 +93,20 @@ export function createMurrayAgentServer({
         return;
       }
 
+      if (req.method === "POST" && pathname === "/workspace/hitl") {
+        if (typeof engine.handleWorkspaceHitl !== "function") {
+          sendJson(res, 503, { error: "coding_session_unconfigured" });
+          return;
+        }
+        const body = await parseJsonBody(req);
+        const result = await engine.handleWorkspaceHitl({
+          callback_data: body.callback_data,
+          chat_id: body.chat_id,
+        });
+        sendJson(res, 200, result);
+        return;
+      }
+
       sendJson(res, 404, { error: "not_found", path: pathname });
     } catch (err) {
       const status = Number(err.status) || (err.code === "ops_approval_denied" ? 403 : 500);
@@ -107,7 +127,31 @@ export function createEngineFromEnv() {
   const llm = createLlm();
   const memory = createMemory();
   const approvals = createApprovalStore();
-  return createChatEngine({
+  const session = createSessionStore();
+  const workspace = createWorkspace();
+  const jobs = createJobStore();
+  const openhands = createOpenHandsClient();
+  const telegram = createTelegramNotifier();
+  const workerRef = { current: null };
+  const coding = createCodingSession({
+    workspace,
+    session,
+    jobs,
+    approvals,
+    openhands,
+    telegram,
+    worker: {
+      kick(id) {
+        return workerRef.current ? workerRef.current.kick(id) : Promise.resolve(null);
+      },
+    },
+  });
+  workerRef.current = createJobWorker({
+    store: jobs,
+    handlers: coding.handlers,
+    intervalMs: Number(process.env.MURRAY_JOB_INTERVAL_MS || 2000),
+  });
+  const engine = createChatEngine({
     ops,
     llm,
     memory,
@@ -115,7 +159,11 @@ export function createEngineFromEnv() {
     gmailMeta: () => fetchGmailMeta(),
     readDoc,
     personaText,
+    coding,
+    workspace,
+    session,
   });
+  return { engine, jobs, worker: workerRef.current };
 }
 
 const isDirectRun =
@@ -124,9 +172,10 @@ const isDirectRun =
 
 if (isDirectRun) {
   const port = Number.parseInt(process.env.MURRAY_AGENT_PORT || "8080", 10);
-  const engine = createEngineFromEnv();
+  const { engine, worker } = createEngineFromEnv();
   const server = createMurrayAgentServer({ engine });
   server.listen(port, "0.0.0.0", () => {
     console.log(`murray-agent listening on :${port}`);
+    worker.start();
   });
 }

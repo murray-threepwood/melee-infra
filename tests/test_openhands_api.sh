@@ -8,16 +8,24 @@ BASE_URL="http://127.0.0.1:${HOST_PORT}"
 
 # 1. Test de Health endpoint
 echo "Comprobando endpoint de salud..."
-HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}/api/health" || echo "000")
+HTTP_STATUS=$(curl -s -o /tmp/oh-health-body.txt -w "%{http_code}" "${BASE_URL}/health" || echo "000")
+if [ "$HTTP_STATUS" != "200" ]; then
+  echo "ADVERTENCIA: GET /health no respondió 200 (código ${HTTP_STATUS}). /api/health es la SPA."
+  docker compose up -d openhands || true
+  sleep 5
+  HTTP_STATUS=$(curl -s -o /tmp/oh-health-body.txt -w "%{http_code}" "${BASE_URL}/health" || echo "000")
+fi
+if [ "$HTTP_STATUS" = "200" ]; then
+  echo "  [OK] OpenHands GET /health → $(tr -d '\n' < /tmp/oh-health-body.txt | head -c 40)"
+fi
 
-if [ "$HTTP_STATUS" != "200" ] && [ "$HTTP_STATUS" != "404" ]; then
-  # Nota: en ciertas versiones de OpenHands el endpoint raíz responde 200 y api/health puede variar
-  ROOT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "${BASE_URL}/" || echo "000")
-  if [ "$ROOT_STATUS" != "200" ]; then
-    echo "ADVERTENCIA: OpenHands no está respondiendo en ${BASE_URL} (Código: $HTTP_STATUS / $ROOT_STATUS). Levantando servicio..."
-    docker compose up -d openhands
-    sleep 10
-  fi
+FOLLOWUP=$(curl -s "${BASE_URL}/openapi.json" | python3 -c "import json,sys; p=json.load(sys.stdin).get('paths',{}); print('yes' if '/api/v1/app-conversations/{conversation_id}/send-message' in p else 'no')" 2>/dev/null || echo "skip")
+if [ "$FOLLOWUP" = "no" ]; then
+  echo "ERROR: OpenAPI local no tiene send-message; el loop Telegram no puede hacer follow-up." >&2
+  exit 1
+fi
+if [ "$FOLLOWUP" = "yes" ]; then
+  echo "  [OK] OpenHands follow-up POST .../send-message existe"
 fi
 
 # 2. Simulación de loop de detección de errores (Circuit Breaker / Stuck Loop)

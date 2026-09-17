@@ -282,7 +282,7 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ chat_id: String($('Telegram Trigger').item.json.message.chat.id), text: String($('Telegram Trigger').item.json.message.text || ''), message_id: $('Telegram Trigger').item.json.message.message_id }) }}",
-        "options": { "timeout": 60000 }
+        "options": { "timeout": 45000 }
       },
       "id": "http-murray-chat-16",
       "name": "Consultar Murray",
@@ -332,13 +332,13 @@
                   {
                     "text": "✅ Aprobar",
                     "additionalFields": {
-                      "callback_data": "=APPROVE_OPS:{{ $json.hitl.approval_id }}"
+                      "callback_data": "={{ $json.hitl.approve_data }}"
                     }
                   },
                   {
                     "text": "❌ Rechazar",
                     "additionalFields": {
-                      "callback_data": "=REJECT_OPS:{{ $json.hitl.approval_id }}"
+                      "callback_data": "={{ $json.hitl.reject_data }}"
                     }
                   }
                 ]
@@ -372,6 +372,49 @@
           "appendAttribution": false
         }
       }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = String($json.callback_query && $json.callback_query.data ? $json.callback_query.data : '');\nconst is_workspace = /_(CLONE|CODE):/.test(data) || /^STUCK_/.test(data);\nreturn [{ json: { ...$json, is_workspace, callback_data: data } }];\n"
+      },
+      "id": "code-classify-workspace-cb-20",
+      "name": "Clasificar callback workspace",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [820, 520]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.is_workspace }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "if-callback-workspace-21",
+      "name": "¿Callback Workspace?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [1040, 520]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://murray-agent:8080/workspace/hitl",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ callback_data: String($json.callback_query.data || ''), chat_id: String($json.callback_query.message.chat.id) }) }}",
+        "options": { "timeout": 20000 }
+      },
+      "id": "http-workspace-hitl-22",
+      "name": "Resolver HITL Workspace",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1260, 520],
+      "onError": "continueRegularOutput"
     }
   ],
   "connections": {
@@ -390,8 +433,20 @@
     "¿Callback Ops?": {
       "main": [
         [{ "node": "¿Aprobar Ops?", "type": "main", "index": 0 }],
+        [{ "node": "Clasificar callback workspace", "type": "main", "index": 0 }]
+      ]
+    },
+    "Clasificar callback workspace": {
+      "main": [[{ "node": "¿Callback Workspace?", "type": "main", "index": 0 }]]
+    },
+    "¿Callback Workspace?": {
+      "main": [
+        [{ "node": "Resolver HITL Workspace", "type": "main", "index": 0 }],
         [{ "node": "¿Aprobar OpenHands?", "type": "main", "index": 0 }]
       ]
+    },
+    "Resolver HITL Workspace": {
+      "main": [[{ "node": "Notificar Resolución HITL", "type": "main", "index": 0 }]]
     },
     "¿Aprobar Ops?": {
       "main": [

@@ -22,8 +22,12 @@ Invariante: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true`. El clic de 
 Runtime de agente de código acotado a `./workspace`, con `no-new-privileges` y socket Docker para sandboxes hijos.
 
 ## murray-agent
-Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. DeepSeek Chat + diagnóstico/ops del stack. No es Cursor. Restart/recreate de un servicio exige HITL (`approval_id`).
+Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. DeepSeek Chat + diagnóstico/ops del stack + conductor de coding sessions (`./workspace`). No edita murray-infra. No hay git push.
+
+## Coding session
+Loop HITL por Telegram: clonar un repo público/privado (token en `.env`) a `./workspace/<slug>`, preguntar, y con Aprobar código mandar a OpenHands a editar/testear. Stuck → opciones (retry/cambiar/parar/log).
 
 _Avoid_: llamar “MCP” al workflow n8n; el MCP es el servicio `workspace-mcp`.
 _Avoid_: mapear Postgres a `0.0.0.0`.
 _Avoid_: segundo bot Telegram / segundo webhook.
+_Avoid_: `git push` desde el bot.
