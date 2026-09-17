@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.8 — Teclado HITL de código sin depender del LLM
+
+- Misión de código con repo activo + `Comando:` / `corré npm test` arma HITL `kind=code` en intercept, sin DeepSeek.
+- `/chat` descarta prosa «Pido Aprobar» / «Tocá Aprobar» si no hay `needs_hitl=true` (n8n no pinta teclado con texto plano).
+
 ## 0.1.7 — Panel de control y observabilidad local (el_corazon_de_Murray.sh)
 
 - Panel de control y observabilidad interactivo CLI en un único script autónomo (`el_corazon_de_Murray.sh`), 100% self-hosted en consola.

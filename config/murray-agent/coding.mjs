@@ -1,4 +1,4 @@
-import { classifyUserText } from "./intent.mjs";
+import { classifyUserText, extractTestCommand } from "./intent.mjs";
 import { detectStuck, isAgentDone, summarizeEvents } from "./openhands.mjs";
 import { packHitl, packReply } from "./reply.mjs";
 import { stuckKeyboard } from "./telegram.mjs";
@@ -308,6 +308,17 @@ export function createCodingSession({
         branch: verdict.branch,
         create: Boolean(verdict.create),
       });
+    }
+    if (verdict.action === "maybe_code_mission") {
+      const tests = extractTestCommand(text);
+      if (tests) {
+        return proposeCode({
+          chatId,
+          instruction: text,
+          testCommand: tests,
+          filesPlan: "pendiente del obrero",
+        });
+      }
     }
     return null;
   }

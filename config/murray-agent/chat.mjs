@@ -3,8 +3,9 @@ import {
   assertAllowedService,
   webhookGapWarning,
 } from "./ops.mjs";
+import { extractTestCommand } from "./intent.mjs";
 import { TOOL_DEFS } from "./llm.mjs";
-import { packHitl, packReply } from "./reply.mjs";
+import { looksLikeHitlCopy, packHitl, packReply } from "./reply.mjs";
 import { redact } from "./redact.mjs";
 
 const HEALTH_URLS = {
@@ -110,6 +111,26 @@ export function createChatEngine({
     return session && typeof session.get === "function"
       ? session.get(chatId).slug
       : "";
+  }
+
+  function recoverCodeHitl(chatId, text) {
+    if (!coding || typeof coding.proposeCode !== "function") {
+      return null;
+    }
+    if (!activeSlug(chatId)) {
+      return null;
+    }
+    const tests = extractTestCommand(text);
+    if (!tests) {
+      return null;
+    }
+    const packed = coding.proposeCode({
+      chatId,
+      instruction: text,
+      testCommand: tests,
+      filesPlan: "pendiente del obrero",
+    });
+    return packed.needs_hitl ? packed : null;
   }
 
   async function dispatchTool(name, args, ctx = {}) {
@@ -397,6 +418,20 @@ export function createChatEngine({
           });
         }
         continue;
+      }
+      if (looksLikeHitlCopy(out.content)) {
+        const recovered = recoverCodeHitl(chatId, text);
+        if (recovered) {
+          memory.append(chatId, "user", text);
+          memory.append(chatId, "assistant", recovered.reply);
+          return recovered;
+        }
+        const refused = packReply(
+          "No mandé teclado. n8n solo arma botones si needs_hitl=true. Decime instrucción + comando de test (o cloná / borrá / pusheá / recreá) y te mando Aprobar de verdad."
+        );
+        memory.append(chatId, "user", text);
+        memory.append(chatId, "assistant", refused.reply);
+        return refused;
       }
       const packed = packReply(
         out.content || "No tengo nada útil. Peleás como un granjero de vacas."
