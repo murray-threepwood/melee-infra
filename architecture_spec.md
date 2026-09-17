@@ -173,7 +173,8 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
 - **`GET /healthz`**: `200` `{"status":"ok","service":"murray-agent","model":"deepseek-chat"}`
 - **`POST /chat`**: `{ chat_id, text, message_id? }`
   - `200`: `{ reply, replies, parse_mode:"HTML", needs_hitl, hitl?, needs_job?, job_id? }`
-  - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`, `/workspace`
+  - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`, `/workspace`, `/jobs`, `/jobs <id>`
+  - `/jobs`: últimos 20 jobs del chat (id, type, status, age, slug, error). `/jobs <id>`: detalle + últimas 20 líneas de `job.log` (notify + transiciones terminales). Solo lectura, sin HITL. "estado de los jobs" intercepta igual.
   - Clone sin URL, mutate sin repo activo, o delete sin path: pregunta, no HITL, no LLM
   - Misión de código con repo activo + comando de test extraíble (`Comando: …` / `corré npm test`): intercept HITL `kind=code` **sin LLM**. Preguntas al repo (sin comando de test) siguen al LLM.
   - Copy que pide Aprobar / Tocá Aprobar **sin** `needs_hitl=true` + `hitl.approve_data` es inválida: n8n rutea a texto plano y no hay teclado. `/chat` descarta esa prosa (o recupera HITL de código si hay comando de test).

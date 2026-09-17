@@ -22,7 +22,10 @@ Invariante: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true`. El clic de 
 Runtime de agente de código acotado a `./workspace`, con `no-new-privileges` y socket Docker para sandboxes hijos.
 
 ## murray-agent
-Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. DeepSeek Chat + diagnóstico/ops del stack + conductor de coding sessions (`./workspace`). No edita murray-infra. Git de dev en el jail: pull/commit sin HITL; push y delete con Aprobar. Nunca force ni push a main/master.
+Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. DeepSeek Chat + diagnóstico/ops del stack + conductor de coding sessions (`./workspace`). No edita murray-infra. Git de dev en el jail: pull/commit sin HITL; push y delete con Aprobar. Nunca force ni push a main/master. `/jobs` consulta la cola async.
+
+## Job
+Fila async en `jobs.json`: clone, code, oh_poll, pull, push, delete, checkout. Status `queued|running|done|failed|stuck`. El CEO las ve con `/jobs`.
 
 ## Coding session
 Loop HITL por Telegram: clonar un repo público/privado (token en `.env`) a `./workspace/<slug>`, preguntar, editar/testear con OpenHands, y (con Aprobar) pushear una rama feature o borrar paths bajo `./workspace`. Stuck → opciones (retry/cambiar/parar/log).

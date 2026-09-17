@@ -1,4 +1,5 @@
 import { classifyUserText, extractTestCommand } from "./intent.mjs";
+import { formatJobDetail, formatJobsSummary, jobsHint } from "./jobs.mjs";
 import { detectStuck, isAgentDone, summarizeEvents } from "./openhands.mjs";
 import { packHitl, packReply } from "./reply.mjs";
 import { stuckKeyboard } from "./telegram.mjs";
@@ -204,7 +205,7 @@ export function createCodingSession({
     if (worker && typeof worker.kick === "function") {
       void worker.kick(job.id);
     }
-    return packReply(message.replaceAll("{id}", job.id), {
+    return packReply(`${message.replaceAll("{id}", job.id)}\n${jobsHint(job.id)}`, {
       needs_job: true,
       job_id: job.id,
     });
@@ -309,6 +310,9 @@ export function createCodingSession({
         create: Boolean(verdict.create),
       });
     }
+    if (verdict.action === "list_jobs") {
+      return describeJobs({ chatId, jobId: verdict.jobId });
+    }
     if (verdict.action === "maybe_code_mission") {
       const tests = extractTestCommand(text);
       if (tests) {
@@ -334,6 +338,31 @@ export function createCodingSession({
     }
   }
 
+  async function notifyJob(job, text, buttons) {
+    if (job?.id && typeof jobs.appendLog === "function") {
+      jobs.appendLog(job.id, text);
+    }
+    return notify(job.chatId, text, buttons);
+  }
+
+  function describeJobs({ chatId, jobId } = {}) {
+    if (typeof jobs.list !== "function") {
+      return packReply("Jobs no están configurados.");
+    }
+    let id = String(jobId || "").trim().toLowerCase();
+    if (id === "last" || id === "ultimo" || id === "último") {
+      id = String(session.get(chatId).lastJobId || "");
+    }
+    if (id) {
+      const job = jobs.get(id);
+      if (!job || (chatId && job.chatId && job.chatId !== String(chatId))) {
+        return packReply(`No hay job ${id}. /jobs lista los últimos 20.`);
+      }
+      return packReply(formatJobDetail(job));
+    }
+    return packReply(formatJobsSummary(jobs.list({ chatId, limit: 20 })));
+  }
+
   async function startCloneJob(item) {
     const job = jobs.enqueue({
       type: "clone",
@@ -345,7 +374,7 @@ export function createCodingSession({
       void worker.kick(job.id);
     }
     return packReply(
-      `Clonando ${item.url} en ./workspace/${item.slug}. Job ${job.id}. Te aviso cuando termine; el webhook no se queda colgado.`,
+      `Clonando ${item.url} en ./workspace/${item.slug}. Job ${job.id}. Te aviso cuando termine; el webhook no se queda colgado.\n${jobsHint(job.id)}`,
       { needs_job: true, job_id: job.id }
     );
   }
@@ -372,7 +401,7 @@ export function createCodingSession({
       void worker.kick(job.id);
     }
     return packReply(
-      `Misión encolada (${job.id}) para ${item.slug}. OpenHands labura en su sandbox. Te mando progreso; si se tranca, opciones.`,
+      `Misión encolada (${job.id}) para ${item.slug}. OpenHands labura en su sandbox. Te mando progreso; si se tranca, opciones.\n${jobsHint(job.id)}`,
       { needs_job: true, job_id: job.id }
     );
   }
@@ -388,8 +417,8 @@ export function createCodingSession({
       });
       jobs.update(job.id, { status: "done", error: "" });
       const listing = workspace.tree(result.slug);
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         [
           result.reused ? `Repo ya estaba en ./workspace/${result.slug}.` : `Clon listo: ./workspace/${result.slug}`,
           `archivos (cap ${listing.files.length}${listing.truncated ? "+" : ""}). Preguntame por el código.`,
@@ -398,8 +427,8 @@ export function createCodingSession({
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         `Clone falló (${err.code || "git_clone_failed"}): ${String(err.message || "").slice(0, 400)}`
       );
     }
@@ -436,7 +465,7 @@ export function createCodingSession({
             instruction: payload.instruction,
             testCommand: payload.testCommand,
           });
-          await notify(job.chatId, `Follow-up mandado a OpenHands (${payload.conversationId}).`);
+          await notifyJob(job, `Follow-up mandado a OpenHands (${payload.conversationId}).`);
           return;
         } catch {
           // start a new conversation
@@ -455,14 +484,14 @@ export function createCodingSession({
         instruction: payload.instruction,
         testCommand: payload.testCommand,
       });
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         `OpenHands arrancó (task ${startTaskId || "n/a"}). Te aviso al terminar o si se tranca.`
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         `No pude disparar OpenHands (${err.code || err.message}). Revisá que el servicio esté healthy.`
       );
     }
@@ -485,8 +514,8 @@ export function createCodingSession({
       error: reason,
       payload: { ...payload, stuckApprovalId: hitl.approval_id, log },
     });
-    await notify(
-      job.chatId,
+    await notifyJob(
+      job,
       `Me trancé (${reason}) en ${payload.slug}. No sigo solo. Elegí: Reintentar / Cambiar instrucción / Parar / Ver log.`,
       stuckKeyboard(hitl.approval_id)
     );
@@ -545,8 +574,8 @@ export function createCodingSession({
         const changeText = JSON.stringify(changes).slice(0, 800);
         const summary = summarizeEvents(events);
         jobs.update(job.id, { status: "done", error: "" });
-        await notify(
-          job.chatId,
+        await notifyJob(
+          job,
           [
             `Misión lista en ${payload.slug} (status ${conversation?.execution_status}).`,
             summary,
@@ -632,8 +661,8 @@ export function createCodingSession({
       clearSessionIfRemoved(job.chatId, result);
       jobs.update(job.id, { status: "done", error: "" });
       const listing = workspace.list();
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         [
           result.wiped
             ? `Vacié ./workspace (${result.removed.length} entradas).`
@@ -643,8 +672,8 @@ export function createCodingSession({
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         `Delete falló (${err.code || "workspace_delete_failed"}): ${String(err.message || "").slice(0, 400)}`
       );
     }
@@ -655,8 +684,8 @@ export function createCodingSession({
     try {
       const result = await workspace.pull(slug);
       jobs.update(job.id, { status: "done", error: "" });
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         [
           `Pull listo en ${slug}${result.unshallowed ? " (unshallow)" : ""}.`,
           result.stdout || "(sin stdout)",
@@ -664,8 +693,8 @@ export function createCodingSession({
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         `Pull falló (${err.code || "git_pull_failed"}): ${String(err.message || "").slice(0, 400)}`
       );
     }
@@ -676,16 +705,16 @@ export function createCodingSession({
     try {
       const result = await workspace.push(slug);
       jobs.update(job.id, { status: "done", error: "" });
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         [`Push listo: ${slug} ${result.branch} → origin HEAD.`, result.stdout || "(sin stdout)"].join(
           "\n"
         )
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         `Push falló (${err.code || "git_push_failed"}): ${String(err.message || "").slice(0, 400)}`
       );
     }
@@ -699,14 +728,14 @@ export function createCodingSession({
         create: Boolean(payload.create),
       });
       jobs.update(job.id, { status: "done", error: "" });
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         `Checkout ${result.created ? "creó" : "cambió a"} ${result.branch} en ${payload.slug}.`
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
-      await notify(
-        job.chatId,
+      await notifyJob(
+        job,
         `Checkout falló (${err.code || "git_checkout_failed"}): ${String(err.message || "").slice(0, 400)}`
       );
     }
@@ -777,6 +806,7 @@ export function createCodingSession({
     startPull,
     startCheckout,
     describeWorkspace,
+    describeJobs,
     handleHitl,
     handlers,
     parseWorkspaceCallback,
