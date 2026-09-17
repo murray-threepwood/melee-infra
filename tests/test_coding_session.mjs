@@ -4,6 +4,7 @@ import { detectStuck, isAgentDone, summarizeEvents } from "../config/murray-agen
 import {
   classifyUserText,
   extractDeletePath,
+  extractJobId,
   extractTestCommand,
 } from "../config/murray-agent/intent.mjs";
 import { parseWorkspaceCallback } from "../config/murray-agent/coding.mjs";
@@ -19,6 +20,16 @@ test("classify: clone sin URL pregunta; mutate sin repo pregunta", () => {
   assert.equal(
     classifyUserText("agregá un test", { hasSession: true }).action,
     "maybe_code_mission"
+  );
+});
+
+test("classify: estado de jobs no va al LLM de código", () => {
+  assert.equal(classifyUserText("estado de los jobs").action, "list_jobs");
+  assert.equal(classifyUserText("cómo van los jobs").action, "list_jobs");
+  assert.equal(extractJobId("/jobs aabbccddeeff0011"), "aabbccddeeff0011");
+  assert.equal(
+    classifyUserText("jobs aabbccddeeff0011").jobId,
+    "aabbccddeeff0011"
   );
 });
 

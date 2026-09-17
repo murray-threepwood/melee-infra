@@ -39,6 +39,9 @@ export function parseSlash(text) {
   if (name === "workspace") {
     return { cmd: "workspace" };
   }
+  if (name === "jobs") {
+    return { cmd: "jobs", jobId: rest[0] || "" };
+  }
   return { cmd: name, service: rest[0] || "" };
 }
 
@@ -362,6 +365,16 @@ export function createChatEngine({
         return { payload: { error: err.code || err.message, message: err.message } };
       }
     }
+    if (name === "list_jobs") {
+      if (!coding || typeof coding.describeJobs !== "function") {
+        return { payload: { error: "jobs_unconfigured" } };
+      }
+      const packed = coding.describeJobs({
+        chatId: ctx.chatId,
+        jobId: args.job_id || args.id || "",
+      });
+      return { packed, direct: true, payload: { reply: packed.reply } };
+    }
     return { payload: { error: "unknown_tool", name } };
   }
 
@@ -398,6 +411,11 @@ export function createChatEngine({
             return packed;
           }
           if (result.needs_job && result.packed) {
+            memory.append(chatId, "user", text);
+            memory.append(chatId, "assistant", result.packed.reply);
+            return result.packed;
+          }
+          if (result.direct && result.packed) {
             memory.append(chatId, "user", text);
             memory.append(chatId, "assistant", result.packed.reply);
             return result.packed;
@@ -450,7 +468,7 @@ export function createChatEngine({
     const trimmed = String(text || "").trim();
     if (!trimmed) {
       return packReply(
-        "Mandame texto. Fotos mudas no diagnostico. /status /health /logs n8n /repo /workspace"
+        "Mandame texto. Fotos mudas no diagnostico. /status /health /logs n8n /repo /workspace /jobs"
       );
     }
     const slash = parseSlash(trimmed);
@@ -475,7 +493,7 @@ export function createChatEngine({
           );
         }
         return packReply(
-          `Repo activo: ${row.slug}\n${row.url || ""}\n/workspace lista el disco. Pull/commit sin HITL; push y borrar piden Aprobar.`
+          `Repo activo: ${row.slug}\n${row.url || ""}\n/workspace lista el disco. /jobs espiá la cola. Pull/commit sin HITL; push y borrar piden Aprobar.`
         );
       }
       if (slash.cmd === "workspace") {
@@ -484,8 +502,14 @@ export function createChatEngine({
         }
         return coding.describeWorkspace();
       }
+      if (slash.cmd === "jobs") {
+        if (!coding || typeof coding.describeJobs !== "function") {
+          return packReply("Jobs no están configurados.");
+        }
+        return coding.describeJobs({ chatId, jobId: slash.jobId });
+      }
       return packReply(
-        `Comando /${slash.cmd} no existe. /status /health /logs <servicio> /repo /workspace`
+        `Comando /${slash.cmd} no existe. /status /health /logs <servicio> /repo /workspace /jobs`
       );
     }
     if (coding && typeof coding.interceptChat === "function") {

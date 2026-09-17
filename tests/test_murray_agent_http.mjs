@@ -755,6 +755,54 @@ test("push en main no HITL; en feature HITL y job", async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
+test("/jobs lista y detalla sin LLM; error y log de 20 líneas", async () => {
+  let llmHits = 0;
+  const { engine, session, jobs, root } = codingStack({
+    llm: {
+      complete: async () => {
+        llmHits += 1;
+        return { content: "no", tool_calls: [] };
+      },
+    },
+  });
+  session.patch("30", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  fs.mkdirSync(path.join(root, "octocat-Hello-World"), { recursive: true });
+  const pulled = await engine.handleChat({ chat_id: "30", text: "hacé pull" });
+  assert.match(pulled.reply, /Si te pica la impaciencia: \/jobs/);
+  const listed = await engine.handleChat({ chat_id: "30", text: "/jobs" });
+  assert.equal(listed.needs_hitl, false);
+  assert.equal(llmHits, 0);
+  assert.match(listed.reply, /pull/);
+  assert.equal(listed.reply.includes(pulled.job_id), true);
+  const failed = jobs.enqueue({
+    type: "code",
+    chatId: "30",
+    payload: { slug: "octocat-Hello-World" },
+  });
+  for (let i = 1; i <= 25; i += 1) {
+    jobs.appendLog(failed.id, `trace ${i}`);
+  }
+  jobs.update(failed.id, { status: "failed", error: "openhands_timeout" });
+  const detail = await engine.handleChat({
+    chat_id: "30",
+    text: `/jobs ${failed.id}`,
+  });
+  assert.equal(llmHits, 0);
+  assert.match(detail.reply, /openhands_timeout/);
+  assert.match(detail.reply, /trace 25/);
+  assert.equal(/trace 1\b/.test(detail.reply), false);
+  const spoken = await engine.handleChat({
+    chat_id: "30",
+    text: "estado de los jobs",
+  });
+  assert.equal(llmHits, 0);
+  assert.match(spoken.reply, /failed/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test("pull sin HITL encola job", async () => {
   const { engine, session, worker, notes, root } = codingStack();
   session.patch("24", {
@@ -765,6 +813,7 @@ test("pull sin HITL encola job", async () => {
   const pulled = await engine.handleChat({ chat_id: "24", text: "hacé pull" });
   assert.equal(pulled.needs_hitl, false);
   assert.equal(pulled.needs_job, true);
+  assert.match(pulled.reply, /\/jobs/);
   await worker.kick(pulled.job_id);
   assert.equal(notes.some((row) => /Pull listo/.test(row.text)), true);
   fs.rmSync(root, { recursive: true, force: true });

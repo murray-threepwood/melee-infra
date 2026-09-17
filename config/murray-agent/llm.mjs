@@ -227,6 +227,18 @@ export const TOOL_DEFS = [
   {
     type: "function",
     function: {
+      name: "list_jobs",
+      description:
+        "Lista jobs async (clone/code/pull/push/delete/checkout/oh_poll): status, error y últimas líneas de log. Solo lectura. job_id opcional para detalle.",
+      parameters: {
+        type: "object",
+        properties: { job_id: { type: "string" } },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "workspace_git_commit",
       description:
         "git add + commit en el repo activo. Sin HITL. Exige message. No commitea .env ni secretos. Author default Murray (noreply de murray-threepwood).",

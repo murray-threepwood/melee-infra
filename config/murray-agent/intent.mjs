@@ -19,6 +19,14 @@ export const COMMIT_INTENT = /\b(git )?commit\b|commite[áa]/i;
 
 export const CHECKOUT_INTENT = /\bcheckout\b|cambi[áa] de rama|cre[áa] (una )?rama/i;
 
+export const JOBS_INTENT =
+  /estado de los jobs|cola de (?:los )?jobs|c[oó]mo van los jobs|qu[eé] jobs hay|list[áa](?:me)? los jobs|^\s*jobs(?:\s+\S+)?\s*$/i;
+
+export function extractJobId(text) {
+  const labeled = String(text || "").match(/(?:job|jobs)\s+([a-f0-9]{16})\b/i);
+  return labeled ? labeled[1].toLowerCase() : "";
+}
+
 export function extractDeletePath(text) {
   const t = String(text || "").trim();
   if (
@@ -114,6 +122,9 @@ export function classifyUserText(text, { hasSession = false } = {}) {
     return named.branch
       ? { action: "checkout", branch: named.branch, create: named.create }
       : { action: "clarify_branch" };
+  }
+  if (JOBS_INTENT.test(trimmed)) {
+    return { action: "list_jobs", jobId: extractJobId(trimmed) };
   }
   if (MUTATE_INTENT.test(trimmed) && !hasSession && !url && !STACK_TALK.test(trimmed)) {
     return { action: "clarify_repo" };

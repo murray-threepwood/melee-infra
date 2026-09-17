@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9 — Estado de jobs por Telegram
+
+- `/jobs` y «estado de los jobs» listan la cola async (clone/code/pull/push/delete/checkout/oh_poll): status, error, edad. `/jobs <id>` muestra las últimas 20 líneas del log del job. Sin LLM, sin HITL.
+- Murray ofrece `/jobs` en una línea cuando encola trabajo.
+
 ## 0.1.8 — Teclado HITL de código sin depender del LLM
 
 - Misión de código con repo activo + `Comando:` / `corré npm test` arma HITL `kind=code` en intercept, sin DeepSeek.
