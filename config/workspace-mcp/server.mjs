@@ -12,7 +12,7 @@
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { createGmailClient } from "./gmail-client.mjs";
+import { createGmailClient, readGauthClient } from "./gmail-client.mjs";
 
 function sendJson(res, status, body, flags) {
   const payload = JSON.stringify(body);
@@ -165,6 +165,15 @@ function envFlag(name) {
 export function createServerFromEnv() {
   const allowSending = envFlag("GMAIL_ALLOW_SENDING");
   const allowDrafts = envFlag("GMAIL_ALLOW_DRAFTS");
+  const fallbackClients = [];
+  try {
+    const fromGauth = readGauthClient("/app/auth/.gauth.json");
+    if (fromGauth) {
+      fallbackClients.push(fromGauth);
+    }
+  } catch {
+    // .gauth.json es opcional; el env alcanza si client y refresh coinciden.
+  }
   let gmailClient;
   let gmailMode = "live";
   try {
@@ -172,6 +181,7 @@ export function createServerFromEnv() {
       clientId: process.env.GOOGLE_CLIENT_ID,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET,
       refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
+      fallbackClients,
     });
   } catch (err) {
     gmailMode = "unconfigured";

@@ -213,6 +213,53 @@ test("token inválido no se cachea como unread vacío", async () => {
   await assert.rejects(() => client.listUnread(), (err) => err.code === "gmail_oauth_failed");
 });
 
+test("unauthorized_client reintenta con fallback gauth", async () => {
+  const bodies = [];
+  const fetchImpl = async (url, init = {}) => {
+    const u = String(url);
+    if (u.startsWith("https://oauth2.googleapis.com/token")) {
+      const params = new URLSearchParams(String(init.body || ""));
+      bodies.push(params.get("client_id"));
+      if (params.get("client_id") === "web-from-gauth.apps.googleusercontent.com") {
+        return new Response(
+          JSON.stringify({ access_token: "ya29.ok", expires_in: 3600, token_type: "Bearer" }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      }
+      return new Response(JSON.stringify({ error: "unauthorized_client" }), {
+        status: 401,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    if (u.includes("/messages?")) {
+      return new Response(JSON.stringify({ messages: [], resultSizeEstimate: 0 }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }
+    throw new Error(`unexpected ${u}`);
+  };
+  const client = createGmailClient({
+    clientId: "desktop-old.apps.googleusercontent.com",
+    clientSecret: "GOCSPX-desktop",
+    refreshToken: "1//test-refresh-token",
+    fallbackClients: [
+      {
+        clientId: "web-from-gauth.apps.googleusercontent.com",
+        clientSecret: "GOCSPX-web",
+      },
+    ],
+    fetchImpl,
+  });
+  const result = await client.listUnread();
+  assert.equal(result.status, "ok");
+  assert.equal(result.unread_count, 0);
+  assert.deepEqual(bodies, [
+    "desktop-old.apps.googleusercontent.com",
+    "web-from-gauth.apps.googleusercontent.com",
+  ]);
+});
+
 test("unauthorized_client es mismatch de OAuth client, no inbox vacía", async () => {
   const fetchImpl = async (url) => {
     if (String(url).startsWith("https://oauth2.googleapis.com/token")) {

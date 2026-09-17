@@ -4,6 +4,7 @@
  * Public surface: listUnread + createDraft. There is no send() on purpose.
  * Callers inject fetchImpl so tests never hit Google.
  */
+import fs from "node:fs";
 
 export const GMAIL_PATHS = Object.freeze({
   token: "https://oauth2.googleapis.com/token",
@@ -87,6 +88,24 @@ export function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
+export function normalizeSecret(value) {
+  return String(value || "")
+    .trim()
+    .replace(/^["']|["']$/g, "")
+    .trim();
+}
+
+export function readGauthClient(gauthPath) {
+  const parsed = JSON.parse(fs.readFileSync(gauthPath, "utf8"));
+  const cred = parsed.web || parsed.installed || {};
+  const clientId = normalizeSecret(cred.client_id);
+  const clientSecret = normalizeSecret(cred.client_secret);
+  if (!clientId || !clientSecret) {
+    return null;
+  }
+  return { clientId, clientSecret };
+}
+
 function isPlaceholderCredential(value) {
   return /REEMPLAZAR|ejemploRefreshToken|ejemplo-client-id|CAMBIAR_POR/i.test(
     String(value || "")
@@ -94,9 +113,9 @@ function isPlaceholderCredential(value) {
 }
 
 export function assertGmailCredentials({ clientId, clientSecret, refreshToken }) {
-  const id = String(clientId || "").trim();
-  const secret = String(clientSecret || "").trim();
-  const refresh = String(refreshToken || "").trim();
+  const id = normalizeSecret(clientId);
+  const secret = normalizeSecret(clientSecret);
+  const refresh = normalizeSecret(refreshToken);
   if (!id || !secret || !refresh) {
     throw new GmailConfigError(
       "GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN ausentes"
@@ -124,12 +143,28 @@ export function createGmailClient({
   clientId,
   clientSecret,
   refreshToken,
+  fallbackClients = [],
   fetchImpl = globalThis.fetch,
   clock = () => Date.now(),
   timeoutMs = 10_000,
   maxUnread = 15,
 } = {}) {
   const creds = assertGmailCredentials({ clientId, clientSecret, refreshToken });
+  const clientChain = [
+    creds,
+    ...fallbackClients
+      .map((item) => ({
+        clientId: normalizeSecret(item.clientId),
+        clientSecret: normalizeSecret(item.clientSecret),
+        refreshToken: creds.refreshToken,
+      }))
+      .filter(
+        (item) =>
+          item.clientId &&
+          item.clientSecret &&
+          item.clientId !== creds.clientId
+      ),
+  ];
   let cachedToken = "";
   let expiresAt = 0;
 
@@ -161,27 +196,43 @@ export function createGmailClient({
     return data;
   }
 
-  async function accessToken() {
-    if (cachedToken && clock() < expiresAt) {
-      return cachedToken;
-    }
+  async function requestToken(client) {
     const data = await request(GMAIL_PATHS.token, {
       method: "POST",
       headers: { "content-type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        client_id: creds.clientId,
-        client_secret: creds.clientSecret,
-        refresh_token: creds.refreshToken,
+        client_id: client.clientId,
+        client_secret: client.clientSecret,
+        refresh_token: client.refreshToken,
         grant_type: "refresh_token",
       }).toString(),
     });
     if (!data.access_token) {
       throw new GmailApiError("token response without access_token", 502);
     }
-    cachedToken = data.access_token;
-    const ttlMs = Number(data.expires_in || 3600) * 1000;
-    expiresAt = clock() + Math.max(ttlMs - 60_000, 0);
-    return cachedToken;
+    return data;
+  }
+
+  async function accessToken() {
+    if (cachedToken && clock() < expiresAt) {
+      return cachedToken;
+    }
+    let lastMismatch;
+    for (const client of clientChain) {
+      try {
+        const data = await requestToken(client);
+        cachedToken = data.access_token;
+        const ttlMs = Number(data.expires_in || 3600) * 1000;
+        expiresAt = clock() + Math.max(ttlMs - 60_000, 0);
+        return cachedToken;
+      } catch (err) {
+        if (err.code !== "gmail_oauth_client_mismatch") {
+          throw err;
+        }
+        lastMismatch = err;
+      }
+    }
+    throw lastMismatch;
   }
 
   async function gmail(url, init = {}) {
