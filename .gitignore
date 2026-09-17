@@ -13,8 +13,13 @@ n8n_data/
 ~/.openhands-state/
 .openhands-state/
 
-# Sandbox de OpenHands
-workspace/
+# Credenciales OAuth locales del MCP (nunca commitear)
+config/mcp-auth/.gauth.json
+config/mcp-auth/.accounts.json
+
+# Sandbox de OpenHands (trackear solo el ancla del directorio)
+workspace/*
+!workspace/.gitkeep
 
 # Dependencias y caches
 node_modules/

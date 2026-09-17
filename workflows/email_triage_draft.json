@@ -1,0 +1,184 @@
+{
+  "id": "Z8f9K2mP1qRt5vWx",
+  "name": "email_triage_draft",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger-01",
+      "name": "Cada 15 Minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [200, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://workspace-mcp:8000/gmail/unread",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "fetch-unread-emails-02",
+      "name": "Consultar Correos No Leídos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [420, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.unread_count || 0 }}",
+              "operation": "larger",
+              "value2": 0
+            }
+          ]
+        }
+      },
+      "id": "check-has-emails-03",
+      "name": "¿Hay Correos Nuevos?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [640, 300]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "messages"
+      },
+      "id": "split-messages-03b",
+      "name": "Separar Mensajes",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [860, 240]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.seen = staticData.seen || {};\nconst id = $json.id;\nif (!id || staticData.seen[id]) {\n  return [];\n}\nstaticData.seen[id] = Date.now();\nreturn [$json];\n"
+      },
+      "id": "dedup-seen-03c",
+      "name": "Deduplicar Ya Vistos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1080, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://workspace-mcp:8000/gmail/drafts",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ messageId: $json.id, threadId: $json.threadId, to: $json.sender, subject: $json.subject, inReplyTo: $json.inReplyTo }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "mcp-create-draft-node-05",
+      "name": "Crear Borrador MCP (No Send)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1300, 240]
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
+        "text": "=📬 <b>Borrador creado en Gmail (no enviado)</b>\n\n<b>De:</b> {{ $('Separar Mensajes').item.json.senderHtml }}\n<b>Asunto:</b> {{ $('Separar Mensajes').item.json.subjectHtml }}\n<b>Resumen:</b> {{ $('Separar Mensajes').item.json.summaryHtml }}\n<b>Draft:</b> {{ $json.id }}\n\nEditá y enviá desde Gmail. Murray no manda correo.",
+        "additionalFields": {
+          "parse_mode": "HTML",
+          "appendAttribution": false
+        }
+      },
+      "id": "telegram-alert-triage-04",
+      "name": "Notificar Triage a Telegram",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1,
+      "position": [1520, 240],
+      "credentials": {
+        "telegramApi": {
+          "id": "9IhWvhoAHuzho5J5",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cada 15 Minutos": {
+      "main": [
+        [
+          {
+            "node": "Consultar Correos No Leídos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consultar Correos No Leídos": {
+      "main": [
+        [
+          {
+            "node": "¿Hay Correos Nuevos?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "¿Hay Correos Nuevos?": {
+      "main": [
+        [
+          {
+            "node": "Separar Mensajes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Separar Mensajes": {
+      "main": [
+        [
+          {
+            "node": "Deduplicar Ya Vistos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplicar Ya Vistos": {
+      "main": [
+        [
+          {
+            "node": "Crear Borrador MCP (No Send)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crear Borrador MCP (No Send)": {
+      "main": [
+        [
+          {
+            "node": "Notificar Triage a Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

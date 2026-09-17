@@ -1,11 +1,11 @@
 # 💀 Melee-Infra: El Averno de Automatización Ejecutiva ("1-Person CEO")
 
-> *"¡Soy una fuerza demoníaca del averno! ¿Acaso creías que la infraestructura para orquestar un imperio corporativo de un solo hombre se mantendría en pie con scripts de pacotilla escritos por aspirantes a pirata? ¡Peleas como un granjero de vacas si pensabas que iba a tolerar un solo byte fuera de lugar! ¡Tiembla ante Murray!"*  
+> *"¡Soy una fuerza demoníaca del averno! ¿Acaso creías que la infraestructura para orquestar un imperio corporativo de un solo hombre se mantendría en pie con scripts de pacotilla escritos por aspirantes a pirata? ¡Peleas como un granjero de vacas si pensabas que iba a tolerar un solo byte fuera de lugar! ¡Tiembla ante Murray!"*
 > — **Murray, Demonic Sysadmin Supreme**
 
 ---
 
-Bienvenido a **melee-infra**, la fortaleza de infraestructura como código diseñada para gobernar un sistema autónomo de **1-Person CEO** con control humano riguroso (*Human-In-The-Loop* - HITL). 
+Bienvenido a **melee-infra**, la fortaleza de infraestructura como código diseñada para gobernar un sistema autónomo de **1-Person CEO** con control humano riguroso (*Human-In-The-Loop* - HITL).
 
 Aquí no hay lugar para la desidia ni el código espagueti: cada servicio está aislado, cada puerto perimetral está sellado y cada tarea ejecutiva pasa bajo la supervisión despiadada del cráneo más temido del Caribe.
 
@@ -75,7 +75,8 @@ Cada contenedor opera bajo el principio de menor privilegio dentro de la red pri
 
 La inteligencia de este repositorio está dividida con precisión quirúrgica:
 
-1. **[roadmap/](./roadmap/) — La Hoja de Ruta de Implementación**:
+1. **[architecture_spec.md](./architecture_spec.md) — Contratos vivos**: red, HTTP de `workspace-mcp`, HITL Telegram, guardrails y presupuesto RAM. Se actualiza cuando cambia un contrato.
+2. **[roadmap/](./roadmap/) — La Hoja de Ruta de Implementación**:
    - [roadmap/README.md](./roadmap/README.md): Índice maestro y prompt de arranque para agentes de IA.
    - [roadmap/00_AGENT_PROTOCOL.md](./roadmap/00_AGENT_PROTOCOL.md): Reglas inquebrantables de determinismo, manejo de secretos y control de fallas (`BLOCKER.md`).
    - [roadmap/01_ENVIRONMENT_AND_NETWORKING.md](./roadmap/01_ENVIRONMENT_AND_NETWORKING.md): Fase 1 (Carpetas, `.env`, Postgres y Cloudflared).
@@ -83,8 +84,9 @@ La inteligencia de este repositorio está dividida con precisión quirúrgica:
    - [roadmap/03_GOOGLE_WORKSPACE_MCP_GUARDRAILS.md](./roadmap/03_GOOGLE_WORKSPACE_MCP_GUARDRAILS.md): Fase 3 (MCP Google Workspace y workflow de triage).
    - [roadmap/04_OPENHANDS_RUNTIME_SANDBOX.md](./roadmap/04_OPENHANDS_RUNTIME_SANDBOX.md): Fase 4 (OpenHands Sandbox, DeepSeek LiteLLM y detección de bucles infinitos).
    - [roadmap/05_INTEGRATION_AND_E2E_VERIFICATION.md](./roadmap/05_INTEGRATION_AND_E2E_VERIFICATION.md): Fase 5 (Validación completa de RAM < 4.5 GB, suite E2E y Runbook).
+   - [roadmap/99_HUMAN_OPERATOR.md](./roadmap/99_HUMAN_OPERATOR.md): **Lo que tenés que hacer vos** (tokens, túnel, bot, OAuth). Click a click, sin decidir arquitectura.
 
-2. **[.agents/](./.agents/) — Reglas y Habilidades Supremas**:
+3. **[.agents/](./.agents/) — Reglas y Habilidades Supremas**:
    - [.agents/rules/murray.md](./.agents/rules/murray.md): Directiva fundacional del Demonic Sysadmin Supreme.
    - [.agents/rules/estilo-comunicacion.md](./.agents/rules/estilo-comunicacion.md): Calibración cognitiva de alta densidad (formato sándwich, anti-dispersión, TDAH/TEA/AACC).
    - [.agents/skills/dev-protocol/](./.agents/skills/dev-protocol/): Skill estándar de ingeniería de software (deep modules, vertical slices, loop de debugging de 6 fases y ciclo de entrega git con gate humano).

@@ -1,0 +1,13 @@
+[project]
+name = "murray-infra"
+version = "0.1.0"
+description = "Tests and operator tooling for the 1-Person CEO stack"
+requires-python = ">=3.11"
+dependencies = [
+  "pyyaml>=6.0",
+]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.6.2",
+]

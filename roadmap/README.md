@@ -63,6 +63,7 @@ Cada fase depende estrictamente de que la anterior haya cumplido al 100% su *Def
 | [03_GOOGLE_WORKSPACE_MCP_GUARDRAILS.md](./03_GOOGLE_WORKSPACE_MCP_GUARDRAILS.md) | **Fase 3** | Servidor MCP Google Workspace con guardrail *Draft-Only* y flujo de triage de correos. | `workspace-mcp`, `tests/test_mcp_draft_only.py`, `workflows/email_triage_draft.json` |
 | [04_OPENHANDS_RUNTIME_SANDBOX.md](./04_OPENHANDS_RUNTIME_SANDBOX.md) | **Fase 4** | OpenHands sandbox acotado a `./workspace`, socket Docker, DeepSeek LLM y detección de loops. | `openhands`, `tests/test_openhands_api.sh` |
 | [05_INTEGRATION_AND_E2E_VERIFICATION.md](./05_INTEGRATION_AND_E2E_VERIFICATION.md) | **Fase 5** | Verificación integral del stack, límite de RAM (<4.5GB), smoke tests y runbook de fallas. | `tests/test_e2e_stack.sh`, `RUNBOOK.md` |
+| [99_HUMAN_OPERATOR.md](./99_HUMAN_OPERATOR.md) | **Operador humano** | Clicks, tokens y cuentas externas. El agente no puede completar esto. | `.env` real, túnel, Telegram, DeepSeek, OAuth |
 
 ---
 
