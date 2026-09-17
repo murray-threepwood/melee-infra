@@ -4,7 +4,7 @@ import path from "node:path";
 
 const LOG_CAP = 40;
 const LIST_CAP = 20;
-const TERMINAL = new Set(["done", "failed", "stuck"]);
+export const TERMINAL = new Set(["done", "failed", "stuck", "paused"]);
 
 function jobSubject(job) {
   const payload = job?.payload || {};
@@ -116,6 +116,8 @@ export function formatJobDetail(job, { now = Date.now(), tail = 20, timeZone = J
     payload.slug ? `slug: ${payload.slug}` : "",
     payload.branch ? `branch: ${payload.branch}` : "",
     payload.rel ? `path: ${payload.rel}` : "",
+    payload.conversationId ? `conversation: ${payload.conversationId}` : "",
+    payload.startTaskId ? `task: ${payload.startTaskId}` : "",
     job.error ? `error: ${job.error}` : "",
   ].filter(Boolean);
   if (!lines.length) {
@@ -220,6 +222,26 @@ export function createJobStore({
     return rows.slice(0, cap);
   }
 
+  function find({ chatId = "", ref = "" } = {}) {
+    const needle = String(ref || "").trim().toLowerCase();
+    if (!needle) {
+      return null;
+    }
+    const rows = Object.values(load()).filter(
+      (job) => !chatId || String(job.chatId) === String(chatId)
+    );
+    return (
+      rows.find((job) => {
+        const payload = job.payload || {};
+        return (
+          String(job.id).toLowerCase() === needle ||
+          String(payload.conversationId || "").toLowerCase() === needle ||
+          String(payload.startTaskId || "").toLowerCase() === needle
+        );
+      }) || null
+    );
+  }
+
   function due(now = Date.now()) {
     return Object.values(load()).filter(
       (job) =>
@@ -228,7 +250,7 @@ export function createJobStore({
     );
   }
 
-  return { enqueue, get, update, appendLog, list, due };
+  return { enqueue, get, update, appendLog, list, find, due };
 }
 
 export function createJobWorker({
@@ -245,7 +267,7 @@ export function createJobWorker({
     if (!job) {
       return null;
     }
-    if (job.status === "done" || job.status === "failed" || job.status === "stuck") {
+    if (TERMINAL.has(job.status)) {
       return job;
     }
     const handler = handlers[job.type];

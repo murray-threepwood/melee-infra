@@ -1,6 +1,6 @@
-import { classifyUserText, extractTestCommand, isAffirmative, isHitlStuck } from "./intent.mjs";
+import { classifyUserText, extractTestCommand, isAffirmative, isHitlStuck, isResumeMission } from "./intent.mjs";
 import { formatJobDetail, formatJobsSummary, jobsHint } from "./jobs.mjs";
-import { detectStuck, isAgentDone, summarizeEvents } from "./openhands.mjs";
+import { detectStuck, isAgentDone, isSandboxPaused, summarizeEvents } from "./openhands.mjs";
 import { packHitl, packHitlHelp, packReply } from "./reply.mjs";
 import { stuckKeyboard } from "./telegram.mjs";
 import { parseHttpsGitUrl } from "./workspace.mjs";
@@ -62,6 +62,7 @@ export function createCodingSession({
   now = () => Date.now(),
   pollDelayMs = 4000,
   missionMaxMs = 12 * 60 * 1000,
+  pollFailsMax = 3,
 } = {}) {
   function issueHitl(kind, payload) {
     const approvalId = approvals.issue({ kind, ...payload });
@@ -259,7 +260,7 @@ export function createCodingSession({
     if (!tests) {
       return null;
     }
-    const userIsShort = isAffirmative(text) || isHitlStuck(text);
+    const userIsShort = isAffirmative(text) || isHitlStuck(text) || isResumeMission(text);
     const instruction = (
       userIsShort
         ? sess.lastMission || lastAssistant || text
@@ -347,8 +348,12 @@ export function createCodingSession({
         create: Boolean(verdict.create),
       });
     }
-    if (verdict.action === "list_jobs") {
-      return describeJobs({ chatId, jobId: verdict.jobId });
+    if (verdict.action === "list_jobs" || verdict.action === "diagnose_job") {
+      return describeJobs({
+        chatId,
+        jobId: verdict.jobId,
+        diagnose: verdict.action === "diagnose_job",
+      });
     }
     if (verdict.action === "maybe_code_mission") {
       const recovered = recoverCodeHitl({ chatId, text, lastAssistant });
@@ -402,20 +407,70 @@ export function createCodingSession({
     return notify(job.chatId, text, buttons);
   }
 
-  function describeJobs({ chatId, jobId } = {}) {
-    if (typeof jobs.list !== "function") {
-      return packReply("Jobs no están configurados.");
-    }
+  function lookupJob(chatId, jobId, { fallbackLast = false } = {}) {
     let id = String(jobId || "").trim().toLowerCase();
     if (id === "last" || id === "ultimo" || id === "último") {
       id = String(session.get(chatId).lastJobId || "");
     }
-    if (id) {
-      const job = jobs.get(id);
-      if (!job || (chatId && job.chatId && job.chatId !== String(chatId))) {
-        return packReply(`No hay job ${id}. /jobs lista los últimos 20.`);
+    if (id && typeof jobs.find === "function") {
+      const found = jobs.find({ chatId, ref: id });
+      if (found) {
+        return found;
       }
-      return packReply(formatJobDetail(job));
+    }
+    if (id && typeof jobs.get === "function") {
+      const job = jobs.get(id);
+      if (job && (!chatId || !job.chatId || job.chatId === String(chatId))) {
+        return job;
+      }
+    }
+    if (fallbackLast && typeof jobs.list === "function") {
+      return jobs.list({ chatId, limit: 1 })[0] || null;
+    }
+    return null;
+  }
+
+  async function liveOpenHandsLine(job) {
+    const payload = job?.payload || {};
+    const conversationId = payload.conversationId || "";
+    const startTaskId = payload.startTaskId || "";
+    if (conversationId && openhands && typeof openhands.getConversation === "function") {
+      try {
+        const conv = await openhands.getConversation(conversationId);
+        return `openhands: sandbox=${conv?.sandbox_status || "?"} exec=${conv?.execution_status ?? "null"}`;
+      } catch (err) {
+        return `openhands: no pude leer (${err.code || err.message})`;
+      }
+    }
+    if (startTaskId && openhands && typeof openhands.getStartTask === "function") {
+      try {
+        const task = await openhands.getStartTask(startTaskId);
+        return `start-task: ${task?.status || "?"} conv=${task?.app_conversation_id || "n/a"}`;
+      } catch (err) {
+        return `start-task: no pude leer (${err.code || err.message})`;
+      }
+    }
+    return "";
+  }
+
+  async function describeJobs({ chatId, jobId, diagnose = false } = {}) {
+    if (typeof jobs.list !== "function") {
+      return packReply("Jobs no están configurados.");
+    }
+    const id = String(jobId || "").trim();
+    if (id || diagnose) {
+      const job = lookupJob(chatId, id, { fallbackLast: diagnose });
+      if (!job) {
+        return packReply(
+          id ? `No hay job ${id}. /jobs lista los últimos 20.` : "No hay jobs en la cola. /jobs."
+        );
+      }
+      const live = await liveOpenHandsLine(job);
+      const hint =
+        job.status === "stuck" || job.status === "paused" || job.error === "sandbox_paused"
+          ? "Si querés seguir: Reintentar en el teclado, o escribí seguí / retomá."
+          : "";
+      return packReply([formatJobDetail(job), live, hint].filter(Boolean).join("\n"));
     }
     return packReply(formatJobsSummary(jobs.list({ chatId, limit: 20 })));
   }
@@ -504,6 +559,7 @@ export function createCodingSession({
     if (worker && typeof worker.kick === "function") {
       void worker.kick(job.id);
     }
+    session.patch(chatId, { lastJobId: job.id });
     return job;
   }
 
@@ -543,7 +599,7 @@ export function createCodingSession({
       });
       await notifyJob(
         job,
-        `OpenHands arrancó (task ${startTaskId || "n/a"}). Te aviso al terminar o si se tranca.`
+        `OpenHands arrancó (task ${startTaskId || "n/a"}). Te aviso si pausa, se tranca o termina.`
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
@@ -578,6 +634,38 @@ export function createCodingSession({
     );
   }
 
+  async function markPaused(job, events) {
+    const payload = job.payload || {};
+    const slug = payload.slug || "";
+    let files = [];
+    try {
+      if (slug && workspace && typeof workspace.status === "function") {
+        const st = await workspace.status(slug);
+        files = Array.isArray(st.files) ? st.files : [];
+      }
+    } catch {
+      files = [];
+    }
+    if (files.length) {
+      const names = files.slice(0, 8).join(", ");
+      jobs.update(job.id, {
+        status: "paused",
+        error: "sandbox_paused",
+        payload: { ...payload, dirtyFiles: files },
+      });
+      await notifyJob(
+        job,
+        [
+          `Obrero pausó en ${slug}. Sandbox PAUSED, no es misión lista.`,
+          `Hay cambios sin commit: ${names}${files.length > 8 ? "…" : ""}.`,
+          "Si el diff es el trabajo: commiteá. Si querés que siga: escribí seguí / retomá y re-armo HITL.",
+        ].join("\n")
+      );
+      return;
+    }
+    await markStuck(job, "sandbox_paused", events);
+  }
+
   async function handlePollJob(job) {
     const payload = job.payload || {};
     let conversationId = payload.conversationId || "";
@@ -593,13 +681,14 @@ export function createCodingSession({
           jobs.update(job.id, {
             status: "queued",
             runAfter: now() + pollDelayMs,
+            payload: { ...payload, pollFails: 0 },
           });
           return;
         }
         conversationId = task.app_conversation_id;
         session.patch(job.chatId, { conversationId });
         jobs.update(job.id, {
-          payload: { ...payload, conversationId },
+          payload: { ...payload, conversationId, pollFails: 0 },
         });
       }
       if (!conversationId) {
@@ -621,6 +710,15 @@ export function createCodingSession({
       });
       if (stuck.stuck) {
         await markStuck(job, stuck.reason, events);
+        return;
+      }
+      if (
+        isSandboxPaused({
+          executionStatus: conversation?.execution_status,
+          sandboxStatus: conversation?.sandbox_status,
+        })
+      ) {
+        await markPaused(job, events);
         return;
       }
       if (isAgentDone({
@@ -647,13 +745,27 @@ export function createCodingSession({
       jobs.update(job.id, {
         status: "queued",
         runAfter: now() + pollDelayMs,
-        payload: { ...payload, conversationId },
+        payload: { ...payload, conversationId, pollFails: 0 },
       });
     } catch (err) {
+      const fails = Number(payload.pollFails || 0) + 1;
+      const label = String(
+        err.code || err.errno || err.cause?.code || err.message || "poll_failed"
+      ).slice(0, 120);
+      if (fails >= pollFailsMax) {
+        await markStuck(job, `poll_error:${label}`, []);
+        return;
+      }
       jobs.update(job.id, {
         status: "queued",
         runAfter: now() + pollDelayMs,
-        error: err.code || err.message,
+        error: "",
+        payload: {
+          ...payload,
+          conversationId: conversationId || payload.conversationId,
+          pollFails: fails,
+          lastPollError: label,
+        },
       });
     }
   }

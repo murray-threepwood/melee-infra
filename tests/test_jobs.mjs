@@ -4,7 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 import {
+  TERMINAL,
   createJobStore,
+  createJobWorker,
   formatClock,
   formatJobDetail,
   formatJobsSummary,
@@ -116,4 +118,42 @@ test("formatClock: mismo día HH:MM; otro día con fecha", () => {
 test("jobsHint ofrece /jobs en una línea Murray", () => {
   assert.equal(jobsHint(), "Si te pica la impaciencia: /jobs.");
   assert.match(jobsHint("aabbccddeeff0011"), /\/jobs aabbccddeeff0011/);
+});
+
+test("find por job id, conversationId y startTaskId; paused es terminal", async () => {
+  const { dir, store } = tmpStore();
+  assert.equal(TERMINAL.has("paused"), true);
+  const job = store.enqueue({
+    type: "oh_poll",
+    chatId: "7",
+    payload: {
+      slug: "repo-a",
+      conversationId: "460fdf35f8e54fb996d8c52d9eb01057",
+      startTaskId: "d02a1ede8b1643f28c27715a9c82ed6d",
+    },
+  });
+  assert.equal(store.find({ chatId: "7", ref: job.id }).id, job.id);
+  assert.equal(
+    store.find({ chatId: "7", ref: "460fdf35f8e54fb996d8c52d9eb01057" }).id,
+    job.id
+  );
+  assert.equal(
+    store.find({ chatId: "7", ref: "d02a1ede8b1643f28c27715a9c82ed6d" }).id,
+    job.id
+  );
+  assert.equal(store.find({ chatId: "8", ref: job.id }), null);
+  store.update(job.id, { status: "paused", error: "sandbox_paused" });
+  const hits = [];
+  const worker = createJobWorker({
+    store,
+    handlers: {
+      oh_poll: async () => {
+        hits.push("ran");
+      },
+    },
+  });
+  const after = await worker.kick(job.id);
+  assert.equal(after.status, "paused");
+  assert.equal(hits.length, 0);
+  fs.rmSync(dir, { recursive: true, force: true });
 });

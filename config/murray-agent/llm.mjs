@@ -229,7 +229,7 @@ export const TOOL_DEFS = [
     function: {
       name: "list_jobs",
       description:
-        "Lista jobs async (clone/code/pull/push/delete/checkout/oh_poll): status, error y últimas líneas de log. Solo lectura. job_id opcional para detalle.",
+        "Lista o diagnostica jobs async (clone/code/pull/push/delete/checkout/oh_poll). job_id acepta el id Murray (16 hex) o el UUID de OpenHands (32 hex). Solo lectura.",
       parameters: {
         type: "object",
         properties: { job_id: { type: "string" } },

@@ -78,7 +78,19 @@ export function isAgentDone({ executionStatus = "", sandboxStatus = "" } = {}) {
   if (sandbox === "ERROR" || sandbox === "MISSING") {
     return false;
   }
+  if (sandbox === "PAUSED" && status !== "finished" && status !== "idle") {
+    return false;
+  }
   return status === "finished" || status === "idle" || status === "paused";
+}
+
+export function isSandboxPaused({ executionStatus = "", sandboxStatus = "" } = {}) {
+  const sandbox = String(sandboxStatus || "").toUpperCase();
+  if (sandbox !== "PAUSED") {
+    return false;
+  }
+  const status = String(executionStatus || "").toLowerCase();
+  return status !== "finished" && status !== "idle";
 }
 
 export function summarizeEvents(events = [], { maxChars = 1800 } = {}) {

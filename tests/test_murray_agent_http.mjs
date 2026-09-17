@@ -368,7 +368,11 @@ function codingStack(overrides = {}) {
         return { code: 0, stdout: "https://github.com/octocat/Hello-World.git", stderr: "" };
       }
       if (verb === "status") {
-        return { code: 0, stdout: `## ${overrides.branch || "feat/disk"}\n M README.md\n`, stderr: "" };
+        const porcelain =
+          overrides.statusStdout !== undefined
+            ? overrides.statusStdout
+            : `## ${overrides.branch || "feat/disk"}\n M README.md\n`;
+        return { code: 0, stdout: porcelain, stderr: "" };
       }
       if (verb === "push" && !opts.allowPush) {
         throw Object.assign(new Error("git push exige HITL"), { code: "git_forbidden" });
@@ -415,7 +419,7 @@ function codingStack(overrides = {}) {
     approvals,
     openhands,
     telegram,
-    pollDelayMs: 1,
+    pollDelayMs: overrides.pollDelayMs ?? 1,
     worker: {
       kick(id) {
         return workerRef.current.kick(id);
@@ -953,5 +957,187 @@ test("pull sin HITL encola job", async () => {
   assert.match(pulled.reply, /\/jobs/);
   await worker.kick(pulled.job_id);
   assert.equal(notes.some((row) => /Pull listo/.test(row.text)), true);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("sandbox PAUSED limpio avisa stuck HITL, no misión lista", async () => {
+  const { engine, session, worker, notes, jobs, root } = codingStack({
+    statusStdout: "## feat/disk\n",
+    openhands: {
+      getConversation: async () => ({
+        execution_status: null,
+        sandbox_status: "PAUSED",
+      }),
+    },
+  });
+  fs.mkdirSync(path.join(root, "octocat-Hello-World"), { recursive: true });
+  session.patch("40", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  const proposed = await engine.dispatchTool(
+    "propose_code_mission",
+    { instruction: "creá test_embedder_determinism.py", test_command: "pytest" },
+    { chatId: "40" }
+  );
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "40",
+    callback_data: proposed.hitl.approve_data,
+  });
+  await worker.kick(hitl.job_id);
+  await worker.drain();
+  await worker.drain();
+  const stuckNote = notes.find((row) => /sandbox_paused/.test(row.text));
+  assert.ok(stuckNote);
+  assert.ok(stuckNote.buttons);
+  assert.equal(notes.some((row) => /Misión lista/.test(row.text)), false);
+  const poll = jobs.list({ chatId: "40" }).find((job) => job.type === "oh_poll");
+  assert.equal(poll.status, "stuck");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("sandbox PAUSED con cambios avisa pausa y no finge listo", async () => {
+  const { engine, session, worker, notes, jobs, root } = codingStack({
+    openhands: {
+      getConversation: async () => ({
+        execution_status: null,
+        sandbox_status: "PAUSED",
+      }),
+    },
+  });
+  fs.mkdirSync(path.join(root, "octocat-Hello-World"), { recursive: true });
+  session.patch("41", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  const proposed = await engine.dispatchTool(
+    "propose_code_mission",
+    { instruction: "tocá README", test_command: "npm test" },
+    { chatId: "41" }
+  );
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "41",
+    callback_data: proposed.hitl.approve_data,
+  });
+  await worker.kick(hitl.job_id);
+  await worker.drain();
+  await worker.drain();
+  assert.equal(notes.some((row) => /Misión lista/.test(row.text)), false);
+  assert.equal(notes.some((row) => /pausó|PAUSED|cambios/.test(row.text)), true);
+  assert.equal(
+    notes.some((row) => row.buttons && /STUCK_RETRY/.test(row.buttons[0][0].callback_data)),
+    false
+  );
+  const poll = jobs.list({ chatId: "41" }).find((job) => job.type === "oh_poll");
+  assert.equal(poll.status, "paused");
+  assert.equal(poll.error, "sandbox_paused");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("tres fallos de poll marcan stuck; un 23 suelto no", async () => {
+  let polls = 0;
+  const { engine, session, worker, notes, jobs, root } = codingStack({
+    pollDelayMs: 0,
+    openhands: {
+      getConversation: async () => {
+        polls += 1;
+        throw Object.assign(new Error("23"), { code: 23 });
+      },
+    },
+  });
+  session.patch("42", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  const proposed = await engine.dispatchTool(
+    "propose_code_mission",
+    { instruction: "agregá un healthcheck HTTP", test_command: "npm test" },
+    { chatId: "42" }
+  );
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "42",
+    callback_data: proposed.hitl.approve_data,
+  });
+  await worker.kick(hitl.job_id);
+  const poll = jobs.list({ chatId: "42" }).find((job) => job.type === "oh_poll");
+  assert.equal(poll.status, "queued");
+  assert.match(String(poll.error || ""), /^$/);
+  await worker.drain();
+  await worker.drain();
+  const stuck = jobs.get(poll.id);
+  assert.equal(stuck.status, "stuck");
+  assert.match(stuck.error, /poll_error/);
+  assert.equal(polls >= 3, true);
+  assert.equal(notes.some((row) => /poll_error/.test(row.text)), true);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("seguí con L01 re-arma HITL desde lastMission sin LLM", async () => {
+  let llmHits = 0;
+  const { engine, session, root } = codingStack({
+    llm: {
+      complete: async () => {
+        llmHits += 1;
+        return { content: "no", tool_calls: [] };
+      },
+    },
+  });
+  session.patch("43", {
+    slug: "hbauzan-semantic-firewall",
+    url: "https://github.com/hbauzan/semantic-firewall.git",
+    lastMission: "Crear backend/tests/test_embedder_determinism.py (N=100).",
+    lastTestCommand: "cd backend && uv run pytest -q tests/test_embedder_determinism.py",
+  });
+  const body = await engine.handleChat({ chat_id: "43", text: "seguí con L01" });
+  assert.equal(llmHits, 0);
+  assert.equal(body.needs_hitl, true);
+  assert.equal(body.hitl.kind, "code");
+  assert.match(body.reply, /test_embedder_determinism/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("qué pasó con UUID de OpenHands diagnostica sin LLM", async () => {
+  let llmHits = 0;
+  const { engine, session, jobs, root } = codingStack({
+    llm: {
+      complete: async () => {
+        llmHits += 1;
+        return { content: "no", tool_calls: [] };
+      },
+    },
+    openhands: {
+      getConversation: async () => ({
+        execution_status: null,
+        sandbox_status: "PAUSED",
+      }),
+    },
+  });
+  session.patch("44", {
+    slug: "hbauzan-semantic-firewall",
+    lastJobId: "",
+  });
+  const job = jobs.enqueue({
+    type: "oh_poll",
+    chatId: "44",
+    payload: {
+      slug: "hbauzan-semantic-firewall",
+      conversationId: "460fdf35f8e54fb996d8c52d9eb01057",
+      startTaskId: "d02a1ede8b1643f28c27715a9c82ed6d",
+    },
+  });
+  jobs.update(job.id, { status: "queued", error: "" });
+  const spoken = await engine.handleChat({
+    chat_id: "44",
+    text: "en qué quedó task 460fdf35f8e54fb996d8c52d9eb01057",
+  });
+  assert.equal(llmHits, 0);
+  assert.match(spoken.reply, new RegExp(job.id));
+  assert.match(spoken.reply, /PAUSED/i);
+  const bySlash = await engine.handleChat({
+    chat_id: "44",
+    text: "/jobs 460fdf35f8e54fb996d8c52d9eb01057",
+  });
+  assert.equal(llmHits, 0);
+  assert.match(bySlash.reply, new RegExp(job.id));
   fs.rmSync(root, { recursive: true, force: true });
 });
