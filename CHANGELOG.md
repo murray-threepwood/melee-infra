@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.4 — Murray por Telegram (chat + ops HITL)
+
+- Servicio `murray-agent`: DeepSeek chat, `/status` `/health` `/logs`, Gmail meta sin asuntos, compose allowlist.
+- Router Telegram: texto libre → Murray. `/oh` y `sandbox:` → OpenHands con el texto original. `APPROVE_OPS` no pega a OpenHands.
+- `POST /ops/execute` exige `approval_id` de un uso. Cero send de Gmail.
+
 ## 0.1.3 — Healthcheck MCP + lecciones OAuth
 
 - `workspace-mcp` usa `working_dir: /tmp` (el bind `/opt/mcp:ro` como cwd dejaba `unhealthy` falso y rompía `compose exec`).

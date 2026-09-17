@@ -97,6 +97,51 @@ services:
     networks:
       - agent-net
 
+  murray-agent:
+    build: ./config/murray-agent
+    image: murray-agent:local
+    container_name: murray-agent
+    restart: unless-stopped
+    working_dir: /tmp
+    command: ["node", "/opt/agent/server.mjs"]
+    security_opt:
+      - "no-new-privileges:true"
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+      - DEEPSEEK_MODEL=deepseek-chat
+      - MURRAY_AGENT_PORT=8080
+      - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-murray-infra}
+      - COMPOSE_FILE=/opt/stack/docker-compose.yml
+      - COMPOSE_PROJECT_DIR=/opt/stack
+      - GMAIL_MCP_URL=http://workspace-mcp:8000
+      - N8N_HEALTH_URL=http://n8n:5678/healthz
+      - OPENHANDS_HEALTH_URL=http://openhands:3000/api/health
+      - MURRAY_MEMORY_PATH=/var/lib/murray-agent/memory.json
+    volumes:
+      - ./config/murray-agent:/opt/agent:ro
+      - ./docker-compose.yml:/opt/stack/docker-compose.yml:ro
+      - ./.env:/opt/stack/.env:ro
+      - ./RUNBOOK.md:/opt/docs/RUNBOOK.md:ro
+      - ./architecture_spec.md:/opt/docs/architecture_spec.md:ro
+      - ./.agents/skills/dev-protocol/lessons-learned.md:/opt/docs/lessons-learned.md:ro
+      - /var/run/docker.sock:/var/run/docker.sock
+      - murray_agent_data:/var/lib/murray-agent
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:8080/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 8s
+    networks:
+      - agent-net
+
   openhands:
     image: ghcr.io/openhands/openhands:latest
     container_name: murray-openhands
@@ -130,4 +175,6 @@ volumes:
   postgres_data:
     driver: local
   n8n_data:
+    driver: local
+  murray_agent_data:
     driver: local

@@ -103,6 +103,20 @@ def test_compose_guardrails():
             )
     print(f"  [OK] working_dir={working_dir} no es un bind :ro")
 
+    agent = services.get("murray-agent")
+    if not agent:
+        raise AssertionError(
+            "Servicio 'murray-agent' no definido en docker-compose.yml"
+        )
+    agent_cwd = str(agent.get("working_dir") or agent.get("workingDir") or "").rstrip(
+        "/"
+    )
+    if agent_cwd != "/tmp":
+        raise AssertionError(
+            f"murray-agent working_dir={agent_cwd!r} tiene que ser /tmp (bind :ro mata healthcheck)."
+        )
+    print("  [OK] murray-agent working_dir=/tmp")
+
 
 def test_source_has_no_stub_and_no_send_url():
     print("==> Verificando que el shim ya no es stub y no tiene URL de send...")

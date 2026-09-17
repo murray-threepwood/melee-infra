@@ -39,8 +39,14 @@ if "http://openhands:3000/api/conversations" in joined_urls and "api/v1/app-conv
     raise SystemExit("LIVE_HITL_STALE: el workflow publicado aún pega a /api/conversations (405).")
 if "¿Aprobar OpenHands?" not in names:
     raise SystemExit(f"LIVE_HITL_STALE: falta el IF ¿Aprobar OpenHands?. Nodos={names}")
+if "Consultar Murray" not in names:
+    raise SystemExit(f"LIVE_HITL_STALE: falta Consultar Murray. Nodos={names}")
 if "http://openhands:3000/api/v1/app-conversations" not in joined_urls:
     raise SystemExit(f"LIVE_HITL_STALE: falta POST v1. urls={urls}")
+if "http://murray-agent:8080/chat" not in joined_urls:
+    raise SystemExit("LIVE_HITL_STALE: el publicado no pega a murray-agent /chat")
+if "http://murray-agent:8080/ops/execute" not in joined_urls:
+    raise SystemExit("LIVE_HITL_STALE: falta POST /ops/execute")
 
 trigger = next(n for n in wf.get("nodes", []) if n.get("name") == "Telegram Trigger")
 webhook_id = trigger.get("webhookId")

@@ -35,7 +35,7 @@ run_test "Contrato HITL OpenHands v1" "python3 tests/test_hitl_dispatch.py"
 run_test "Contrato email triage draft-only" "python3 tests/test_email_triage_draft.py"
 
 # 2d. Gmail client + HTTP shim con fetch mockeado (cero Google vivo)
-run_test "Gmail API unit (mock fetch)" "node --test tests/test_gmail_client.mjs tests/test_workspace_mcp_http.mjs"
+run_test "Gmail API unit (mock fetch)" "node --test tests/test_gmail_client.mjs tests/test_workspace_mcp_http.mjs tests/test_murray_agent_http.mjs"
 
 # 2e. Workflow publicado en n8n (requiere stack arriba)
 run_test "HITL publicado en n8n" "bash tests/test_live_hitl_dispatch.sh"
@@ -45,6 +45,9 @@ run_test "Guardrails MCP (Draft-only)" "python3 tests/test_mcp_draft_only.py"
 
 # 3b. Shim Gmail live: unread real, send 403
 run_test "Gmail shim live draft-only" "bash tests/test_live_gmail_shim.sh"
+
+# 3c. Murray Telegram agent live (healthz, /status, ops 403)
+run_test "Murray agent live" "bash tests/test_live_murray_agent.sh"
 
 # 4. Test OpenHands API & Stuck-loop Circuit Breaker
 run_test "OpenHands Circuit Breaker & Health" "bash tests/test_openhands_api.sh"

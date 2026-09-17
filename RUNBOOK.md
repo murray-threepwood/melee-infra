@@ -75,4 +75,16 @@
 
 ### Incidente M: `n8n import:workflow` aborta por `id` NULL
 - Causa: el JSON no trae `"id"` en la raíz. Postgres 16: `null value in column "id" of relation "workflow_entity"`.
-- Mitigación: asignar un id estable en `workflows/*.json` (triage: `Z8f9K2mP1qRt5vWx`) e importar con `--projectId` **o** `--userId`, nunca los dos.
+- Mitigación: asignar un id estable en `workflows/*.json` (HITL: `20uYWal9fr2bWwVV`, triage: `Z8f9K2mP1qRt5vWx`) e importar con `--projectId` **o** `--userId`, nunca los dos. Si `/opt/workflows` está vacío: `docker compose cp` al `/tmp` del contenedor. El import **desactiva**; reactivar y `docker compose restart n8n`.
+
+### Incidente N: El bot tira teclado HITL en cada mensaje (no hay chat)
+- Causa: el router viejo mandaba **todo** texto al teclado OpenHands.
+- Contrato v1: texto libre → `murray-agent` `/chat`. Solo `/oh` o `sandbox:` abren OpenHands.
+- Verificación: `python3 tests/test_hitl_dispatch.py` y `bash tests/test_live_hitl_dispatch.sh` (el publicado tiene `Consultar Murray`).
+- Mitigación: import + publish `telegram_hitl_router.json`, `docker compose restart n8n`.
+
+### Incidente O: Murray no contesta / 403 en ops
+- Causa 1: `murray-agent` unhealthy o n8n no publicado con `/chat`.
+- Causa 2: `POST /ops/execute` sin `approval_id` vigente (15 min, un uso).
+- Verificación: `bash tests/test_live_murray_agent.sh` → `LIVE_MURRAY_AGENT_OK`. `/status` no usa DeepSeek.
+- Mitigación: `docker compose up -d --build --force-recreate murray-agent`. No recrear n8n/cloudflared a ciegas: gap de webhook 10–20s.

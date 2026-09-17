@@ -25,6 +25,11 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 - **405 fósil en logs de n8n**: `docker compose logs --tail=50 n8n` mezcla Axios 405 de *antes* del SIGTERM con el proceso actual. H12 / HITL vivo se verifica con `docker compose logs --since "$(docker inspect -f '{{.State.StartedAt}}' murray-n8n)"` y/o `execution_entity.startedAt` posterior al publish. El grafo publicado tiene que tener el nodo `¿Aprobar OpenHands?`.
 - **`working_dir` no puede ser un bind `:ro`**: `workspace-mcp` monta `./config/workspace-mcp` → `/opt/mcp:ro`. Si `working_dir=/opt/mcp`, Docker Desktop aborta healthcheck y `compose exec` con *cwd outside of container mount namespace* (`exit=-1`). El proceso HTTP sigue vivo → `ps` dice `unhealthy` y el test live falla. Cwd canónico: `/tmp`. Command: `node /opt/mcp/server.mjs`. Tests y exec: `-w /tmp`.
 - **`PROGRESS.md` no es un diario de bloqueos muertos**: si OAuth ya está live y el triage `active=t`, no dejar escrito “mismatch bloquea Active”. El operador lee eso como trabajo pendiente.
+- **Telegram chat vs sandbox**: texto libre va a `murray-agent` (DeepSeek). El teclado OpenHands **solo** si el mensaje es `/oh` o `sandbox:`. Un teclado en cada mensaje hace el chat inservible.
+- **`approval_id` ops de un uso**: `POST /ops/execute` sin token vigente es `403`. Telegram `callback_data` ≤64 bytes → id hex de 16 chars (`APPROVE_OPS:<hex>`). Restart/recreate **no** pasan por el LLM.
+- **docker.sock en murray-agent**: el seam es `ops.mjs` (allowlist + `assertSafeComposeArgs`). Nunca `down -v` / `exec`. Recreate con `--no-deps`. `--project-directory /opt/stack` monta `docker-compose.yml` + `.env` (el LLM no puede `cat` .env: no hay tool de shell).
+- **n8n import desactiva el workflow**: `import:workflow` loguea `Deactivating workflow`. Después: `update:workflow --id=... --active=true` (deprecado pero funciona) o publish + restart. Verificar `workflow_entity.active`.
+- **Bind `./workflows` a veces vacío hasta recrear n8n**: Docker Desktop puede servir `/opt/workflows` vacío. Workaround: `docker compose cp workflows/foo.json n8n:/tmp/foo.json` e importar desde `/tmp`. Un restart de n8n suele remountar.
 
 ---
 
@@ -54,7 +59,7 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 - **Presupuesto de Memoria**: Validar que la huella de memoria acumulada de los servicios no exceda el límite operativo del entorno anfitrión.
 - **Persistencia Aislada**: Los volúmenes y rutas de almacenamiento persistente deben declararse explícitamente sin montar directorios raíz del anfitrión.
 - **docker stats MemUsage**: el formato es `12.5MiB / 3.8GiB`. Si el parser busca `GiB` en toda la línea, toma el **límite** y infla el total a cientos de GB. Parsear solo el primer token (uso). Medir con `docker compose stats`, no `docker stats` global.
-- **Huella idle observada (2026-09-16)**: ~838–850 MiB los 5 servicios. Techo `< 4.5 GB`.
+- **Huella idle observada**: ~838–850 MiB (5 servicios, 2026-09-16); ~1140 MiB con `murray-agent` (2026-09-17). Techo `< 4.5 GB`.
 
 ---
 
