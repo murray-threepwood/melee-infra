@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.6 — Git de dev + borrar ./workspace
+
+- Murray lista y borra paths bajo `./workspace` (HITL `APPROVE_DELETE`). Jail realpath; wipe del mount, no de murray-infra.
+- Git en el repo activo: status/diff/log/pull/checkout/commit sin HITL; push con `APPROVE_PUSH`. Nunca force ni `main`/`master`. Clone sigue shallow; pull/push hacen unshallow.
+- Author de commit default: `Murray <murray-threepwood@users.noreply.github.com>`. `GITHUB_TOKEN` (PAT repo) para clone privado y push. Router: `_DELETE:` / `_PUSH:` → `/workspace/hitl`.
+
 ## 0.1.5 — Coding sessions por Telegram (clone + Q&A + OpenHands obrero)
 
 - Murray clona (HITL) repos https GitHub/GitLab en `./workspace`, responde preguntas (tree/read/grep) y dispara misiones de código a OpenHands con HITL.

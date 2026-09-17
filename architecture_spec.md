@@ -57,7 +57,7 @@ flowchart TD
    - Todo update valida `chat.id` / `from.id` contra `$env.TELEGRAM_CHAT_ID`. IDs no autorizados: silencio total.
    - `$env.*` exige la variable en el servicio Compose `n8n` **y** `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` (n8n 2.x).
    - Un bot = **un** webhook. El trigger canónico es `https://ceo.threepwood.uy/webhook/4dae132d-912c-40e0-b048-c00b42e03250/webhook` (`allowed_updates`: `message` + `callback_query`). La ruta `.../telegram trigger/webhook` da 404 en n8n 2.38.
-   - Texto libre → `POST http://murray-agent:8080/chat` (Murray contesta ya). `/oh …` o `sandbox: …` → teclado OpenHands crudo. `APPROVE_OPS:` / `REJECT_OPS:` → ops HITL. `APPROVE_CLONE:` / `APPROVE_CODE:` / `STUCK_*` → `POST http://murray-agent:8080/workspace/hitl`. Ninguno de esos pega crudo a OpenHands.
+   - Texto libre → `POST http://murray-agent:8080/chat` (Murray contesta ya). `/oh …` o `sandbox: …` → teclado OpenHands crudo. `APPROVE_OPS:` / `REJECT_OPS:` → ops HITL. `APPROVE_CLONE:` / `APPROVE_CODE:` / `APPROVE_DELETE:` / `APPROVE_PUSH:` / `STUCK_*` → `POST http://murray-agent:8080/workspace/hitl`. Ninguno de esos pega crudo a OpenHands.
    - **Aprobar OpenHands** (`/oh` escape hatch) = `POST http://openhands:3000/api/v1/app-conversations` con el **texto original** de la misión (static data `missions[message_id]`). **Rechazar/Pausar** no llaman a OpenHands. `POST /api/conversations` es la SPA (405).
    - Teclado Murray: `hitl.approve_data` / `hitl.reject_data` (no hardcodear solo `APPROVE_OPS`).
    - Nodos Telegram send/notify: `additionalFields.parse_mode=HTML`. El default Markdown rompe `REJECT_TASK` (`_`).
@@ -79,11 +79,12 @@ flowchart TD
    - OAuth Gmail: habilitar **Gmail API** (nunca “Gmail MCP API”). Cliente **Web** + Playground redirect `https://developers.google.com/oauthplayground`. Un `refresh_token` con `gmail.readonly` + `gmail.compose`.
 
 5. **`murray-agent` (Telegram chat + conductor de coding sessions)**:
-   - DeepSeek `deepseek-chat`. No edita `murray-infra`. No hay git push. OpenHands es el obrero en `./workspace/<slug>`.
+   - DeepSeek `deepseek-chat`. No edita `murray-infra`. OpenHands es el obrero en `./workspace/<slug>`. Murray corre git en ese jail: status/diff/log/pull/checkout/commit **sin HITL**; **push y delete con HITL**. Push nunca a `main`/`master`, nunca `--force`.
    - `POST /ops/execute` exige `approval_id` de un solo uso emitido por `propose_ops` / `/chat` con `needs_hitl=true` y `hitl.kind=ops`. Sin eso → `403 ops_approval_denied`.
    - Compose allowlist: `ps`, `logs --tail<=80`, `restart`, `up -d --force-recreate --no-deps` de un servicio. Prohibido `down -v`, `exec`, `kill`.
-   - `callback_data` Telegram ≤64 bytes: `APPROVE_OPS:<16 hex>`, `APPROVE_CLONE:<16 hex>`, `APPROVE_CODE:<16 hex>`, `STUCK_RETRY:<16 hex>`.
-   - Clone: solo `https://github.com` / `https://gitlab.com`, shallow, jail bajo `./workspace`. Token privado en `GITHUB_TOKEN` / `GITLAB_TOKEN` (`.env`), nunca en la URL ni el chat.
+   - `callback_data` Telegram ≤64 bytes: `APPROVE_OPS:<16 hex>`, `APPROVE_CLONE:<16 hex>`, `APPROVE_CODE:<16 hex>`, `APPROVE_DELETE:<16 hex>`, `APPROVE_PUSH:<16 hex>`, `STUCK_RETRY:<16 hex>`.
+   - Clone: solo `https://github.com` / `https://gitlab.com`, shallow `--depth 1 --single-branch`, jail bajo `./workspace`. Pull/push/otra rama: `fetch --unshallow` + fetch. Token privado en `GITHUB_TOKEN` / `GITLAB_TOKEN` (`.env`), nunca en la URL ni el chat. Author de commit: default `Murray <murray-threepwood@users.noreply.github.com>` (override `MURRAY_GIT_*`).
+   - Delete: cualquier path relativo a `./workspace` (archivo, `node_modules`, un slug, o wipe). HITL. No sale del jail.
    - Dos clientes del **mismo** bot: n8n (webhook inbound) y murray-agent (`sendMessage` de progreso/stuck). Solo `TELEGRAM_CHAT_ID`.
 
 ### 2.1. Diagrama de Secuencia: Ciclo de Vida y Flujo HITL
@@ -114,9 +115,9 @@ sequenceDiagram
         N8N->>Agent: POST /ops/execute
         Agent-->>N8N: reply
         N8N->>CEO: HTML
-    else needs_hitl clone o code
+    else needs_hitl clone, code, delete o push
         N8N->>CEO: teclado approve_data
-        CEO->>N8N: callback _CLONE o _CODE
+        CEO->>N8N: callback _CLONE _CODE _DELETE o _PUSH
         N8N->>Agent: POST /workspace/hitl
         Agent-->>N8N: ack job
         N8N->>CEO: HTML
@@ -172,15 +173,16 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
 - **`GET /healthz`**: `200` `{"status":"ok","service":"murray-agent","model":"deepseek-chat"}`
 - **`POST /chat`**: `{ chat_id, text, message_id? }`
   - `200`: `{ reply, replies, parse_mode:"HTML", needs_hitl, hitl?, needs_job?, job_id? }`
-  - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`
-  - Clone sin URL o mutate sin repo activo: pregunta, no HITL, no LLM
-  - `needs_hitl=true` + `hitl.approval_id` (16 hex) + `hitl.kind` (`ops`|`clone`|`code`) + `hitl.approve_data`/`reject_data`
+  - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`, `/workspace`
+  - Clone sin URL, mutate sin repo activo, o delete sin path: pregunta, no HITL, no LLM
+  - `needs_hitl=true` + `hitl.approval_id` (16 hex) + `hitl.kind` (`ops`|`clone`|`code`|`delete`|`push`) + `hitl.approve_data`/`reject_data`
 - **`POST /ops/execute`** y **`POST /ops/reject`**: `{ approval_id }` solo `kind=ops`
   - `200` con `reply` HTML
   - `403` `ops_approval_denied` si falta, está usado, venció (~15 min) o el kind no es ops
 - **`POST /workspace/hitl`**: `{ callback_data, chat_id }`
-  - Clone/code approve → encola job, `needs_job=true` (el webhook no espera `git clone` ni OpenHands)
-  - Reject no clona ni llama OpenHands
+  - Clone/code/delete/push approve → encola job, `needs_job=true` (el webhook no espera `git clone`, `rm`, `git push` ni OpenHands)
+  - Pull/checkout también son jobs (pueden unshallow); no piden HITL
+  - Reject no clona, no borra, no pushea ni llama OpenHands
   - `STUCK_RETRY|STOP|LOGS|CHG:<hex>`
   - `403` si el token HITL no vale
 - Gmail vía tool: solo `{ http, status, error, unread_count }`. Cero `messages`/`subject`.
@@ -195,7 +197,7 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
   - Credencial Telegram: nombre `Telegram account` (id vivo `9IhWvhoAHuzho5J5`).
   - Texto libre → `POST http://murray-agent:8080/chat`. `/oh` o `sandbox:` → teclado OpenHands + `staticData.missions`.
   - `APPROVE_OPS` → `POST http://murray-agent:8080/ops/execute`. `REJECT_OPS` → `/ops/reject`. No OpenHands.
-  - `_CLONE:` / `_CODE:` / `STUCK_` → `POST http://murray-agent:8080/workspace/hitl`. No OpenHands.
+  - `_CLONE:` / `_CODE:` / `_DELETE:` / `_PUSH:` / `STUCK_` → `POST http://murray-agent:8080/workspace/hitl`. No OpenHands.
   - Teclado Murray: `callback_data` = `{{ $json.hitl.approve_data }}` / `reject_data`.
 - **Email Triage Draft** (`workflows/email_triage_draft.json`, id publicado `Z8f9K2mP1qRt5vWx`):
   - Schedule 15 min → `GET http://workspace-mcp:8000/gmail/unread` → IF `unread_count > 0` → split `messages` → dedup por `id` (static data) → `POST /gmail/drafts` → notify Telegram HTML.

@@ -319,14 +319,61 @@ function codingStack(overrides = {}) {
   const notes = [];
   const workspace = createWorkspace({
     root,
-    gitRun: async (args) => {
-      if (args[0] === "clone") {
+    gitName: "Murray",
+    gitEmail: "murray@threepwood.uy",
+    gitRun: async (args, opts = {}) => {
+      const verb = args.includes("clone")
+        ? "clone"
+        : args.includes("push")
+          ? "push"
+          : args.includes("pull")
+            ? "pull"
+            : args.includes("commit")
+              ? "commit"
+              : args.includes("checkout")
+                ? "checkout"
+                : args.includes("rev-parse")
+                  ? "rev-parse"
+                  : args.includes("status")
+                    ? "status"
+                    : args.includes("diff")
+                      ? "diff"
+                      : args.includes("log")
+                        ? "log"
+                        : args.includes("fetch")
+                          ? "fetch"
+                          : args.includes("add")
+                            ? "add"
+                            : args.includes("remote")
+                              ? "remote"
+                              : args[0];
+      if (opts.allowPush === false && verb === "push") {
+        throw Object.assign(new Error("git push exige HITL"), { code: "git_forbidden" });
+      }
+      if (verb === "clone") {
         const dest = args.at(-1);
         fs.mkdirSync(dest, { recursive: true });
         fs.writeFileSync(path.join(dest, "README.md"), "# main entry\n");
         return { code: 0, stdout: "", stderr: "" };
       }
-      return { code: 1, stdout: "", stderr: "" };
+      if (verb === "rev-parse") {
+        if (args.includes("--is-shallow-repository")) {
+          return { code: 0, stdout: "true\n", stderr: "" };
+        }
+        if (args.includes("--abbrev-ref")) {
+          return { code: 0, stdout: `${overrides.branch || "feat/disk"}\n`, stderr: "" };
+        }
+      }
+      if (verb === "remote") {
+        return { code: 0, stdout: "https://github.com/octocat/Hello-World.git", stderr: "" };
+      }
+      if (verb === "status") {
+        return { code: 0, stdout: `## ${overrides.branch || "feat/disk"}\n M README.md\n`, stderr: "" };
+      }
+      if (verb === "push" && !opts.allowPush) {
+        throw Object.assign(new Error("git push exige HITL"), { code: "git_forbidden" });
+      }
+      return { code: 0, stdout: "ok\n", stderr: "" };
     },
   });
   const session = createSessionStore({ filePath: sessionPath });
@@ -582,4 +629,89 @@ test("stuck HITL ofrece opciones y no pushea", async () => {
   assert.match(stop.reply, /Paré/);
   fs.rmSync(root, { recursive: true, force: true });
   assert.ok(jobs);
+});
+
+test("slash /workspace lista disco; borrar pide HITL y ejecuta", async () => {
+  const { engine, session, worker, notes, root } = codingStack();
+  const slug = "octocat-Hello-World";
+  fs.mkdirSync(path.join(root, slug), { recursive: true });
+  fs.writeFileSync(path.join(root, slug, "README.md"), "hola\n");
+  session.patch("21", { slug, url: "https://github.com/octocat/Hello-World.git" });
+  const listed = await engine.handleChat({ chat_id: "21", text: "/workspace" });
+  assert.match(listed.reply, /octocat-Hello-World/);
+  const proposed = await engine.handleChat({
+    chat_id: "21",
+    text: "borrá octocat-Hello-World",
+  });
+  assert.equal(proposed.needs_hitl, true);
+  assert.equal(proposed.hitl.kind, "delete");
+  assert.match(proposed.hitl.approve_data, /^APPROVE_DELETE:[a-f0-9]{16}$/);
+  assert.equal(proposed.hitl.approve_data.length <= 64, true);
+  const rejected = await engine.handleWorkspaceHitl({
+    chat_id: "21",
+    callback_data: proposed.hitl.reject_data,
+  });
+  assert.match(rejected.reply, /RECHAZADO/);
+  assert.equal(fs.existsSync(path.join(root, slug)), true);
+  const again = await engine.handleChat({
+    chat_id: "21",
+    text: "borrá octocat-Hello-World",
+  });
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "21",
+    callback_data: again.hitl.approve_data,
+  });
+  assert.equal(hitl.needs_job, true);
+  await worker.kick(hitl.job_id);
+  assert.equal(fs.existsSync(path.join(root, slug)), false);
+  assert.equal(session.get("21").slug, "");
+  assert.equal(notes.some((row) => /Borré/.test(row.text)), true);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("push en main no HITL; en feature HITL y job", async () => {
+  const onMain = codingStack({ branch: "main" });
+  onMain.session.patch("22", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  fs.mkdirSync(path.join(onMain.root, "octocat-Hello-World"), { recursive: true });
+  const blocked = await onMain.engine.handleChat({ chat_id: "22", text: "pusheá" });
+  assert.equal(blocked.needs_hitl, false);
+  assert.match(blocked.reply, /main/);
+  fs.rmSync(onMain.root, { recursive: true, force: true });
+
+  const { engine, session, worker, notes, root } = codingStack({ branch: "feat/disk" });
+  session.patch("23", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  fs.mkdirSync(path.join(root, "octocat-Hello-World"), { recursive: true });
+  const proposed = await engine.handleChat({ chat_id: "23", text: "pusheá" });
+  assert.equal(proposed.needs_hitl, true);
+  assert.equal(proposed.hitl.kind, "push");
+  assert.match(proposed.hitl.approve_data, /^APPROVE_PUSH:[a-f0-9]{16}$/);
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "23",
+    callback_data: proposed.hitl.approve_data,
+  });
+  assert.equal(hitl.needs_job, true);
+  await worker.kick(hitl.job_id);
+  assert.equal(notes.some((row) => /Push listo/.test(row.text)), true);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("pull sin HITL encola job", async () => {
+  const { engine, session, worker, notes, root } = codingStack();
+  session.patch("24", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  fs.mkdirSync(path.join(root, "octocat-Hello-World"), { recursive: true });
+  const pulled = await engine.handleChat({ chat_id: "24", text: "hacé pull" });
+  assert.equal(pulled.needs_hitl, false);
+  assert.equal(pulled.needs_job, true);
+  await worker.kick(pulled.job_id);
+  assert.equal(notes.some((row) => /Pull listo/.test(row.text)), true);
+  fs.rmSync(root, { recursive: true, force: true });
 });

@@ -90,13 +90,13 @@ def test_workspace_callback_does_not_hit_openhands():
     ops_false = targets(data, "¿Callback Ops?", 1)
     if "Clasificar callback workspace" not in ops_false:
         raise AssertionError(
-            "Callbacks no-ops deben clasificarse (CLONE/CODE/STUCK) antes de OpenHands."
+            "Callbacks no-ops deben clasificarse (CLONE/CODE/DELETE/PUSH/STUCK) antes de OpenHands."
         )
     ws_true = targets(data, "¿Callback Workspace?", 0)
     ws_false = targets(data, "¿Callback Workspace?", 1)
     if "Resolver HITL Workspace" not in ws_true:
         raise AssertionError(
-            "APPROVE_CLONE/CODE debe pegar a murray-agent /workspace/hitl"
+            "APPROVE_CLONE/CODE/DELETE/PUSH debe pegar a murray-agent /workspace/hitl"
         )
     if "Delegar a OpenHands" in ws_true:
         raise AssertionError("HITL workspace no puede pegar crudo a OpenHands.")
@@ -105,6 +105,12 @@ def test_workspace_callback_does_not_hit_openhands():
     resolver = nodes_by_name(data)["Resolver HITL Workspace"]
     if MURRAY_WS not in resolver["parameters"].get("url", ""):
         raise AssertionError("Resolver HITL Workspace debe POST /workspace/hitl")
+    classify = nodes_by_name(data)["Clasificar callback workspace"]
+    code = classify["parameters"].get("jsCode", "")
+    if "DELETE" not in code or "PUSH" not in code:
+        raise AssertionError(
+            "El clasificador workspace tiene que rutar APPROVE_DELETE/PUSH a /workspace/hitl"
+        )
 
 
 def test_ops_keyboard_uses_hitl_callback_pair():

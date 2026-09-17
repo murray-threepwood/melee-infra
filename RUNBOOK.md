@@ -83,6 +83,11 @@
 - Verificación: `python3 tests/test_hitl_dispatch.py` y `bash tests/test_live_hitl_dispatch.sh` (el publicado tiene `Consultar Murray`).
 - Mitigación: import + publish `telegram_hitl_router.json`, `docker compose restart n8n`.
 
+### Incidente Q: ./workspace llena el disco
+- Causa: clones shallow + `node_modules` / unshallow de repos grandes.
+- Verificación: Telegram `/workspace` (lista + tamaños).
+- Mitigación: `borrá <slug>` o `borrá todo el workspace` → Aprobar. Nunca borra fuera de `./workspace`.
+
 ### Incidente P: Clone/código por Telegram no hace nada al tocar Aprobar
 - Causa: el workflow publicado no tiene `Resolver HITL Workspace` / `/workspace/hitl`, o murray-agent viejo sin `git`.
 - Verificación: `python3 tests/test_hitl_dispatch.py` y `bash tests/test_live_workspace_clone.sh`.

@@ -375,7 +375,7 @@
     },
     {
       "parameters": {
-        "jsCode": "const data = String($json.callback_query && $json.callback_query.data ? $json.callback_query.data : '');\nconst is_workspace = /_(CLONE|CODE):/.test(data) || /^STUCK_/.test(data);\nreturn [{ json: { ...$json, is_workspace, callback_data: data } }];\n"
+        "jsCode": "const data = String($json.callback_query && $json.callback_query.data ? $json.callback_query.data : '');\nconst is_workspace = /_(CLONE|CODE|DELETE|PUSH):/.test(data) || /^STUCK_/.test(data);\nreturn [{ json: { ...$json, is_workspace, callback_data: data } }];\n"
       },
       "id": "code-classify-workspace-cb-20",
       "name": "Clasificar callback workspace",

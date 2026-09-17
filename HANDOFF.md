@@ -8,15 +8,15 @@ Leé esto **antes** de tocar código. Fuente de invariantes: [`.agents/skills/de
 
 ## Estado (2026-09-17)
 
-- Rama `feat/telegram-coding-sessions` (push/merge a `main` solo con OK humano). Stack Compose: 6 servicios.
-- Coding sessions: clone HITL + Q&A + misión OpenHands + stuck/opciones. Import del router n8n pendiente en el host si el publicado no tiene `/workspace/hitl`.
-- Verificación: `bash tests/test_e2e_stack.sh` → `E2E_VERIFICACION_COMPLETA_OK`. RAM idle ~1.2 GiB (techo 4.5 GiB).
+- Rama `feat/workspace-git-lifecycle` (push/merge a `main` solo con OK humano). Stack Compose: 6 servicios.
+- Coding sessions: clone HITL + Q&A + git de dev (pull/commit sin HITL; push/delete con HITL) + misión OpenHands + stuck. Import del router n8n pendiente si el publicado no rutea `_DELETE:` / `_PUSH:`.
+- Verificación: `node --test tests/test_workspace.mjs tests/test_coding_session.mjs tests/test_murray_agent_http.mjs` y `python3 tests/test_hitl_dispatch.py`. RAM idle ~1.2 GiB (techo 4.5 GiB).
 - Gmail live draft-only. `GET /gmail/unread` → `status=ok`. Send → 403.
-- Telegram: un bot, un webhook. Texto libre = Murray (DeepSeek en `murray-agent`). `/oh` o `sandbox:` = OpenHands crudo. Ops = `APPROVE_OPS`. Clone/código = `APPROVE_CLONE` / `APPROVE_CODE` → `/workspace/hitl`. Stuck = `STUCK_*`.
-- Murray **no** edita `murray-infra`. Clona a `./workspace/<slug>`. No hay git push desde el bot. OpenHands es el obrero.
+- Telegram: un bot, un webhook. Texto libre = Murray (DeepSeek en `murray-agent`). `/oh` o `sandbox:` = OpenHands crudo. Ops = `APPROVE_OPS`. Clone/código/delete/push = `APPROVE_CLONE` / `APPROVE_CODE` / `APPROVE_DELETE` / `APPROVE_PUSH` → `/workspace/hitl`. Stuck = `STUCK_*`.
+- Murray **no** edita `murray-infra`. Clona a `./workspace/<slug>`. Push solo feature + HITL. OpenHands es el obrero (sigue sin pushear).
 - OpenHands 1.11: health `GET /health` (`"OK"`). Follow-up `POST /api/v1/app-conversations/{id}/send-message`. `execution_status` incluye `stuck`. `/api/health` es SPA HTML.
 - Workflows n8n activos: `telegram_hitl_router` (`20uYWal9fr2bWwVV`), `email_triage_draft` (`Z8f9K2mP1qRt5vWx`).
-- Murray-en-Telegram **no es Cursor**. No edita este repo. No hay git push desde el bot.
+- Murray-en-Telegram **no es Cursor**. No edita este repo. Commits en `./workspace` firman `Murray <murray-threepwood@users.noreply.github.com>` salvo override `MURRAY_GIT_*`.
 
 ---
 
@@ -37,7 +37,7 @@ Leé esto **antes** de tocar código. Fuente de invariantes: [`.agents/skills/de
 | Gmail | `GMAIL_ALLOW_SENDING=false`. No hay `send()` en `gmail-client.mjs`. |
 | Telegram | Un `telegramTrigger`. WebhookId `4dae132d-912c-40e0-b048-c00b42e03250`. `parse_mode=HTML`. |
 | Chat vs sandbox | Texto libre → `POST murray-agent:8080/chat`. OpenHands crudo solo `/oh` o `sandbox:`. Código pedido a Murray → HITL clone/code, obrero OpenHands. |
-| Coding | `./workspace/<slug>` only. https GitHub/GitLab. Privados: `GITHUB_TOKEN` en `.env`. Cero `git push`. |
+| Coding | `./workspace/<slug>` only. https GitHub/GitLab. Privados: `GITHUB_TOKEN` en `.env`. Push HITL a feature, nunca main/force. Delete HITL bajo `./workspace`. |
 | Ops | `restart`/`recreate` de un servicio: `approval_id` de un uso. `callback_data` ≤64 bytes. |
 | OpenHands | Imagen `ghcr.io/openhands/openhands:latest`. Alta `POST /api/v1/app-conversations`. Follow-up `.../send-message`. Health `GET /health`. Rechazar/Pausar `/oh` no llaman. |
 | Compose env | `docker compose restart` **no** recarga `.env`. Usar `up -d --force-recreate`. |
@@ -114,5 +114,5 @@ n8n projectId de import: `RtVLhOyjbwQ3l5th`. Credencial Telegram nombre `Telegra
 - Segundo bot / segundo webhook.
 - `GMAIL_ALLOW_SENDING=true`.
 - Postgres 17.
-- Editar `murray-infra` o `git push` desde el bot.
+- Editar `murray-infra`, `git push --force`, o push a `main`/`master` desde el bot.
 - Publicar la app OAuth (scopes Gmail = verificación Google).

@@ -120,7 +120,7 @@ export const TOOL_DEFS = [
     function: {
       name: "propose_clone",
       description:
-        "Pide HITL para git clone https GitHub/GitLab shallow en ./workspace. NO clona hasta Aprobar. Nunca push.",
+        "Pide HITL para git clone https GitHub/GitLab shallow en ./workspace. NO clona hasta Aprobar.",
       parameters: {
         type: "object",
         properties: { url: { type: "string" } },
@@ -133,7 +133,7 @@ export const TOOL_DEFS = [
     function: {
       name: "propose_code_mission",
       description:
-        "Pide HITL para que OpenHands edite/testee el repo activo. NO ejecuta. Requiere instrucción y comando de test. Cero git push.",
+        "Pide HITL para que OpenHands edite/testee el repo activo. NO ejecuta. Requiere instrucción y comando de test. OpenHands no pushea; el push lo hace Murray con HITL.",
       parameters: {
         type: "object",
         properties: {
@@ -142,6 +142,101 @@ export const TOOL_DEFS = [
           files_plan: { type: "string" },
         },
         required: ["instruction", "test_command"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_list",
+      description: "Lista entradas de ./workspace con tamaño. Para ver qué llena el disco.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_delete",
+      description:
+        "Pide HITL para borrar un path relativo a ./workspace (archivo, node_modules, un slug o todo). NO borra hasta Aprobar.",
+      parameters: {
+        type: "object",
+        properties: { path: { type: "string" } },
+        required: ["path"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "propose_push",
+      description:
+        "Pide HITL para git push origin HEAD del repo activo. Prohibido main/master y force. NO pushea hasta Aprobar.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_git_status",
+      description: "git status --porcelain del repo activo. Sin HITL.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_git_diff",
+      description: "git diff del repo activo (cap). Sin HITL.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_git_log",
+      description: "git log --oneline del repo activo. Sin HITL.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_git_pull",
+      description:
+        "git pull --ff-only del repo activo (unshallow si el clone era shallow). Sin HITL. Job async.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_git_checkout",
+      description:
+        "checkout de una rama en el repo activo. create=true hace checkout -b. Sin HITL. No crea main/master.",
+      parameters: {
+        type: "object",
+        properties: {
+          branch: { type: "string" },
+          create: { type: "boolean" },
+        },
+        required: ["branch"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "workspace_git_commit",
+      description:
+        "git add + commit en el repo activo. Sin HITL. Exige message. No commitea .env ni secretos. Author default Murray (noreply de murray-threepwood).",
+      parameters: {
+        type: "object",
+        properties: {
+          message: { type: "string" },
+          paths: { type: "array", items: { type: "string" } },
+        },
+        required: ["message"],
       },
     },
   },

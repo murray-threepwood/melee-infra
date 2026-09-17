@@ -1,6 +1,6 @@
 # Estado de Avance del Proyecto
 
-Última actualización: 2026-09-17 20:20 (UTC)
+Última actualización: 2026-09-17 19:45 (UTC-3)
 Agente ejecutor: Cursor
 
 ## Fases y Tareas
@@ -34,14 +34,17 @@ Agente ejecutor: Cursor
   - [x] Spike OpenHands follow-up + jobs async
   - [x] HITL clone + tree/read/grep
   - [x] propose_code_mission + stuck options + Murray pregunta antes
+- [x] Fase 6c: Git de dev + borrar ./workspace
+  - [x] Delete HITL de path/slug/wipe bajo ./workspace
+  - [x] pull/checkout/commit sin HITL; push HITL feature-only + unshallow
 
 ## Acciones humanas pendientes
 - H1–H12: cerrados. H12 (2026-09-16 ~20:34 UY): Rechazar → `✅ Orden procesada: REJECT_TASK:16`.
 - Gmail OAuth **live**. Workflows n8n **activos**: HITL `20uYWal9fr2bWwVV`, triage `Z8f9K2mP1qRt5vWx`.
 - Postgres 16: alerta de n8n 2.38 ignorada a propósito (no upgrade de major).
 - **Operador (no bloquea código)**:
-  1. Import + publish + reactivar `telegram_hitl_router` (nodos workspace HITL) y `docker compose up -d --build --force-recreate murray-agent`.
-  2. Telegram: `cloná https://github.com/owner/repo` → Aprobar. Preguntá por el código. Pedí un cambio con comando de test → Aprobar código.
+  1. Pegar `GITHUB_TOKEN` (PAT de murray-threepwood, scope `repo`) en `.env`. Import + publish + reactivar `telegram_hitl_router` (`_DELETE:` / `_PUSH:`) y `docker compose up -d --force-recreate murray-agent`.
+  2. Telegram: `/workspace`. `cloná https://github.com/owner/repo` → Aprobar. `hacé pull`. `commiteá "feat: …"`. `pusheá` (HITL, no en main). `borrá <slug>` → Aprobar.
   3. Recreate de un servicio del stack sigue pidiendo Aprobar ops.
   4. `/oh` queda para sandbox crudo.
   5. Rotar `GOOGLE_CLIENT_SECRET` si se pegó en un chat. Refresh token Testing ~7 días.

@@ -2,7 +2,7 @@ import { classifyUserText } from "./intent.mjs";
 import { detectStuck, isAgentDone, summarizeEvents } from "./openhands.mjs";
 import { packHitl, packReply } from "./reply.mjs";
 import { stuckKeyboard } from "./telegram.mjs";
-import { extractHttpsGitUrl, parseHttpsGitUrl } from "./workspace.mjs";
+import { parseHttpsGitUrl } from "./workspace.mjs";
 
 export function parseWorkspaceCallback(data) {
   const raw = String(data || "").trim();
@@ -10,7 +10,7 @@ export function parseWorkspaceCallback(data) {
   if (stuck) {
     return { family: "stuck", verb: stuck[1].toUpperCase(), id: stuck[2].toLowerCase() };
   }
-  const hitl = raw.match(/^(APPROVE|REJECT)_(CLONE|CODE):([a-f0-9]{16})$/i);
+  const hitl = raw.match(/^(APPROVE|REJECT)_(CLONE|CODE|DELETE|PUSH):([a-f0-9]{16})$/i);
   if (hitl) {
     return {
       family: hitl[2].toLowerCase(),
@@ -19,6 +19,17 @@ export function parseWorkspaceCallback(data) {
     };
   }
   return null;
+}
+
+export function formatBytes(n) {
+  const value = Number(n) || 0;
+  if (value < 1024) {
+    return `${value} B`;
+  }
+  if (value < 1024 * 1024) {
+    return `${(value / 1024).toFixed(1)} KiB`;
+  }
+  return `${(value / (1024 * 1024)).toFixed(1)} MiB`;
 }
 
 function denied(message = "approval_id inválido, usado o vencido") {
@@ -117,14 +128,120 @@ export function createCodingSession({
         `- repo: ${sess.slug}`,
         `- archivos: ${filesPlan || "(los decide el obrero bajo el plan)"}`,
         `- test: ${tests}`,
-        `- riesgo: mutación en ./workspace, cero git push.`,
+        `- riesgo: mutación en ./workspace. Push lo hago yo después, con HITL, nunca a main.`,
         `Tocá Aprobar código. Rechazar no llama a OpenHands.`,
       ].join("\n"),
       hitl
     );
   }
 
-  function interceptChat({ chatId, text }) {
+  function describeWorkspace() {
+    const listed = workspace.list();
+    if (!listed.entries.length) {
+      return packReply("./workspace está vacío. El disco respira. /workspace para listar.");
+    }
+    const lines = listed.entries.map((row) => {
+      const kind = row.is_dir ? "dir" : "file";
+      return `- ${row.name} (${kind}, ${formatBytes(row.bytes)})`;
+    });
+    return packReply(`./workspace ${formatBytes(listed.bytes)}:\n${lines.join("\n")}`);
+  }
+
+  function proposeDelete({ chatId, relPath }) {
+    let target;
+    try {
+      target = workspace.parseTarget(relPath, session.get(chatId).slug);
+    } catch (err) {
+      return packReply(`Ese path no pasa el cerrojo: ${err.message}`);
+    }
+    const listed = workspace.list();
+    const label = target.wipe
+      ? `TODO ./workspace (${listed.entries.length} entradas, ${formatBytes(listed.bytes)})`
+      : `./workspace/${target.rel || "."}`;
+    const hitl = issueHitl("delete", {
+      chatId: String(chatId || ""),
+      rel: target.rel,
+      wipe: Boolean(target.wipe),
+    });
+    return packHitl(
+      `Pido Aprobar BORRAR ${label}. Irreversible. El jail es ./workspace, jamás murray-infra.\nTocá Aprobar. Sin eso no toco disco.`,
+      hitl
+    );
+  }
+
+  async function proposePush({ chatId }) {
+    const sess = session.get(chatId);
+    if (!sess.slug) {
+      return packReply(
+        "No hay repo activo. Cloná uno primero (cloná https://github.com/owner/repo)."
+      );
+    }
+    try {
+      const st = await workspace.status(sess.slug);
+      if (st.protected) {
+        return packReply(
+          `Estás en ${st.branch}. Push a main/master está vedado. Decime el nombre de la rama (feat/...) y hago checkout -b.`
+        );
+      }
+      const hitl = issueHitl("push", {
+        chatId: String(chatId || ""),
+        slug: sess.slug,
+        branch: st.branch,
+        url: sess.url,
+      });
+      return packHitl(
+        `Pido Aprobar PUSH de ${sess.slug} rama ${st.branch} → origin HEAD (sin force, unshallow si hace falta).\nTocá Aprobar. Rechazar no pushea.`,
+        hitl
+      );
+    } catch (err) {
+      return packReply(`No pude leer git status (${err.code || "git_failed"}): ${err.message}`);
+    }
+  }
+
+  function enqueueJob(type, chatId, payload, message) {
+    const job = jobs.enqueue({ type, chatId, payload });
+    session.patch(chatId, { lastJobId: job.id });
+    if (worker && typeof worker.kick === "function") {
+      void worker.kick(job.id);
+    }
+    return packReply(message.replaceAll("{id}", job.id), {
+      needs_job: true,
+      job_id: job.id,
+    });
+  }
+
+  function startPull({ chatId, slug }) {
+    const sess = session.get(chatId);
+    const repo = slug || sess.slug;
+    if (!repo) {
+      return packReply("No hay repo activo. Cloná uno primero.");
+    }
+    return enqueueJob(
+      "pull",
+      chatId,
+      { slug: repo },
+      `Haciendo pull de ${repo} (unshallow si el clone era shallow). Job {id}. Te aviso.`
+    );
+  }
+
+  function startCheckout({ chatId, branch, create = false }) {
+    const sess = session.get(chatId);
+    if (!sess.slug) {
+      return packReply("No hay repo activo. Cloná uno primero.");
+    }
+    const name = String(branch || "").trim();
+    if (!name) {
+      return packReply("¿A qué rama? Ej: checkout -b feat/limpieza");
+    }
+    return enqueueJob(
+      "checkout",
+      chatId,
+      { slug: sess.slug, branch: name, create: Boolean(create) },
+      `Checkout ${create ? "-b " : ""}${name} en ${sess.slug}. Job {id}. Te aviso.`
+    );
+  }
+
+  async function interceptChat({ chatId, text }) {
     const sess = session.get(chatId) || {};
     if (sess.awaiting_instruction) {
       session.patch(chatId, { awaiting_instruction: false });
@@ -148,6 +265,49 @@ export function createCodingSession({
     }
     if (verdict.action === "propose_clone") {
       return proposeClone({ chatId, url: verdict.url });
+    }
+    if (verdict.action === "clarify_delete_path") {
+      return packReply(
+        "¿Qué borro bajo ./workspace? Un slug, un path (node_modules), o «todo el workspace»."
+      );
+    }
+    if (verdict.action === "propose_delete") {
+      return proposeDelete({ chatId, relPath: verdict.relPath });
+    }
+    if (verdict.action === "propose_push") {
+      return proposePush({ chatId });
+    }
+    if (verdict.action === "pull") {
+      return startPull({ chatId });
+    }
+    if (verdict.action === "commit") {
+      if (!sess.slug) {
+        return packReply("No hay repo activo. Cloná uno primero.");
+      }
+      if (!verdict.message) {
+        return packReply('¿Mensaje de commit? Ej: commiteá "feat: healthcheck".');
+      }
+      try {
+        const result = await workspace.commit(sess.slug, { message: verdict.message });
+        const skipped = result.skipped_secrets?.length
+          ? `\nNo toqué secretos: ${result.skipped_secrets.join(", ")}`
+          : "";
+        return packReply(
+          `Commit en ${sess.slug}: ${result.files.join(", ")}\n${result.stdout}${skipped}`
+        );
+      } catch (err) {
+        return packReply(`Commit falló (${err.code || "git_commit_failed"}): ${err.message}`);
+      }
+    }
+    if (verdict.action === "clarify_branch") {
+      return packReply("¿A qué rama? Ej: checkout -b feat/limpieza");
+    }
+    if (verdict.action === "checkout") {
+      return startCheckout({
+        chatId,
+        branch: verdict.branch,
+        create: Boolean(verdict.create),
+      });
     }
     return null;
   }
@@ -222,7 +382,7 @@ export function createCodingSession({
         [
           result.reused ? `Repo ya estaba en ./workspace/${result.slug}.` : `Clon listo: ./workspace/${result.slug}`,
           `archivos (cap ${listing.files.length}${listing.truncated ? "+" : ""}). Preguntame por el código.`,
-          "No soy Cursor de murray-infra. Cero git push.",
+          "No soy Cursor de murray-infra. Pull/commit los hago yo; push pide Aprobar y nunca va a main.",
         ].join("\n")
       );
     } catch (err) {
@@ -380,7 +540,7 @@ export function createCodingSession({
             `Misión lista en ${payload.slug} (status ${conversation?.execution_status}).`,
             summary,
             changeText && changeText !== "{}" ? `git changes: ${changeText}` : "",
-            "Cero push. Si querés otro cambio, pedímelo.",
+            "Si está bien, pedime commit y después push (HITL, nunca main).",
           ]
             .filter(Boolean)
             .join("\n")
@@ -442,6 +602,105 @@ export function createCodingSession({
     throw denied("stuck_verb_denied");
   }
 
+  function clearSessionIfRemoved(chatId, result) {
+    const sess = session.get(chatId);
+    if (!sess.slug) {
+      return;
+    }
+    if (result.wiped || result.removed.includes(sess.slug)) {
+      session.patch(chatId, { slug: "", url: "", conversationId: "" });
+    }
+  }
+
+  async function handleDeleteJob(job) {
+    const payload = job.payload || {};
+    try {
+      const result = workspace.remove(payload.wipe ? "." : payload.rel || ".", {
+        activeSlug: session.get(job.chatId).slug,
+      });
+      clearSessionIfRemoved(job.chatId, result);
+      jobs.update(job.id, { status: "done", error: "" });
+      const listing = workspace.list();
+      await notify(
+        job.chatId,
+        [
+          result.wiped
+            ? `Vacié ./workspace (${result.removed.length} entradas).`
+            : `Borré ./workspace/${result.rel}.`,
+          `Queda ${listing.entries.length} entradas, ${formatBytes(listing.bytes)}.`,
+        ].join("\n")
+      );
+    } catch (err) {
+      jobs.update(job.id, { status: "failed", error: err.code || err.message });
+      await notify(
+        job.chatId,
+        `Delete falló (${err.code || "workspace_delete_failed"}): ${String(err.message || "").slice(0, 400)}`
+      );
+    }
+  }
+
+  async function handlePullJob(job) {
+    const slug = job.payload?.slug;
+    try {
+      const result = await workspace.pull(slug);
+      jobs.update(job.id, { status: "done", error: "" });
+      await notify(
+        job.chatId,
+        [
+          `Pull listo en ${slug}${result.unshallowed ? " (unshallow)" : ""}.`,
+          result.stdout || "(sin stdout)",
+        ].join("\n")
+      );
+    } catch (err) {
+      jobs.update(job.id, { status: "failed", error: err.code || err.message });
+      await notify(
+        job.chatId,
+        `Pull falló (${err.code || "git_pull_failed"}): ${String(err.message || "").slice(0, 400)}`
+      );
+    }
+  }
+
+  async function handlePushJob(job) {
+    const slug = job.payload?.slug;
+    try {
+      const result = await workspace.push(slug);
+      jobs.update(job.id, { status: "done", error: "" });
+      await notify(
+        job.chatId,
+        [`Push listo: ${slug} ${result.branch} → origin HEAD.`, result.stdout || "(sin stdout)"].join(
+          "\n"
+        )
+      );
+    } catch (err) {
+      jobs.update(job.id, { status: "failed", error: err.code || err.message });
+      await notify(
+        job.chatId,
+        `Push falló (${err.code || "git_push_failed"}): ${String(err.message || "").slice(0, 400)}`
+      );
+    }
+  }
+
+  async function handleCheckoutJob(job) {
+    const payload = job.payload || {};
+    try {
+      const result = await workspace.checkout(payload.slug, {
+        branch: payload.branch,
+        create: Boolean(payload.create),
+      });
+      jobs.update(job.id, { status: "done", error: "" });
+      await notify(
+        job.chatId,
+        `Checkout ${result.created ? "creó" : "cambió a"} ${result.branch} en ${payload.slug}.`
+      );
+    } catch (err) {
+      jobs.update(job.id, { status: "failed", error: err.code || err.message });
+      await notify(
+        job.chatId,
+        `Checkout falló (${err.code || "git_checkout_failed"}): ${String(err.message || "").slice(0, 400)}`
+      );
+    }
+  }
+
   async function handleHitl({ callback_data, chat_id }) {
     const parsed = parseWorkspaceCallback(callback_data);
     if (!parsed) {
@@ -455,17 +714,35 @@ export function createCodingSession({
       throw denied();
     }
     if (parsed.verb === "REJECT") {
-      return packReply(
-        item.kind === "clone"
-          ? "Clone RECHAZADO. No toqué ./workspace."
-          : "Misión código RECHAZADA. OpenHands no se llamó."
-      );
+      const rejected = {
+        clone: "Clone RECHAZADO. No toqué ./workspace.",
+        code: "Misión código RECHAZADA. OpenHands no se llamó.",
+        delete: "Delete RECHAZADO. No borré nada.",
+        push: "Push RECHAZADO. No toqué el remoto.",
+      };
+      return packReply(rejected[item.kind] || "RECHAZADO.");
     }
     if (item.kind === "clone") {
       return startCloneJob(item);
     }
     if (item.kind === "code") {
       return startCodeJob(item);
+    }
+    if (item.kind === "delete") {
+      return enqueueJob(
+        "delete",
+        item.chatId || chat_id,
+        { rel: item.rel, wipe: Boolean(item.wipe) },
+        `Borrando ${item.wipe ? "./workspace" : `./workspace/${item.rel}`}. Job {id}. Te aviso.`
+      );
+    }
+    if (item.kind === "push") {
+      return enqueueJob(
+        "push",
+        item.chatId || chat_id,
+        { slug: item.slug, branch: item.branch },
+        `Pusheando ${item.slug} ${item.branch} → origin HEAD. Job {id}. Te aviso.`
+      );
     }
     throw denied();
   }
@@ -474,12 +751,21 @@ export function createCodingSession({
     clone: handleCloneJob,
     code: handleCodeJob,
     oh_poll: handlePollJob,
+    delete: handleDeleteJob,
+    pull: handlePullJob,
+    push: handlePushJob,
+    checkout: handleCheckoutJob,
   };
 
   return {
     interceptChat,
     proposeClone,
     proposeCode,
+    proposeDelete,
+    proposePush,
+    startPull,
+    startCheckout,
+    describeWorkspace,
     handleHitl,
     handlers,
     parseWorkspaceCallback,

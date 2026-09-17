@@ -51,6 +51,12 @@ if "http://murray-agent:8080/workspace/hitl" not in joined_urls:
     raise SystemExit("LIVE_HITL_STALE: falta POST /workspace/hitl (clone/code HITL)")
 if "¿Callback Workspace?" not in names:
     raise SystemExit("LIVE_HITL_STALE: falta ¿Callback Workspace?")
+blob = json.dumps(wf)
+if "DELETE" not in blob or "PUSH" not in blob:
+    raise SystemExit("LIVE_HITL_STALE: el clasificador no rutea APPROVE_DELETE/PUSH")
+if "_(CLONE|CODE|DELETE|PUSH):" not in blob:
+    raise SystemExit("LIVE_HITL_STALE: falta regex CLONE|CODE|DELETE|PUSH en el clasificador")
+
 
 trigger = next(n for n in wf.get("nodes", []) if n.get("name") == "Telegram Trigger")
 webhook_id = trigger.get("webhookId")

@@ -7,6 +7,60 @@ export const MUTATE_INTENT =
 export const STACK_TALK =
   /\b(n8n|postgres|cloudflared|openhands|compose|webhook|gmail|stack|contenedor|murray-agent)\b/i;
 
+export const DELETE_INTENT =
+  /borr[áa]|elimin[áa]|vaciar (el )?workspace|limpi[áa] (el )?workspace|\brm\b|delete (el )?(repo|workspace)/i;
+
+export const PUSH_INTENT = /\b(git )?push\b|pushe[áa]|sub[íi] (el commit|los cambios|la rama)/i;
+
+export const PULL_INTENT =
+  /\b(git )?pull\b|actualiz[áa] (el )?repo|tra[ée]te los cambios|hacé pull|hace pull/i;
+
+export const COMMIT_INTENT = /\b(git )?commit\b|commite[áa]/i;
+
+export const CHECKOUT_INTENT = /\bcheckout\b|cambi[áa] de rama|cre[áa] (una )?rama/i;
+
+export function extractDeletePath(text) {
+  const t = String(text || "").trim();
+  if (
+    /todo (el )?workspace|vaciar (el )?workspace|limpi[áa] (el )?workspace|\.\/workspace/i.test(t)
+  ) {
+    return ".";
+  }
+  const match = t.match(
+    /(?:borr[áa]e?|elimin[áa]e?|delete|rm(?:\s+-rf)?)\s+(?:el |la |los |las )?(?:repo |directorio |carpeta |archivo )?(.*)$/i
+  );
+  if (!match) {
+    return "";
+  }
+  return String(match[1] || "")
+    .replace(/[?.!]+$/, "")
+    .trim();
+}
+
+export function extractCommitMessage(text) {
+  const quoted = String(text || "").match(/["“](.+?)["”]/);
+  if (quoted) {
+    return quoted[1].trim();
+  }
+  const match = String(text || "").match(/(?:commit(?:e[áa])?|mensaje)\s*[:\-]\s*(.+)$/i);
+  return match ? match[1].trim() : "";
+}
+
+export function extractBranchName(text) {
+  const t = String(text || "").trim();
+  const dashed = t.match(/checkout\s+-b\s+([A-Za-z0-9._/-]+)/i);
+  if (dashed) {
+    return { branch: dashed[1], create: true };
+  }
+  const named = t.match(
+    /(?:rama|branch|checkout|cambi[áa](?:te)? (?:a|de rama(?: a)?))\s+([A-Za-z0-9._/-]+)/i
+  );
+  if (named) {
+    return { branch: named[1], create: /cre[áa]|nueva|-b\b/i.test(t) };
+  }
+  return { branch: "", create: false };
+}
+
 export function classifyUserText(text, { hasSession = false } = {}) {
   const trimmed = String(text || "").trim();
   const url = extractHttpsGitUrl(trimmed);
@@ -15,6 +69,27 @@ export function classifyUserText(text, { hasSession = false } = {}) {
   }
   if (url && (CLONE_INTENT.test(trimmed) || (!hasSession && MUTATE_INTENT.test(trimmed)))) {
     return { action: "propose_clone", url };
+  }
+  if (DELETE_INTENT.test(trimmed)) {
+    const relPath = extractDeletePath(trimmed);
+    return relPath
+      ? { action: "propose_delete", relPath }
+      : { action: "clarify_delete_path" };
+  }
+  if (PUSH_INTENT.test(trimmed)) {
+    return { action: "propose_push" };
+  }
+  if (PULL_INTENT.test(trimmed)) {
+    return { action: "pull" };
+  }
+  if (COMMIT_INTENT.test(trimmed)) {
+    return { action: "commit", message: extractCommitMessage(trimmed) };
+  }
+  if (CHECKOUT_INTENT.test(trimmed)) {
+    const named = extractBranchName(trimmed);
+    return named.branch
+      ? { action: "checkout", branch: named.branch, create: named.create }
+      : { action: "clarify_branch" };
   }
   if (MUTATE_INTENT.test(trimmed) && !hasSession && !url && !STACK_TALK.test(trimmed)) {
     return { action: "clarify_repo" };
