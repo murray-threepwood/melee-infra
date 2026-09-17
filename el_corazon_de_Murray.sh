@@ -758,7 +758,7 @@ run_tests_menu() {
             ;;
         2)
             echo -e "\n${CYAN}▶ Ejecutando unit tests en Node...${RESET}\n"
-            node --test tests/test_gmail_client.mjs tests/test_workspace_mcp_http.mjs tests/test_murray_agent_http.mjs tests/test_workspace.mjs tests/test_coding_session.mjs
+            node --test tests/test_gmail_client.mjs tests/test_workspace_mcp_http.mjs tests/test_murray_agent_http.mjs tests/test_workspace.mjs tests/test_coding_session.mjs tests/test_jobs.mjs
             ;;
         3)
             echo -e "\n${CYAN}▶ Verificando esquemas y contratos HITL...${RESET}\n"

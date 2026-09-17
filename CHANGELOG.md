@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.12 — Conductor: aviso al pausar/trancar/terminar
+
+- OpenHands `sandbox PAUSED` ya no se finge «misión lista». Árbol sucio → Telegram de pausa + commit; limpio o sin archivo → stuck HITL (Reintentar/Parar).
+- Murray avisa solo cuando el obrero pausa, se tranca o termina. Tres fallos de poll (el «error: 23» de ruido) marcan stuck; uno suelto no.
+- «qué pasó», UUID de 16 o 32 hex y `/jobs <id>` diagnostican sin LLM. «seguí con L01» / «retomá» re-arman HITL desde `lastMission`.
+
 ## 0.1.11 — Confirmar plan de código y receta si te trancás
 
 - `si` / `dale` / `ok` confirma el plan previo (memoria o `Test:`/`Comando:`) y arma teclado HITL de verdad.

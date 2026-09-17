@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { detectStuck, isAgentDone, summarizeEvents } from "../config/murray-agent/openhands.mjs";
+import { detectStuck, isAgentDone, isSandboxPaused, summarizeEvents } from "../config/murray-agent/openhands.mjs";
 import {
   classifyUserText,
   extractDeletePath,
   extractJobId,
+  extractJobRefs,
   extractTestCommand,
   isAffirmative,
   isHitlStuck,
+  isResumeMission,
 } from "../config/murray-agent/intent.mjs";
 import { parseWorkspaceCallback } from "../config/murray-agent/coding.mjs";
 import { looksLikeHitlCopy } from "../config/murray-agent/reply.mjs";
@@ -66,6 +68,37 @@ test("classify: estado de jobs no va al LLM de código", () => {
     classifyUserText("jobs aabbccddeeff0011").jobId,
     "aabbccddeeff0011"
   );
+  assert.equal(extractJobId("bff74f890aed3d41"), "bff74f890aed3d41");
+  assert.equal(
+    extractJobRefs("task 460fdf35f8e54fb996d8c52d9eb01057").ohId,
+    "460fdf35f8e54fb996d8c52d9eb01057"
+  );
+  assert.equal(
+    extractJobRefs("fijate el bff74f890aed3d41").ref,
+    "bff74f890aed3d41"
+  );
+  assert.equal(classifyUserText("qué pasó").action, "diagnose_job");
+  assert.equal(
+    classifyUserText("en qué quedó task 460fdf35f8e54fb996d8c52d9eb01057").action,
+    "diagnose_job"
+  );
+  assert.equal(
+    classifyUserText("en qué quedó task 460fdf35f8e54fb996d8c52d9eb01057").jobId,
+    "460fdf35f8e54fb996d8c52d9eb01057"
+  );
+  assert.equal(classifyUserText("bff74f890aed3d41").action, "diagnose_job");
+});
+
+test("classify: seguí / retomá re-arma HITL, no es chat", () => {
+  assert.equal(isResumeMission("seguí con L01"), true);
+  assert.equal(isResumeMission("retomá"), true);
+  assert.equal(isResumeMission("continuá la misión"), true);
+  assert.equal(isResumeMission("mejorá el README"), false);
+  assert.equal(
+    classifyUserText("seguí con L01", { hasSession: true }).action,
+    "confirm_code"
+  );
+  assert.equal(classifyUserText("seguí con L01").action, "clarify_repo");
 });
 
 test("classify: borrar / push / pull / commit", () => {
@@ -168,5 +201,34 @@ test("detectStuck: execution_status, timeout y loop de comandos", () => {
   assert.equal(loop.reason, "stuck_loop_detected");
   assert.equal(loop.repeats, 3);
   assert.equal(isAgentDone({ executionStatus: "finished", sandboxStatus: "RUNNING" }), true);
+  assert.equal(
+    isAgentDone({ executionStatus: null, sandboxStatus: "PAUSED" }),
+    false
+  );
+  assert.equal(
+    isAgentDone({ executionStatus: "paused", sandboxStatus: "PAUSED" }),
+    false
+  );
+  assert.equal(
+    isAgentDone({ executionStatus: "finished", sandboxStatus: "PAUSED" }),
+    true
+  );
+  assert.equal(
+    isSandboxPaused({ executionStatus: null, sandboxStatus: "PAUSED" }),
+    true
+  );
+  assert.equal(
+    isSandboxPaused({ executionStatus: "finished", sandboxStatus: "PAUSED" }),
+    false
+  );
+  assert.equal(
+    detectStuck({
+      executionStatus: null,
+      sandboxStatus: "PAUSED",
+      startedAt: Date.now(),
+      now: Date.now(),
+    }).stuck,
+    false
+  );
   assert.match(summarizeEvents([{ kind: "MessageEvent", payload: "ok" }]), /MessageEvent/);
 });

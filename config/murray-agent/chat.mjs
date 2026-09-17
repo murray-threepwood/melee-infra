@@ -365,7 +365,7 @@ export function createChatEngine({
       if (!coding || typeof coding.describeJobs !== "function") {
         return { payload: { error: "jobs_unconfigured" } };
       }
-      const packed = coding.describeJobs({
+      const packed = await coding.describeJobs({
         chatId: ctx.chatId,
         jobId: args.job_id || args.id || "",
       });

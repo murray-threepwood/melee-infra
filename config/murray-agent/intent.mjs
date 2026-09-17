@@ -24,6 +24,9 @@ export const CHECKOUT_INTENT =
 export const JOBS_INTENT =
   /estado de los jobs|cola de (?:los )?jobs|c[oó]mo van los jobs|qu[eé] jobs hay|list[áa](?:me)? los jobs|^\s*jobs(?:\s+\S+)?\s*$/i;
 
+export const DIAGNOSE_INTENT =
+  /en qu[eé] qued[oó]|qu[eé] pas[oó]|c[oó]mo (?:va|est[áa]|qued[oó]) (?:el )?(?:job|task|poll|obrero|misi[oó]n)|revis[áa](?:me)? (?:el )?(?:job|obrero|openhands|poll)|fijate .{0,160}(?:job|oh_poll|\/jobs|[a-f0-9]{16})|error:\s*\S+|task [a-f0-9]{16,32}|qu[eé] (?:hizo|est[áa] haciendo) (?:el )?(?:obrero|openhands)/i;
+
 export function isAffirmative(text) {
   const t = String(text || "")
     .trim()
@@ -44,9 +47,30 @@ export function isHitlStuck(text) {
   );
 }
 
+export function extractJobRefs(text) {
+  const raw = String(text || "");
+  const labeled16 = raw.match(/(?:job|jobs|\/jobs)\s+([a-f0-9]{16})\b/i);
+  const labeled32 = raw.match(
+    /(?:job|jobs|task|oh_poll|conv(?:ersation)?)\s+([a-f0-9]{32})\b/i
+  );
+  const hex = [...raw.matchAll(/\b([a-f0-9]{16,32})\b/gi)].map((m) => m[1].toLowerCase());
+  const jobId = String(labeled16?.[1] || hex.find((id) => id.length === 16) || "").toLowerCase();
+  const ohId = String(labeled32?.[1] || hex.find((id) => id.length === 32) || "").toLowerCase();
+  return { jobId, ohId, ref: jobId || ohId };
+}
+
 export function extractJobId(text) {
-  const labeled = String(text || "").match(/(?:job|jobs)\s+([a-f0-9]{16})\b/i);
-  return labeled ? labeled[1].toLowerCase() : "";
+  return extractJobRefs(text).jobId;
+}
+
+export function isResumeMission(text) {
+  const t = String(text || "").trim();
+  if (!t || t.length > 140) {
+    return false;
+  }
+  return /^(?:segu[íi](?: con(?: la misi[oó]n)?(?: L\d+)?)?|retom[áa](?:la|lo)?(?: la misi[oó]n)?|continu[áa](?:la|lo)?(?: (?:con )?la misi[oó]n)?|otra vez(?: la misi[oó]n)?|dale de nuevo|rearm[áa](?:la|lo)?(?: la misi[oó]n| el hitl| L\d+)?)[.!?]*$/i.test(
+    t
+  );
 }
 
 export function extractDeletePath(text) {
@@ -156,14 +180,26 @@ export function classifyUserText(text, { hasSession = false } = {}) {
       ? { action: "checkout", branch: named.branch, create: named.create }
       : { action: "clarify_branch" };
   }
+  const refs = extractJobRefs(trimmed);
   if (JOBS_INTENT.test(trimmed)) {
-    return { action: "list_jobs", jobId: extractJobId(trimmed) };
+    return refs.ref
+      ? { action: "diagnose_job", jobId: refs.ref }
+      : { action: "list_jobs", jobId: "" };
   }
   if (isHitlStuck(trimmed)) {
     return { action: "hitl_help" };
   }
+  if (
+    DIAGNOSE_INTENT.test(trimmed) ||
+    (refs.ref && trimmed.length <= 80 && !MUTATE_INTENT.test(trimmed))
+  ) {
+    return { action: "diagnose_job", jobId: refs.ref };
+  }
   if (isAffirmative(trimmed)) {
     return { action: hasSession ? "confirm_code" : "chat" };
+  }
+  if (isResumeMission(trimmed)) {
+    return { action: hasSession ? "confirm_code" : "clarify_repo" };
   }
   if (MUTATE_INTENT.test(trimmed) && !hasSession && !url && !STACK_TALK.test(trimmed)) {
     return { action: "clarify_repo" };

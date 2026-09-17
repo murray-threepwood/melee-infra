@@ -174,13 +174,14 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
 - **`POST /chat`**: `{ chat_id, text, message_id? }`
   - `200`: `{ reply, replies, parse_mode:"HTML", needs_hitl, hitl?, needs_job?, job_id? }`
   - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`, `/workspace`, `/jobs`, `/jobs <id>`
-  - `/jobs`: últimos 20 jobs del chat (id, type, status, start HH:MM America/Montevideo, duración desde `createdAt`, slug, error). `/jobs <id>`: `start:` + `hace Xm` + últimas 20 líneas de `job.log`. Edad **no** usa `updatedAt` (el poll de OpenHands lo toca cada ~2s). Solo lectura, sin HITL. "estado de los jobs" intercepta igual.
+  - `/jobs`: últimos 20 jobs del chat (id, type, status, start HH:MM America/Montevideo, duración desde `createdAt`, slug, error). `/jobs <id>` acepta id Murray (16 hex) o UUID OpenHands (32 hex): detalle + snapshot live (`sandbox`/`exec`). Edad **no** usa `updatedAt`. Solo lectura, sin HITL. "estado de los jobs" lista; "qué pasó" / "en qué quedó" diagnostica el último o el id pegado.
   - Clone sin URL, mutate sin repo activo, o delete sin path: pregunta, no HITL, no LLM
   - Misión de código con repo activo + comando de test extraíble (`Comando: …` / `Test: …` / `corré npm test`): intercept HITL `kind=code` **sin LLM**. Mutación sin comando (p. ej. `creá el test`) no va al LLM: receta Murray (`Comando:`).
-  - `si` / `dale` / `ok` con repo activo confirma el plan previo (último assistant o `lastTestCommand`) y arma HITL. Sin plan recuperable, o «no me da los botones»: receta Murray, `needs_hitl=false`.
+  - `si` / `dale` / `ok` con repo activo confirma el plan previo (último assistant o `lastTestCommand`) y arma HITL. `seguí` / `retomá` / `seguí con L01` igual, desde `lastMission`. Sin plan recuperable, o «no me da los botones»: receta Murray, `needs_hitl=false`.
   - Copy que pide Aprobar / `propose_code_mission` / botón Aprobar **sin** `needs_hitl=true` + `hitl.approve_data` es inválida. `/chat` recupera HITL si el texto del LLM trae comando de test; si no, receta Murray (nunca «Tocá Aprobar» en prosa).
   - `\bpush\b` suelto en status («push permitido») no es `propose_push`. `pusheá` / `hacé push` / `git push` al inicio sí.
   - `needs_hitl=true` + `hitl.approval_id` (16 hex) + `hitl.kind` (`ops`|`clone`|`code`|`delete`|`push`) + `hitl.approve_data`/`reject_data`
+  - Jobs `oh_poll`: Telegram al pausar, trancar o terminar. `sandbox_status=PAUSED` + `execution_status` vacío **no** es done. Working tree sucio → status `paused` + aviso de commit; limpio → stuck HITL `sandbox_paused`. Tres fallos HTTP de poll → stuck `poll_error:…`.
 - **`POST /ops/execute`** y **`POST /ops/reject`**: `{ approval_id }` solo `kind=ops`
   - `200` con `reply` HTML
   - `403` `ops_approval_denied` si falta, está usado, venció (~15 min) o el kind no es ops
