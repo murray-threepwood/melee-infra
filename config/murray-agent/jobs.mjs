@@ -28,9 +28,45 @@ function collectLogLines(job) {
 
 export const JOBS_HINT = "Si te pica la impaciencia: /jobs.";
 
+export const JOBS_TZ = process.env.MURRAY_TZ || "America/Montevideo";
+
 export function jobsHint(jobId = "") {
   const id = String(jobId || "").trim();
   return id ? `${JOBS_HINT} Este bicho: /jobs ${id}.` : JOBS_HINT;
+}
+
+function zonedParts(ts, timeZone) {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date(Number(ts) || 0));
+  const get = (type) => parts.find((row) => row.type === type)?.value || "";
+  return {
+    day: get("day"),
+    month: get("month"),
+    year: get("year"),
+    hour: get("hour"),
+    minute: get("minute"),
+  };
+}
+
+export function formatClock(ts, { now = Date.now(), timeZone = JOBS_TZ } = {}) {
+  const start = zonedParts(ts, timeZone);
+  const today = zonedParts(now, timeZone);
+  const time = `${start.hour}:${start.minute}`;
+  if (start.year === today.year && start.month === today.month && start.day === today.day) {
+    return time;
+  }
+  return `${start.day}/${start.month} ${time}`;
+}
+
+function jobStartedAt(job) {
+  return Number(job?.createdAt || job?.updatedAt || 0);
 }
 
 export function formatAge(ts, now = Date.now()) {
@@ -47,34 +83,36 @@ export function formatAge(ts, now = Date.now()) {
   return `${Math.floor(seconds / 86400)}d`;
 }
 
-export function formatJobsSummary(rows, { now = Date.now(), limit = LIST_CAP } = {}) {
+export function formatJobsSummary(rows, { now = Date.now(), limit = LIST_CAP, timeZone = JOBS_TZ } = {}) {
   if (!rows.length) {
     return "No hay jobs. Clone, pull, código, push y borrar encolan acá. Si te pica la impaciencia: /jobs.";
   }
   const shown = rows.slice(0, limit);
   const lines = shown.map((job) => {
     const subject = jobSubject(job);
+    const started = jobStartedAt(job);
     const err = job.error ? ` error: ${String(job.error).slice(0, 80)}` : "";
-    return `- ${job.id} ${job.type} ${job.status} ${formatAge(job.updatedAt, now)}${subject ? ` ${subject}` : ""}${err}`;
+    return `- ${job.id} ${job.type} ${job.status} ${formatClock(started, { now, timeZone })} ${formatAge(started, now)}${subject ? ` ${subject}` : ""}${err}`;
   });
-    return [
+  return [
     `Jobs (${shown.length}${rows.length > shown.length ? "+" : ""}, más nuevos primero):`,
     ...lines,
     "Si se tranca uno: /jobs <id> para las últimas 20 líneas.",
   ].join("\n");
 }
 
-export function formatJobDetail(job, { now = Date.now(), tail = 20 } = {}) {
+export function formatJobDetail(job, { now = Date.now(), tail = 20, timeZone = JOBS_TZ } = {}) {
   if (!job) {
     return "No hay ese job. /jobs lista los últimos 20.";
   }
   const payload = job.payload || {};
+  const started = jobStartedAt(job);
   const lines = collectLogLines(job).slice(-Math.max(1, Number(tail) || 20));
   const header = [
     `Job ${job.id}`,
     `type: ${job.type}`,
     `status: ${job.status}`,
-    `age: ${formatAge(job.updatedAt, now)}`,
+    `start: ${formatClock(started, { now, timeZone })} (hace ${formatAge(started, now)})`,
     payload.slug ? `slug: ${payload.slug}` : "",
     payload.branch ? `branch: ${payload.branch}` : "",
     payload.rel ? `path: ${payload.rel}` : "",

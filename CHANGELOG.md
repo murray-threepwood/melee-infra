@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10 — Reloj de start en /jobs
+
+- `/jobs` muestra hora de arranque (America/Montevideo) y duración desde `createdAt`. El poll de OpenHands ya no disfraza un job de 8m como «2s».
+
 ## 0.1.9 — Estado de jobs por Telegram
 
 - `/jobs` y «estado de los jobs» listan la cola async (clone/code/pull/push/delete/checkout/oh_poll): status, error, edad. `/jobs <id>` muestra las últimas 20 líneas del log del job. Sin LLM, sin HITL.
