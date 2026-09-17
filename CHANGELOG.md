@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.5 — Coding sessions por Telegram (clone + Q&A + OpenHands obrero)
+
+- Murray clona (HITL) repos https GitHub/GitLab en `./workspace`, responde preguntas (tree/read/grep) y dispara misiones de código a OpenHands con HITL.
+- Jobs async + `sendMessage` del mismo bot (progreso / stuck + opciones). Cero git push. Cero edición de `murray-infra`.
+- OpenHands: health `GET /health`; follow-up `send-message`. Router: `/workspace/hitl` para `_CLONE:` / `_CODE:` / `STUCK_`.
+- Privados: `GITHUB_TOKEN` / `GITLAB_TOKEN` en `.env`.
+
 ## 0.1.4 — Murray por Telegram (chat + ops HITL)
 
 - Servicio `murray-agent`: DeepSeek chat, `/status` `/health` `/logs`, Gmail meta sin asuntos, compose allowlist.

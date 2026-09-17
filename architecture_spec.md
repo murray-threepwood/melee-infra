@@ -57,8 +57,9 @@ flowchart TD
    - Todo update valida `chat.id` / `from.id` contra `$env.TELEGRAM_CHAT_ID`. IDs no autorizados: silencio total.
    - `$env.*` exige la variable en el servicio Compose `n8n` **y** `N8N_BLOCK_ENV_ACCESS_IN_NODE=false` (n8n 2.x).
    - Un bot = **un** webhook. El trigger canónico es `https://ceo.threepwood.uy/webhook/4dae132d-912c-40e0-b048-c00b42e03250/webhook` (`allowed_updates`: `message` + `callback_query`). La ruta `.../telegram trigger/webhook` da 404 en n8n 2.38.
-   - Texto libre → `POST http://murray-agent:8080/chat` (Murray contesta ya). `/oh …` o `sandbox: …` → teclado OpenHands. `APPROVE_OPS:` / `REJECT_OPS:` → ops HITL, **no** OpenHands.
-   - **Aprobar OpenHands** = `POST http://openhands:3000/api/v1/app-conversations` con el **texto original** de la misión (static data `missions[message_id]`). **Rechazar/Pausar** no llaman a OpenHands. `POST /api/conversations` es la SPA (405).
+   - Texto libre → `POST http://murray-agent:8080/chat` (Murray contesta ya). `/oh …` o `sandbox: …` → teclado OpenHands crudo. `APPROVE_OPS:` / `REJECT_OPS:` → ops HITL. `APPROVE_CLONE:` / `APPROVE_CODE:` / `STUCK_*` → `POST http://murray-agent:8080/workspace/hitl`. Ninguno de esos pega crudo a OpenHands.
+   - **Aprobar OpenHands** (`/oh` escape hatch) = `POST http://openhands:3000/api/v1/app-conversations` con el **texto original** de la misión (static data `missions[message_id]`). **Rechazar/Pausar** no llaman a OpenHands. `POST /api/conversations` es la SPA (405).
+   - Teclado Murray: `hitl.approve_data` / `hitl.reject_data` (no hardcodear solo `APPROVE_OPS`).
    - Nodos Telegram send/notify: `additionalFields.parse_mode=HTML`. El default Markdown rompe `REJECT_TASK` (`_`).
 
 2. **Guardrail *Draft-Only* en Google Workspace (`workspace-mcp`)**:
@@ -68,19 +69,22 @@ flowchart TD
 
 3. **Aislamiento del Runtime Sandbox (`openhands`)**:
    - `security_opt: ["no-new-privileges:true"]`.
-   - Workspace host acotado a `./workspace`.
-   - `MAX_ITERATIONS=30`.
+   - Workspace host acotado a `./workspace` (compartido con murray-agent).
+   - `MAX_ITERATIONS=30`. Health real: `GET /health` → `"OK"`. `GET /api/health` es la SPA HTML (no usarlo).
+   - Follow-up: `POST /api/v1/app-conversations/{id}/send-message`. Eventos: `GET /api/v1/conversation/{id}/events/search`. `execution_status` incluye `stuck`.
    - Imagen: `ghcr.io/openhands/openhands:latest` (`docker.all-hands.dev` = NXDOMAIN).
 
 4. **Zero Trust & Secretos**:
    - Secretos solo en `.env` y `config/mcp-auth/.gauth.json` (gitignore). Nunca en git ni en el chat.
    - OAuth Gmail: habilitar **Gmail API** (nunca “Gmail MCP API”). Cliente **Web** + Playground redirect `https://developers.google.com/oauthplayground`. Un `refresh_token` con `gmail.readonly` + `gmail.compose`.
 
-5. **`murray-agent` (Telegram chat)**:
-   - DeepSeek `deepseek-chat`. No es Cursor. No edita el repo. No hay tool de Gmail send.
-   - `POST /ops/execute` exige `approval_id` de un solo uso emitido por `propose_ops` / `/chat` con `needs_hitl=true`. Sin eso → `403 ops_approval_denied`.
+5. **`murray-agent` (Telegram chat + conductor de coding sessions)**:
+   - DeepSeek `deepseek-chat`. No edita `murray-infra`. No hay git push. OpenHands es el obrero en `./workspace/<slug>`.
+   - `POST /ops/execute` exige `approval_id` de un solo uso emitido por `propose_ops` / `/chat` con `needs_hitl=true` y `hitl.kind=ops`. Sin eso → `403 ops_approval_denied`.
    - Compose allowlist: `ps`, `logs --tail<=80`, `restart`, `up -d --force-recreate --no-deps` de un servicio. Prohibido `down -v`, `exec`, `kill`.
-   - `callback_data` Telegram ≤64 bytes: `APPROVE_OPS:<16 hex>`.
+   - `callback_data` Telegram ≤64 bytes: `APPROVE_OPS:<16 hex>`, `APPROVE_CLONE:<16 hex>`, `APPROVE_CODE:<16 hex>`, `STUCK_RETRY:<16 hex>`.
+   - Clone: solo `https://github.com` / `https://gitlab.com`, shallow, jail bajo `./workspace`. Token privado en `GITHUB_TOKEN` / `GITLAB_TOKEN` (`.env`), nunca en la URL ni el chat.
+   - Dos clientes del **mismo** bot: n8n (webhook inbound) y murray-agent (`sendMessage` de progreso/stuck). Solo `TELEGRAM_CHAT_ID`.
 
 ### 2.1. Diagrama de Secuencia: Ciclo de Vida y Flujo HITL
 
@@ -104,12 +108,23 @@ sequenceDiagram
     Note over CEO,Agent: Chat libre
     CEO->>N8N: texto
     N8N->>Agent: POST /chat
-    alt needs_hitl
-        N8N->>CEO: teclado APPROVE_OPS
-        CEO->>N8N: callback
+    alt needs_hitl ops
+        N8N->>CEO: teclado approve_data
+        CEO->>N8N: callback _OPS
         N8N->>Agent: POST /ops/execute
         Agent-->>N8N: reply
         N8N->>CEO: HTML
+    else needs_hitl clone o code
+        N8N->>CEO: teclado approve_data
+        CEO->>N8N: callback _CLONE o _CODE
+        N8N->>Agent: POST /workspace/hitl
+        Agent-->>N8N: ack job
+        N8N->>CEO: HTML
+        Agent->>CEO: progreso sendMessage
+        opt mision codigo
+            Agent->>OH: POST /api/v1/app-conversations
+            Agent->>OH: GET events/search
+        end
     else respuesta
         N8N->>CEO: reply HTML
     end
@@ -150,19 +165,26 @@ Inbox vacía (`unread_count=0`, `status=ok`) **no** es stub. OAuth ausente es `5
   - `500` `guardrail_violation`: si `GMAIL_ALLOW_SENDING=true` (el proceso igual no envía)
 - Rutas send: `403` `{"error":"gmail_send_blocked",...}` sin llamar al client.
 
-### 3.1b. `murray-agent` (HTTP REST, DeepSeek + ops HITL)
+### 3.1b. `murray-agent` (HTTP REST, DeepSeek + ops HITL + workspace)
 
-Seam: `createMurrayAgentServer({ engine })` y `createChatEngine({ ops, llm, ... })`. Tests mockean `llm.complete` y `ops.runCommand`. Cero DeepSeek vivo en unit tests.
+Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, coding, ... })`, `createCodingSession({ workspace, jobs, openhands })`. Tests mockean `llm.complete`, `ops.runCommand` y `gitRun`. Cero DeepSeek/GitHub vivos en unit tests.
 
 - **`GET /healthz`**: `200` `{"status":"ok","service":"murray-agent","model":"deepseek-chat"}`
 - **`POST /chat`**: `{ chat_id, text, message_id? }`
-  - `200`: `{ reply, replies, parse_mode:"HTML", needs_hitl, hitl? }`
-  - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`
-  - `needs_hitl=true` + `hitl.approval_id` (16 hex) cuando el modelo llama `propose_ops`
-- **`POST /ops/execute`** y **`POST /ops/reject`**: `{ approval_id }`
+  - `200`: `{ reply, replies, parse_mode:"HTML", needs_hitl, hitl?, needs_job?, job_id? }`
+  - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`
+  - Clone sin URL o mutate sin repo activo: pregunta, no HITL, no LLM
+  - `needs_hitl=true` + `hitl.approval_id` (16 hex) + `hitl.kind` (`ops`|`clone`|`code`) + `hitl.approve_data`/`reject_data`
+- **`POST /ops/execute`** y **`POST /ops/reject`**: `{ approval_id }` solo `kind=ops`
   - `200` con `reply` HTML
-  - `403` `ops_approval_denied` si falta, está usado o venció (~15 min)
+  - `403` `ops_approval_denied` si falta, está usado, venció (~15 min) o el kind no es ops
+- **`POST /workspace/hitl`**: `{ callback_data, chat_id }`
+  - Clone/code approve → encola job, `needs_job=true` (el webhook no espera `git clone` ni OpenHands)
+  - Reject no clona ni llama OpenHands
+  - `STUCK_RETRY|STOP|LOGS|CHG:<hex>`
+  - `403` si el token HITL no vale
 - Gmail vía tool: solo `{ http, status, error, unread_count }`. Cero `messages`/`subject`.
+- n8n `Consultar Murray` timeout **45s**. Clone/misión largos van por jobs + `sendMessage`.
 
 ### 3.2. `n8n` Workflows & Triggers
 
@@ -173,6 +195,8 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
   - Credencial Telegram: nombre `Telegram account` (id vivo `9IhWvhoAHuzho5J5`).
   - Texto libre → `POST http://murray-agent:8080/chat`. `/oh` o `sandbox:` → teclado OpenHands + `staticData.missions`.
   - `APPROVE_OPS` → `POST http://murray-agent:8080/ops/execute`. `REJECT_OPS` → `/ops/reject`. No OpenHands.
+  - `_CLONE:` / `_CODE:` / `STUCK_` → `POST http://murray-agent:8080/workspace/hitl`. No OpenHands.
+  - Teclado Murray: `callback_data` = `{{ $json.hitl.approve_data }}` / `reject_data`.
 - **Email Triage Draft** (`workflows/email_triage_draft.json`, id publicado `Z8f9K2mP1qRt5vWx`):
   - Schedule 15 min → `GET http://workspace-mcp:8000/gmail/unread` → IF `unread_count > 0` → split `messages` → dedup por `id` (static data) → `POST /gmail/drafts` → notify Telegram HTML.
   - **No** lleva `telegramTrigger` (no se puede robar el webhook del HITL).
@@ -196,9 +220,9 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
 | `./workflows` (Bind Mount, RO) | `/opt/workflows:ro` | JSON versionado. El mount **no** recarga flujos publicados. |
 | `./config/workspace-mcp` (Bind Mount, RO) | `/opt/mcp:ro` | `server.mjs` + `gmail-client.mjs`. **`working_dir` del contenedor es `/tmp`**, no `/opt/mcp`: un cwd sobre bind `:ro` hace que Docker Desktop mate healthcheck/`compose exec` (`exit=-1`) aunque el proceso HTTP siga vivo. |
 | `./config/mcp-auth` (Bind Mount) | `/app/auth` | `.gauth.json` OAuth (gitignore). |
-| `./config/murray-agent` (Bind Mount, RO) | `/opt/agent:ro` | Chat/ops HTTP. **`working_dir=/tmp`**. |
-| `murray_agent_data` | `/var/lib/murray-agent` | Memoria de chat (20 vueltas). |
-| `./workspace` (Bind Mount) | `/opt/workspace_base` | Área aislada de `openhands`. |
+| `./config/murray-agent` (Bind Mount, RO) | `/opt/agent:ro` | Chat/ops/coding HTTP. **`working_dir=/tmp`**. |
+| `./workspace` (Bind Mount) | murray-agent `/opt/workspace`; openhands `/opt/workspace_base` | Repos clonados (un slug por repo). Writable. No es murray-infra. |
+| `murray_agent_data` | `/var/lib/murray-agent` | Memoria de chat (20 vueltas), session.json, jobs.json. |
 
 ---
 

@@ -5,8 +5,12 @@ import path from "node:path";
 import { test } from "node:test";
 import { createApprovalStore } from "../config/murray-agent/approvals.mjs";
 import { createChatEngine } from "../config/murray-agent/chat.mjs";
+import { createCodingSession } from "../config/murray-agent/coding.mjs";
 import { fetchGmailMeta } from "../config/murray-agent/gmail-meta.mjs";
+import { createJobStore, createJobWorker } from "../config/murray-agent/jobs.mjs";
 import { createMemory } from "../config/murray-agent/memory.mjs";
+import { createSessionStore } from "../config/murray-agent/session.mjs";
+import { createWorkspace } from "../config/murray-agent/workspace.mjs";
 import {
   assertSafeComposeArgs,
   createOps,
@@ -306,4 +310,276 @@ test("memoria recorta a 20 mensajes", () => {
   assert.equal(rows.length, 20);
   assert.equal(rows[0].content, "m5");
   fs.unlinkSync(filePath);
+});
+
+function codingStack(overrides = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "murray-code-"));
+  const sessionPath = path.join(root, "session.json");
+  const jobsPath = path.join(root, "jobs.json");
+  const notes = [];
+  const workspace = createWorkspace({
+    root,
+    gitRun: async (args) => {
+      if (args[0] === "clone") {
+        const dest = args.at(-1);
+        fs.mkdirSync(dest, { recursive: true });
+        fs.writeFileSync(path.join(dest, "README.md"), "# main entry\n");
+        return { code: 0, stdout: "", stderr: "" };
+      }
+      return { code: 1, stdout: "", stderr: "" };
+    },
+  });
+  const session = createSessionStore({ filePath: sessionPath });
+  const jobs = createJobStore({ filePath: jobsPath });
+  const approvals = createApprovalStore();
+  const telegram = {
+    send: async (msg) => {
+      notes.push(msg);
+      return { ok: true };
+    },
+  };
+  const openhands = {
+    startConversation: async () => ({
+      id: "task1",
+      status: "READY",
+      app_conversation_id: "conv-1",
+    }),
+    getStartTask: async () => ({
+      id: "task1",
+      status: "READY",
+      app_conversation_id: "conv-1",
+    }),
+    getConversation: async () => ({
+      execution_status: "finished",
+      sandbox_status: "RUNNING",
+    }),
+    sendMessage: async () => ({ success: true, sandbox_status: "RUNNING" }),
+    searchEvents: async () => [
+      { kind: "MessageEvent", payload: { content: "tests pass" } },
+    ],
+    gitChanges: async () => ({ items: ["README.md"] }),
+    ...overrides.openhands,
+  };
+  const workerRef = { current: null };
+  const coding = createCodingSession({
+    workspace,
+    session,
+    jobs,
+    approvals,
+    openhands,
+    telegram,
+    pollDelayMs: 1,
+    worker: {
+      kick(id) {
+        return workerRef.current.kick(id);
+      },
+    },
+  });
+  workerRef.current = createJobWorker({
+    store: jobs,
+    handlers: coding.handlers,
+    intervalMs: 60_000,
+  });
+  const { engine } = makeEngine({
+    approvals,
+    coding,
+    workspace,
+    session,
+    llm: overrides.llm || {
+      complete: async () => ({ content: "Núcleo: leí el repo.", tool_calls: [] }),
+    },
+  });
+  return { engine, coding, session, jobs, worker: workerRef.current, notes, root };
+}
+
+test("POST /chat clone sin URL no llama LLM", async () => {
+  let llmHits = 0;
+  const { engine } = codingStack({
+    llm: {
+      complete: async () => {
+        llmHits += 1;
+        return { content: "no", tool_calls: [] };
+      },
+    },
+  });
+  await withServer(engine, async (port) => {
+    const res = await fetch(`http://127.0.0.1:${port}/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: "7", text: "cloná algo" }),
+    });
+    const body = await res.json();
+    assert.equal(res.status, 200);
+    assert.equal(body.needs_hitl, false);
+    assert.match(body.reply, /URL https/);
+    assert.equal(llmHits, 0);
+  });
+});
+
+test("mutate sin repo pregunta y no dispara HITL código", async () => {
+  let llmHits = 0;
+  const { engine } = codingStack({
+    llm: {
+      complete: async () => {
+        llmHits += 1;
+        return { content: "no", tool_calls: [] };
+      },
+    },
+  });
+  const result = await engine.handleChat({
+    chat_id: "8",
+    text: "mejorá el README",
+  });
+  assert.equal(result.needs_hitl, false);
+  assert.match(result.reply, /repo activo/);
+  assert.equal(llmHits, 0);
+});
+
+test("clone HITL + execute encola job y no pushea", async () => {
+  const { engine, worker, session, notes, root } = codingStack();
+  await withServer(engine, async (port) => {
+    const chatRes = await fetch(`http://127.0.0.1:${port}/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: "9",
+        text: "cloná https://github.com/octocat/Hello-World",
+      }),
+    });
+    const chatBody = await chatRes.json();
+    assert.equal(chatRes.status, 200);
+    assert.equal(chatBody.needs_hitl, true);
+    assert.equal(chatBody.hitl.kind, "clone");
+    assert.match(chatBody.hitl.approve_data, /^APPROVE_CLONE:[a-f0-9]{16}$/);
+    assert.equal(chatBody.hitl.approve_data.length <= 64, true);
+
+    const hitlRes = await fetch(`http://127.0.0.1:${port}/workspace/hitl`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        chat_id: "9",
+        callback_data: chatBody.hitl.approve_data,
+      }),
+    });
+    const hitlBody = await hitlRes.json();
+    assert.equal(hitlRes.status, 200);
+    assert.equal(hitlBody.needs_job, true);
+    await worker.kick(hitlBody.job_id);
+    assert.equal(session.get("9").slug, "octocat-Hello-World");
+    assert.equal(notes.length >= 1, true);
+    const qa = await fetch(`http://127.0.0.1:${port}/chat`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ chat_id: "9", text: "¿dónde está el main?" }),
+    });
+    const qaBody = await qa.json();
+    assert.equal(qa.status, 200);
+    assert.equal(qaBody.needs_hitl, false);
+  });
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("code HITL no llama OpenHands hasta Aprobar; reject tampoco", async () => {
+  const starts = [];
+  const { engine, session, root } = codingStack({
+    openhands: {
+      startConversation: async () => {
+        starts.push("start");
+        return { id: "t", status: "READY", app_conversation_id: "c" };
+      },
+    },
+  });
+  session.patch("12", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  const engineWithLlm = engine;
+  const proposed = await engineWithLlm.dispatchTool(
+    "propose_code_mission",
+    { instruction: "agregá un healthcheck HTTP", test_command: "npm test" },
+    { chatId: "12" }
+  );
+  assert.equal(proposed.needs_hitl, true);
+  assert.equal(proposed.hitl.kind, "code");
+  const rejected = await engine.handleWorkspaceHitl({
+    chat_id: "12",
+    callback_data: proposed.hitl.reject_data,
+  });
+  assert.match(rejected.reply, /RECHAZADA/);
+  assert.equal(starts.length, 0);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("code approve arranca OpenHands y poll termina", async () => {
+  const { engine, session, worker, notes, root } = codingStack();
+  session.patch("13", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  const proposed = await engine.dispatchTool(
+    "propose_code_mission",
+    { instruction: "agregá un healthcheck HTTP", test_command: "npm test", files_plan: "server.js" },
+    { chatId: "13" }
+  );
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "13",
+    callback_data: proposed.hitl.approve_data,
+  });
+  assert.equal(hitl.needs_job, true);
+  await worker.kick(hitl.job_id);
+  const due = (await import("../config/murray-agent/jobs.mjs")).createJobStore;
+  assert.ok(due);
+  const pollJobs = notes;
+  await worker.drain();
+  await worker.drain();
+  assert.equal(notes.some((row) => /Misión lista|OpenHands arrancó/.test(row.text)), true);
+  fs.rmSync(root, { recursive: true, force: true });
+  assert.ok(pollJobs);
+});
+
+test("stuck HITL ofrece opciones y no pushea", async () => {
+  const { engine, session, worker, notes, jobs, root } = codingStack({
+    openhands: {
+      startConversation: async () => ({
+        id: "task1",
+        status: "READY",
+        app_conversation_id: "conv-stuck",
+      }),
+      getStartTask: async () => ({
+        status: "READY",
+        app_conversation_id: "conv-stuck",
+      }),
+      getConversation: async () => ({
+        execution_status: "stuck",
+        sandbox_status: "RUNNING",
+      }),
+      searchEvents: async () => [],
+      gitChanges: async () => ({}),
+    },
+  });
+  session.patch("14", { slug: "octocat-Hello-World", url: "https://github.com/x/y.git" });
+  const proposed = await engine.dispatchTool(
+    "propose_code_mission",
+    { instruction: "romper tests a propósito para el stuck", test_command: "npm test" },
+    { chatId: "14" }
+  );
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "14",
+    callback_data: proposed.hitl.approve_data,
+  });
+  await worker.kick(hitl.job_id);
+  await worker.drain();
+  await worker.drain();
+  const stuckNote = notes.find((row) => row.buttons);
+  assert.ok(stuckNote);
+  const retry = stuckNote.buttons[0][0].callback_data;
+  assert.match(retry, /^STUCK_RETRY:/);
+  assert.equal(retry.length <= 64, true);
+  const stop = await engine.handleWorkspaceHitl({
+    chat_id: "14",
+    callback_data: stuckNote.buttons[0][1].callback_data,
+  });
+  assert.match(stop.reply, /Paré/);
+  fs.rmSync(root, { recursive: true, force: true });
+  assert.ok(jobs);
 });

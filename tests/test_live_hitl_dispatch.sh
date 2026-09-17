@@ -47,6 +47,10 @@ if "http://murray-agent:8080/chat" not in joined_urls:
     raise SystemExit("LIVE_HITL_STALE: el publicado no pega a murray-agent /chat")
 if "http://murray-agent:8080/ops/execute" not in joined_urls:
     raise SystemExit("LIVE_HITL_STALE: falta POST /ops/execute")
+if "http://murray-agent:8080/workspace/hitl" not in joined_urls:
+    raise SystemExit("LIVE_HITL_STALE: falta POST /workspace/hitl (clone/code HITL)")
+if "¿Callback Workspace?" not in names:
+    raise SystemExit("LIVE_HITL_STALE: falta ¿Callback Workspace?")
 
 trigger = next(n for n in wf.get("nodes", []) if n.get("name") == "Telegram Trigger")
 webhook_id = trigger.get("webhookId")

@@ -83,6 +83,11 @@
 - Verificación: `python3 tests/test_hitl_dispatch.py` y `bash tests/test_live_hitl_dispatch.sh` (el publicado tiene `Consultar Murray`).
 - Mitigación: import + publish `telegram_hitl_router.json`, `docker compose restart n8n`.
 
+### Incidente P: Clone/código por Telegram no hace nada al tocar Aprobar
+- Causa: el workflow publicado no tiene `Resolver HITL Workspace` / `/workspace/hitl`, o murray-agent viejo sin `git`.
+- Verificación: `python3 tests/test_hitl_dispatch.py` y `bash tests/test_live_workspace_clone.sh`.
+- Mitigación: import + publish `telegram_hitl_router.json`; `docker compose up -d --build --force-recreate murray-agent`.
+
 ### Incidente O: Murray no contesta / 403 en ops
 - Causa 1: `murray-agent` unhealthy o n8n no publicado con `/chat`.
 - Causa 2: `POST /ops/execute` sin `approval_id` vigente (15 min, un uso).
