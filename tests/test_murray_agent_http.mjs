@@ -577,6 +577,143 @@ test("prosa Pido Aprobar del LLM sin tool no manda teclado falso", async () => {
   });
   assert.equal(body.needs_hitl, false);
   assert.equal(/pido aprobar|toc[aá] aprobar/i.test(body.reply), false);
+  assert.match(body.reply, /Comando:/);
+  assert.match(body.reply, /granjero de vacas/i);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("plan L01 del LLM con Test: arma HITL de verdad, no pregunta la tarjeta", async () => {
+  const { engine, session, root } = codingStack({
+    llm: {
+      complete: async () => ({
+        content: [
+          "Ahí está, patrón: la rama existe.",
+          "o sea push permitido.",
+          "Para arrancar necesito que apruebes la misión de código.",
+          "- Test: cd backend && uv run pytest -q tests/test_embedder_determinism.py",
+          "¿Te re-disparo la tarjeta de propose_code_mission para el botón Aprobar?",
+        ].join("\n"),
+        tool_calls: [],
+      }),
+    },
+  });
+  session.patch("112", {
+    slug: "hbauzan-semantic-firewall",
+    url: "https://github.com/hbauzan/semantic-firewall.git",
+  });
+  const body = await engine.handleChat({
+    chat_id: "112",
+    text: "cómo está la rama",
+  });
+  assert.equal(body.needs_hitl, true);
+  assert.equal(body.hitl.kind, "code");
+  assert.match(body.hitl.approve_data, /^APPROVE_CODE:[a-f0-9]{16}$/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("si después de un plan con Test: confirma HITL sin LLM", async () => {
+  let llmHits = 0;
+  const { engine, session, root } = codingStack({
+    llm: {
+      complete: async () => {
+        llmHits += 1;
+        return {
+          content: [
+            "Núcleo: leí el repo.",
+            "Test: cd backend && uv run pytest -q tests/test_embedder_determinism.py",
+            "Cuando quieras arrancamos.",
+          ].join("\n"),
+          tool_calls: [],
+        };
+      },
+    },
+  });
+  session.patch("113", {
+    slug: "hbauzan-semantic-firewall",
+    url: "https://github.com/hbauzan/semantic-firewall.git",
+  });
+  const first = await engine.handleChat({
+    chat_id: "113",
+    text: "cómo está la rama",
+  });
+  assert.equal(first.needs_hitl, false);
+  const confirmed = await engine.handleChat({ chat_id: "113", text: "si" });
+  assert.equal(confirmed.needs_hitl, true);
+  assert.equal(confirmed.hitl.kind, "code");
+  assert.equal(llmHits, 1);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("si suelto sin plan ofrece receta Murray, no teclado falso", async () => {
+  let llmHits = 0;
+  const { engine, session, root } = codingStack({
+    llm: {
+      complete: async () => {
+        llmHits += 1;
+        return { content: "Núcleo: todo healthy.", tool_calls: [] };
+      },
+    },
+  });
+  session.patch("114", {
+    slug: "hbauzan-semantic-firewall",
+    url: "https://github.com/hbauzan/semantic-firewall.git",
+  });
+  await engine.handleChat({ chat_id: "114", text: "cómo está la rama" });
+  const body = await engine.handleChat({ chat_id: "114", text: "si" });
+  assert.equal(body.needs_hitl, false);
+  assert.match(body.reply, /Comando:/);
+  assert.match(body.reply, /granjero de vacas/i);
+  assert.equal(/pido aprobar|toc[aá] aprobar/i.test(body.reply), false);
+  assert.equal(llmHits, 1);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("mutate sin comando de test no va al LLM: ofrece receta", async () => {
+  let llmHits = 0;
+  const { engine, session, root } = codingStack({
+    llm: {
+      complete: async () => {
+        llmHits += 1;
+        return { content: "no", tool_calls: [] };
+      },
+    },
+  });
+  session.patch("115", {
+    slug: "hbauzan-semantic-firewall",
+    url: "https://github.com/hbauzan/semantic-firewall.git",
+  });
+  const body = await engine.handleChat({
+    chat_id: "115",
+    text: "creá backend/tests/test_embedder_determinism.py",
+  });
+  assert.equal(body.needs_hitl, false);
+  assert.equal(llmHits, 0);
+  assert.match(body.reply, /Comando:/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("no me da los botones ofrece receta sin LLM", async () => {
+  let llmHits = 0;
+  const { engine, session, root } = codingStack({
+    llm: {
+      complete: async () => {
+        llmHits += 1;
+        return { content: "no", tool_calls: [] };
+      },
+    },
+  });
+  session.patch("116", {
+    slug: "hbauzan-semantic-firewall",
+    url: "https://github.com/hbauzan/semantic-firewall.git",
+  });
+  const body = await engine.handleChat({
+    chat_id: "116",
+    text: "no me da los botones",
+  });
+  assert.equal(body.needs_hitl, false);
+  assert.equal(llmHits, 0);
+  assert.match(body.reply, /Comando:/);
+  assert.match(body.reply, /\/jobs/);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

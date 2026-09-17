@@ -3,9 +3,8 @@ import {
   assertAllowedService,
   webhookGapWarning,
 } from "./ops.mjs";
-import { extractTestCommand } from "./intent.mjs";
 import { TOOL_DEFS } from "./llm.mjs";
-import { looksLikeHitlCopy, packHitl, packReply } from "./reply.mjs";
+import { looksLikeHitlCopy, packHitl, packHitlHelp, packReply } from "./reply.mjs";
 import { redact } from "./redact.mjs";
 
 const HEALTH_URLS = {
@@ -116,24 +115,21 @@ export function createChatEngine({
       : "";
   }
 
-  function recoverCodeHitl(chatId, text) {
-    if (!coding || typeof coding.proposeCode !== "function") {
+  function lastAssistantFor(chatId) {
+    const history = memory.get(chatId) || [];
+    for (let i = history.length - 1; i >= 0; i -= 1) {
+      if (history[i].role === "assistant") {
+        return String(history[i].content || "");
+      }
+    }
+    return "";
+  }
+
+  function recoverCodeHitl(chatId, text, lastAssistant = "") {
+    if (!coding || typeof coding.recoverCodeHitl !== "function") {
       return null;
     }
-    if (!activeSlug(chatId)) {
-      return null;
-    }
-    const tests = extractTestCommand(text);
-    if (!tests) {
-      return null;
-    }
-    const packed = coding.proposeCode({
-      chatId,
-      instruction: text,
-      testCommand: tests,
-      filesPlan: "pendiente del obrero",
-    });
-    return packed.needs_hitl ? packed : null;
+    return coding.recoverCodeHitl({ chatId, text, lastAssistant });
   }
 
   async function dispatchTool(name, args, ctx = {}) {
@@ -438,15 +434,17 @@ export function createChatEngine({
         continue;
       }
       if (looksLikeHitlCopy(out.content)) {
-        const recovered = recoverCodeHitl(chatId, text);
+        const recovered = recoverCodeHitl(chatId, text, out.content);
         if (recovered) {
           memory.append(chatId, "user", text);
           memory.append(chatId, "assistant", recovered.reply);
           return recovered;
         }
-        const refused = packReply(
-          "No mandé teclado. n8n solo arma botones si needs_hitl=true. Decime instrucción + comando de test (o cloná / borrá / pusheá / recreá) y te mando Aprobar de verdad."
-        );
+        const refused = packHitlHelp({
+          slug: activeSlug(chatId),
+          reason:
+            "DeepSeek escribió prosa de aprobación sin tool. n8n no pinta teclado con texto plano.",
+        });
         memory.append(chatId, "user", text);
         memory.append(chatId, "assistant", refused.reply);
         return refused;
@@ -513,7 +511,11 @@ export function createChatEngine({
       );
     }
     if (coding && typeof coding.interceptChat === "function") {
-      const intercepted = await coding.interceptChat({ chatId, text: trimmed });
+      const intercepted = await coding.interceptChat({
+        chatId,
+        text: trimmed,
+        lastAssistant: lastAssistantFor(chatId),
+      });
       if (intercepted) {
         memory.append(chatId, "user", trimmed);
         memory.append(chatId, "assistant", intercepted.reply);

@@ -6,9 +6,24 @@ import {
   extractDeletePath,
   extractJobId,
   extractTestCommand,
+  isAffirmative,
+  isHitlStuck,
 } from "../config/murray-agent/intent.mjs";
 import { parseWorkspaceCallback } from "../config/murray-agent/coding.mjs";
 import { looksLikeHitlCopy } from "../config/murray-agent/reply.mjs";
+
+export const FIRST_MURRAY_PLAN = `Ahí está, patrón: la rama existe y el árbol está limpio.
+
+Estado real:
+- Repo: hbauzan-semantic-firewall
+- Rama: feat/l01-embedder-determinism (no protegida, o sea push permitido)
+- Working tree: limpio, cero archivos modificados
+
+Para arrancar de verdad necesito que apruebes la misión de código. La instrucción es:
+- Crear backend/tests/test_embedder_determinism.py (N=100).
+- Test: cd backend && uv run pytest -q tests/test_embedder_determinism.py
+
+¿Te re-disparo la tarjeta de propose_code_mission para que aparezca el botón Aprobar?`;
 
 test("classify: clone sin URL pregunta; mutate sin repo pregunta", () => {
   assert.equal(classifyUserText("cloná algo").action, "clarify_clone_url");
@@ -19,6 +34,26 @@ test("classify: clone sin URL pregunta; mutate sin repo pregunta", () => {
   );
   assert.equal(
     classifyUserText("agregá un test", { hasSession: true }).action,
+    "maybe_code_mission"
+  );
+  assert.equal(
+    classifyUserText("creá backend/tests/test_embedder_determinism.py", {
+      hasSession: true,
+    }).action,
+    "maybe_code_mission"
+  );
+  assert.equal(classifyUserText("si", { hasSession: true }).action, "confirm_code");
+  assert.equal(classifyUserText("dale", { hasSession: true }).action, "confirm_code");
+  assert.equal(classifyUserText("si").action, "chat");
+  assert.equal(
+    classifyUserText("no me da los botones", { hasSession: true }).action,
+    "hitl_help"
+  );
+  assert.equal(classifyUserText("pusheá").action, "propose_push");
+  assert.equal(
+    classifyUserText("o sea push permitido, creá el test de L01", {
+      hasSession: true,
+    }).action,
     "maybe_code_mission"
   );
 });
@@ -52,6 +87,13 @@ test("extractTestCommand: Comando: explícito; no dispara por mencionar pytest",
     ),
     "cd backend && uv run pytest -q tests/test_embedder_determinism.py"
   );
+  assert.equal(
+    extractTestCommand(
+      "- Test: cd backend && uv run pytest -q tests/test_embedder_determinism.py"
+    ),
+    "cd backend && uv run pytest -q tests/test_embedder_determinism.py"
+  );
+  assert.equal(extractTestCommand(FIRST_MURRAY_PLAN), "cd backend && uv run pytest -q tests/test_embedder_determinism.py");
   assert.equal(extractTestCommand("mejorá el README y corré npm test"), "npm test");
   assert.equal(extractTestCommand("¿pytest está en el repo?"), "");
   assert.equal(extractTestCommand("agregá un healthcheck"), "");
@@ -59,7 +101,22 @@ test("extractTestCommand: Comando: explícito; no dispara por mencionar pytest",
 
 test("looksLikeHitlCopy detecta prosa de Aprobar sin flag", () => {
   assert.equal(looksLikeHitlCopy("Pido Aprobar la misión de código. Tocá Aprobar."), true);
+  assert.equal(looksLikeHitlCopy(FIRST_MURRAY_PLAN), true);
+  assert.equal(looksLikeHitlCopy("necesito que apruebes la misión"), true);
   assert.equal(looksLikeHitlCopy("Núcleo: leí el README."), false);
+});
+
+test("isAffirmative es mensaje corto; isHitlStuck es tranca de teclado", () => {
+  assert.equal(isAffirmative("si"), true);
+  assert.equal(isAffirmative("dale, mandá el teclado"), true);
+  assert.equal(
+    isAffirmative(
+      "OK confirmado. creá backend/tests/foo.py.\n\nComando: cd backend && uv run pytest"
+    ),
+    false
+  );
+  assert.equal(isHitlStuck("no me da los botones"), true);
+  assert.equal(isHitlStuck("cómo está la rama"), false);
 });
 
 test("callback workspace cabe en 64 bytes y parsea", () => {

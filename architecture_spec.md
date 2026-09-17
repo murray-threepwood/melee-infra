@@ -176,8 +176,10 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
   - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`, `/workspace`, `/jobs`, `/jobs <id>`
   - `/jobs`: últimos 20 jobs del chat (id, type, status, start HH:MM America/Montevideo, duración desde `createdAt`, slug, error). `/jobs <id>`: `start:` + `hace Xm` + últimas 20 líneas de `job.log`. Edad **no** usa `updatedAt` (el poll de OpenHands lo toca cada ~2s). Solo lectura, sin HITL. "estado de los jobs" intercepta igual.
   - Clone sin URL, mutate sin repo activo, o delete sin path: pregunta, no HITL, no LLM
-  - Misión de código con repo activo + comando de test extraíble (`Comando: …` / `corré npm test`): intercept HITL `kind=code` **sin LLM**. Preguntas al repo (sin comando de test) siguen al LLM.
-  - Copy que pide Aprobar / Tocá Aprobar **sin** `needs_hitl=true` + `hitl.approve_data` es inválida: n8n rutea a texto plano y no hay teclado. `/chat` descarta esa prosa (o recupera HITL de código si hay comando de test).
+  - Misión de código con repo activo + comando de test extraíble (`Comando: …` / `Test: …` / `corré npm test`): intercept HITL `kind=code` **sin LLM**. Mutación sin comando (p. ej. `creá el test`) no va al LLM: receta Murray (`Comando:`).
+  - `si` / `dale` / `ok` con repo activo confirma el plan previo (último assistant o `lastTestCommand`) y arma HITL. Sin plan recuperable, o «no me da los botones»: receta Murray, `needs_hitl=false`.
+  - Copy que pide Aprobar / `propose_code_mission` / botón Aprobar **sin** `needs_hitl=true` + `hitl.approve_data` es inválida. `/chat` recupera HITL si el texto del LLM trae comando de test; si no, receta Murray (nunca «Tocá Aprobar» en prosa).
+  - `\bpush\b` suelto en status («push permitido») no es `propose_push`. `pusheá` / `hacé push` / `git push` al inicio sí.
   - `needs_hitl=true` + `hitl.approval_id` (16 hex) + `hitl.kind` (`ops`|`clone`|`code`|`delete`|`push`) + `hitl.approve_data`/`reject_data`
 - **`POST /ops/execute`** y **`POST /ops/reject`**: `{ approval_id }` solo `kind=ops`
   - `200` con `reply` HTML

@@ -1,7 +1,7 @@
-import { classifyUserText, extractTestCommand } from "./intent.mjs";
+import { classifyUserText, extractTestCommand, isAffirmative, isHitlStuck } from "./intent.mjs";
 import { formatJobDetail, formatJobsSummary, jobsHint } from "./jobs.mjs";
 import { detectStuck, isAgentDone, summarizeEvents } from "./openhands.mjs";
-import { packHitl, packReply } from "./reply.mjs";
+import { packHitl, packHitlHelp, packReply } from "./reply.mjs";
 import { stuckKeyboard } from "./telegram.mjs";
 import { parseHttpsGitUrl } from "./workspace.mjs";
 
@@ -123,6 +123,10 @@ export function createCodingSession({
       testCommand: tests.slice(0, 400),
       filesPlan: String(filesPlan || "").slice(0, 800),
     });
+    session.patch(chatId, {
+      lastMission: instructionText.slice(0, 2000),
+      lastTestCommand: tests.slice(0, 400),
+    });
     return packHitl(
       [
         `Plan (no toqué nada todavía):`,
@@ -242,7 +246,40 @@ export function createCodingSession({
     );
   }
 
-  async function interceptChat({ chatId, text }) {
+  function recoverCodeHitl({ chatId, text, lastAssistant = "" }) {
+    const sess = session.get(chatId) || {};
+    if (!sess.slug) {
+      return null;
+    }
+    const tests =
+      extractTestCommand(text) ||
+      extractTestCommand(lastAssistant) ||
+      sess.lastTestCommand ||
+      "";
+    if (!tests) {
+      return null;
+    }
+    const userIsShort = isAffirmative(text) || isHitlStuck(text);
+    const instruction = (
+      userIsShort
+        ? sess.lastMission || lastAssistant || text
+        : extractTestCommand(text)
+          ? text
+          : sess.lastMission || lastAssistant || text
+    ).trim();
+    if (!instruction || instruction.length < 8) {
+      return null;
+    }
+    const packed = proposeCode({
+      chatId,
+      instruction,
+      testCommand: tests,
+      filesPlan: "pendiente del obrero",
+    });
+    return packed.needs_hitl ? packed : null;
+  }
+
+  async function interceptChat({ chatId, text, lastAssistant = "" }) {
     const sess = session.get(chatId) || {};
     if (sess.awaiting_instruction) {
       session.patch(chatId, { awaiting_instruction: false });
@@ -314,15 +351,35 @@ export function createCodingSession({
       return describeJobs({ chatId, jobId: verdict.jobId });
     }
     if (verdict.action === "maybe_code_mission") {
-      const tests = extractTestCommand(text);
-      if (tests) {
-        return proposeCode({
-          chatId,
-          instruction: text,
-          testCommand: tests,
-          filesPlan: "pendiente del obrero",
-        });
+      const recovered = recoverCodeHitl({ chatId, text, lastAssistant });
+      if (recovered) {
+        return recovered;
       }
+      return packHitlHelp({
+        slug: sess.slug,
+        reason: "Pediste un cambio y no vino comando de test en el mismo mensaje.",
+      });
+    }
+    if (verdict.action === "confirm_code") {
+      const recovered = recoverCodeHitl({ chatId, text, lastAssistant });
+      if (recovered) {
+        return recovered;
+      }
+      return packHitlHelp({
+        slug: sess.slug,
+        reason: "Un «si» suelto no pinta teclado. No hay plan previo con comando de test.",
+      });
+    }
+    if (verdict.action === "hitl_help") {
+      const recovered = recoverCodeHitl({ chatId, text, lastAssistant });
+      if (recovered) {
+        return recovered;
+      }
+      return packHitlHelp({
+        slug: sess.slug,
+        reason:
+          "El teclado solo sale con needs_hitl=true. El job de código no arranca hasta que apruebes.",
+      });
     }
     return null;
   }
@@ -799,6 +856,7 @@ export function createCodingSession({
 
   return {
     interceptChat,
+    recoverCodeHitl,
     proposeClone,
     proposeCode,
     proposeDelete,
