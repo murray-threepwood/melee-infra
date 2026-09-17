@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.11 — Confirmar plan de código y receta si te trancás
+
+- `si` / `dale` / `ok` confirma el plan previo (memoria o `Test:`/`Comando:`) y arma teclado HITL de verdad.
+- Mutación sin comando de test y prosa «necesito que apruebes» ya no se van a DeepSeek a pedir la tarjeta: o HITL recuperado, o receta Murray (`Comando:`, no `Test:`, no `push` suelto, job al aprobar, `/jobs`).
+- `Test:` extrae `cd … && uv run pytest`. `push permitido` ya no se lee como pusheá.
+
 ## 0.1.10 — Reloj de start en /jobs
 
 - `/jobs` muestra hora de arranque (America/Montevideo) y duración desde `createdAt`. El poll de OpenHands ya no disfraza un job de 8m como «2s».
