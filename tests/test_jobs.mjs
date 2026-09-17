@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import {
   createJobStore,
+  formatClock,
   formatJobDetail,
   formatJobsSummary,
   jobsHint,
@@ -56,24 +57,60 @@ test("appendLog recorta a 40; detail muestra últimas 20 y el error", () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test("summary lista status y error; vacío explica /jobs", () => {
+test("summary usa createdAt, no el último poll; muestra reloj Montevideo", () => {
   assert.match(formatJobsSummary([]), /No hay jobs/);
+  const createdAt = Date.parse("2026-09-17T23:18:00.000Z");
   const text = formatJobsSummary(
     [
       {
         id: "aabbccddeeff0011",
-        type: "pull",
-        status: "done",
-        updatedAt: 1000,
+        type: "oh_poll",
+        status: "running",
+        createdAt,
+        updatedAt: createdAt + 8 * 60 * 1000,
         error: "",
         payload: { slug: "octocat-Hello-World" },
       },
     ],
-    { now: 1000 + 12_000 }
+    { now: createdAt + 8 * 60 * 1000, timeZone: "America/Montevideo" }
   );
   assert.match(text, /aabbccddeeff0011/);
-  assert.match(text, /pull done 12s/);
+  assert.match(text, /oh_poll running/);
+  assert.match(text, /20:18/);
+  assert.match(text, /8m/);
   assert.match(text, /octocat-Hello-World/);
+  assert.equal(/8s\b/.test(text), false);
+});
+
+test("detail muestra start de createdAt aunque updatedAt se mueva", () => {
+  const createdAt = Date.parse("2026-09-17T23:18:00.000Z");
+  const detail = formatJobDetail(
+    {
+      id: "aabbccddeeff0011",
+      type: "code",
+      status: "failed",
+      createdAt,
+      updatedAt: createdAt + 8 * 60 * 1000,
+      error: "openhands_timeout",
+      payload: { slug: "octocat-Hello-World" },
+      log: ["trace 1"],
+    },
+    { now: createdAt + 8 * 60 * 1000, timeZone: "America/Montevideo", tail: 20 }
+  );
+  assert.match(detail, /start: 20:18 \(hace 8m\)/);
+});
+
+test("formatClock: mismo día HH:MM; otro día con fecha", () => {
+  const start = Date.parse("2026-09-16T23:18:00.000Z");
+  const now = Date.parse("2026-09-17T12:00:00.000Z");
+  assert.equal(formatClock(Date.parse("2026-09-17T23:18:00.000Z"), {
+    now: Date.parse("2026-09-17T23:20:00.000Z"),
+    timeZone: "America/Montevideo",
+  }), "20:18");
+  assert.match(
+    formatClock(start, { now, timeZone: "America/Montevideo" }),
+    /16\/09 20:18/
+  );
 });
 
 test("jobsHint ofrece /jobs en una línea Murray", () => {
