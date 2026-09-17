@@ -5,8 +5,9 @@ import { redact } from "./redact.mjs";
 
 export const ALLOWED_GIT_HOSTS = new Set(["github.com", "gitlab.com"]);
 
+export const PROTECTED_BRANCHES = new Set(["main", "master"]);
+
 const GIT_FORBIDDEN = new Set([
-  "push",
   "credential",
   "daemon",
   "filter-branch",
@@ -14,10 +15,29 @@ const GIT_FORBIDDEN = new Set([
   "--exec",
   "send-pack",
   "receive-pack",
+  "rebase",
+  "reset",
+  "clean",
+  "config",
 ]);
+
+const GIT_FORCE = new Set(["--force", "--force-with-lease", "--force-if-includes", "-f"]);
 
 const HTTPS_GIT_RE =
   /https:\/\/(?:www\.)?(github\.com|gitlab\.com)\/[A-Za-z0-9_.\-]+(?:\/[A-Za-z0-9_.\-]+)+/gi;
+
+const WIPE_ALIASES = new Set([
+  "",
+  ".",
+  "./",
+  "*",
+  "all",
+  "todo",
+  "todo el workspace",
+  "./workspace",
+  "workspace",
+  "/opt/workspace",
+]);
 
 function deny(code, message) {
   const err = new Error(message);
@@ -25,15 +45,102 @@ function deny(code, message) {
   throw err;
 }
 
-export function assertSafeGitArgs(args) {
+function failGit(code, result) {
+  const err = new Error(
+    redact(String(result?.stderr || result?.stdout || code)).slice(0, 400)
+  );
+  err.code = code;
+  throw err;
+}
+
+export function isProtectedBranch(name) {
+  return PROTECTED_BRANCHES.has(String(name || "").trim().toLowerCase());
+}
+
+export function isSecretWorkspacePath(rel) {
+  const n = String(rel || "").replace(/\\/g, "/");
+  const base = n.split("/").pop() || "";
+  if (base === ".env.example") {
+    return false;
+  }
+  if (base === ".env" || base.startsWith(".env.")) {
+    return true;
+  }
+  if (base === ".gauth.json" || base === "credentials.json") {
+    return true;
+  }
+  if (/\.(pem|p12|key)$/i.test(base)) {
+    return true;
+  }
+  if (base === "id_rsa" || base === "id_ed25519") {
+    return true;
+  }
+  return false;
+}
+
+export function sanitizeBranchName(raw) {
+  const name = String(raw || "").trim();
+  if (!name) {
+    deny("git_branch_invalid", "pasame el nombre de la rama");
+  }
+  if (name.startsWith("-") || name.includes("..") || name.includes("\\") || /\s/.test(name)) {
+    deny("git_branch_invalid", `rama inválida: ${name}`);
+  }
+  if (!/^[A-Za-z0-9._/-]+$/.test(name) || name.length > 120) {
+    deny("git_branch_invalid", `rama inválida: ${name}`);
+  }
+  return name;
+}
+
+export function assertSafeGitArgs(args, { allowPush = false } = {}) {
   const tokens = (args || []).map((item) => String(item));
   for (const token of tokens) {
-    const bare = token.replace(/^-+/, "").toLowerCase();
-    if (GIT_FORBIDDEN.has(token) || GIT_FORBIDDEN.has(bare) || token.toLowerCase() === "push") {
-      deny("git_forbidden", `git ${token} está prohibido (no hay push desde el bot)`);
+    const lower = token.toLowerCase();
+    const bare = lower.replace(/^-+/, "");
+    if (GIT_FORCE.has(token) || GIT_FORCE.has(lower)) {
+      deny("git_forbidden", "git force está prohibido");
+    }
+    if (GIT_FORBIDDEN.has(token) || GIT_FORBIDDEN.has(bare) || GIT_FORBIDDEN.has(lower)) {
+      deny("git_forbidden", `git ${token} está prohibido`);
+    }
+    if (lower === "push" || bare === "push") {
+      if (!allowPush) {
+        deny("git_forbidden", "git push exige HITL (allowPush)");
+      }
+    }
+  }
+  if (allowPush) {
+    for (const token of tokens) {
+      const lower = token.toLowerCase();
+      const [src, dest] = lower.split(":");
+      if (PROTECTED_BRANCHES.has(src) || (dest && PROTECTED_BRANCHES.has(dest))) {
+        deny("git_protected_branch", "no hay push a main/master");
+      }
     }
   }
   return tokens;
+}
+
+export function parseWorkspaceTarget(relPath) {
+  const raw = String(relPath ?? "").trim();
+  if (WIPE_ALIASES.has(raw.toLowerCase())) {
+    return { wipe: true, rel: "" };
+  }
+  let cleaned = raw.replace(/\\/g, "/");
+  cleaned = cleaned.replace(/^\/opt\/workspace\/?/i, "");
+  cleaned = cleaned.replace(/^\.\/workspace\/?/i, "");
+  cleaned = cleaned.replace(/^workspace\/?/i, "");
+  if (cleaned.startsWith("/")) {
+    deny("workspace_jail", "path absoluto fuera de ./workspace");
+  }
+  const normalized = path.posix.normalize(cleaned);
+  if (normalized === "." || normalized === "") {
+    return { wipe: true, rel: "" };
+  }
+  if (normalized.startsWith("../") || normalized === "..") {
+    deny("workspace_jail", "path fuera de ./workspace");
+  }
+  return { wipe: false, rel: normalized };
 }
 
 export function extractHttpsGitUrl(text) {
@@ -96,18 +203,47 @@ export function parseHttpsGitUrl(raw) {
   };
 }
 
-export function assertInsideRoot(root, target) {
-  const rootResolved = path.resolve(root);
-  const resolved = path.resolve(target);
-  const prefix = rootResolved.endsWith(path.sep) ? rootResolved : rootResolved + path.sep;
-  if (resolved !== rootResolved && !resolved.startsWith(prefix)) {
-    deny("workspace_jail", "path fuera de ./workspace");
+function realpathOrAbs(p) {
+  const abs = path.resolve(p);
+  try {
+    if (fs.existsSync(abs)) {
+      return fs.realpathSync(abs);
+    }
+  } catch {
+    // ignore
   }
-  return resolved;
+  return abs;
 }
 
-function defaultGitRun(args, { cwd, env = {}, timeoutMs = 120000 } = {}) {
-  assertSafeGitArgs(args);
+function isOutside(rootReal, candidate) {
+  const rel = path.relative(rootReal, candidate);
+  return rel.startsWith(`..${path.sep}`) || rel === "..";
+}
+
+export function assertInsideRoot(root, target) {
+  const rootAbs = path.resolve(root);
+  const rootReal = realpathOrAbs(root);
+  const targetAbs = path.resolve(target);
+  if (fs.existsSync(targetAbs)) {
+    const real = fs.realpathSync(targetAbs);
+    if (isOutside(rootReal, real)) {
+      deny("workspace_jail", "path fuera de ./workspace");
+    }
+    return real;
+  }
+  const lexicalRel = path.relative(rootAbs, targetAbs);
+  if (lexicalRel.startsWith(`..${path.sep}`) || lexicalRel === "..") {
+    deny("workspace_jail", "path fuera de ./workspace");
+  }
+  const mapped = lexicalRel === "" ? rootReal : path.join(rootReal, lexicalRel);
+  if (isOutside(rootReal, mapped)) {
+    deny("workspace_jail", "path fuera de ./workspace");
+  }
+  return mapped;
+}
+
+function defaultGitRun(args, { cwd, env = {}, timeoutMs = 120000, allowPush = false } = {}) {
+  assertSafeGitArgs(args, { allowPush });
   return new Promise((resolve, reject) => {
     const child = spawn("git", args, {
       cwd,
@@ -161,11 +297,89 @@ function isProbablyBinary(buf) {
   return slice.includes(0);
 }
 
+function porcelainFiles(stdout) {
+  const files = [];
+  for (const line of String(stdout || "").split(/\r?\n/)) {
+    if (line.length < 4) {
+      continue;
+    }
+    if (line.startsWith("##")) {
+      continue;
+    }
+    const rest = line.slice(3);
+    const name = rest.includes(" -> ") ? rest.split(" -> ").at(-1) : rest;
+    const cleaned = name.replace(/^"|"$/g, "").trim();
+    if (cleaned) {
+      files.push(cleaned);
+    }
+  }
+  return files;
+}
+
+function directoryBytes(dir, { maxEntries = 50000 } = {}) {
+  let bytes = 0;
+  let count = 0;
+  function walk(current) {
+    if (count >= maxEntries) {
+      return;
+    }
+    let st;
+    try {
+      st = fs.lstatSync(current);
+    } catch {
+      return;
+    }
+    count += 1;
+    if (st.isSymbolicLink()) {
+      return;
+    }
+    if (st.isFile()) {
+      bytes += st.size;
+      return;
+    }
+    if (!st.isDirectory()) {
+      return;
+    }
+    let entries = [];
+    try {
+      entries = fs.readdirSync(current);
+    } catch {
+      return;
+    }
+    for (const name of entries) {
+      walk(path.join(current, name));
+    }
+  }
+  walk(dir);
+  return { bytes, truncated: count >= maxEntries };
+}
+
+function gitIdentity(gitName, gitEmail) {
+  const name = String(gitName || "").trim();
+  const email = String(gitEmail || "").trim();
+  if (
+    !name ||
+    !email ||
+    /CAMBIAR_POR|REEMPLAZAR|ejemplo/i.test(email) ||
+    !email.includes("@") ||
+    /[\r\n]/.test(name) ||
+    /[\r\n]/.test(email)
+  ) {
+    deny(
+      "git_identity_missing",
+      "identidad git inválida (name/email). Override opcional: MURRAY_GIT_NAME / MURRAY_GIT_EMAIL"
+    );
+  }
+  return { name, email };
+}
+
 export function createWorkspace({
   root = process.env.MURRAY_WORKSPACE_ROOT || "/opt/workspace",
   gitRun = defaultGitRun,
   githubToken = process.env.GITHUB_TOKEN || "",
   gitlabToken = process.env.GITLAB_TOKEN || "",
+  gitName = process.env.MURRAY_GIT_NAME || "Murray",
+  gitEmail = process.env.MURRAY_GIT_EMAIL || "murray-threepwood@users.noreply.github.com",
   maxFiles = 200,
   maxBytes = 32768,
   maxHits = 40,
@@ -176,6 +390,14 @@ export function createWorkspace({
       deny("workspace_slug_denied", "slug vacío");
     }
     return assertInsideRoot(root, path.join(root, safe));
+  }
+
+  function requireRepo(slug) {
+    const dest = repoDir(slug);
+    if (!fs.existsSync(dest)) {
+      deny("workspace_missing", `no hay repo activo ${slug}`);
+    }
+    return dest;
   }
 
   async function existingRemote(dest) {
@@ -189,6 +411,43 @@ export function createWorkspace({
     }
   }
 
+  async function envForRepo(dest) {
+    const remote = await existingRemote(dest);
+    if (!remote) {
+      return {};
+    }
+    try {
+      const parsed = parseHttpsGitUrl(remote);
+      return tokenEnvForHost(parsed.host, { githubToken, gitlabToken });
+    } catch {
+      return {};
+    }
+  }
+
+  async function ensureHistory(dest, env) {
+    const shallow = await gitRun(["-C", dest, "rev-parse", "--is-shallow-repository"], {
+      timeoutMs: 15000,
+    });
+    const isShallow = String(shallow.stdout || "").trim() === "true";
+    if (isShallow) {
+      const unshallow = await gitRun(
+        ["-C", dest, "fetch", "--unshallow", "--prune", "--", "origin"],
+        { env, timeoutMs: 180000 }
+      );
+      if (unshallow.code === 0) {
+        return { unshallowed: true };
+      }
+    }
+    const fetched = await gitRun(["-C", dest, "fetch", "--prune", "--", "origin"], {
+      env,
+      timeoutMs: 180000,
+    });
+    if (fetched.code !== 0) {
+      failGit("git_fetch_failed", fetched);
+    }
+    return { unshallowed: isShallow };
+  }
+
   async function clone({ url }) {
     const parsed = parseHttpsGitUrl(url);
     fs.mkdirSync(root, { recursive: true });
@@ -200,7 +459,7 @@ export function createWorkspace({
       }
       deny(
         "workspace_exists",
-        `ya hay otro árbol en ${parsed.slug}; pedime otro slug o borralo a mano en ./workspace`
+        `ya hay otro árbol en ${parsed.slug}; pedime borrar ./workspace/${parsed.slug}`
       );
     }
     const env = tokenEnvForHost(parsed.host, { githubToken, gitlabToken });
@@ -222,10 +481,7 @@ export function createWorkspace({
   }
 
   function tree(slug) {
-    const dest = repoDir(slug);
-    if (!fs.existsSync(dest)) {
-      deny("workspace_missing", `no hay repo activo ${slug}`);
-    }
+    const dest = requireRepo(slug);
     const files = [];
     function walk(dir) {
       if (files.length >= maxFiles) {
@@ -258,7 +514,7 @@ export function createWorkspace({
   }
 
   function read(slug, relPath) {
-    const dest = repoDir(slug);
+    const dest = requireRepo(slug);
     const target = assertInsideRoot(dest, path.join(dest, String(relPath || "")));
     if (!fs.existsSync(target) || !fs.statSync(target).isFile()) {
       deny("workspace_file_missing", `no existe ${relPath}`);
@@ -281,7 +537,7 @@ export function createWorkspace({
     if (!needle) {
       deny("workspace_grep_empty", "pasame un patrón");
     }
-    const dest = repoDir(slug);
+    const dest = requireRepo(slug);
     const hits = [];
     const listing = tree(slug);
     for (const rel of listing.files) {
@@ -315,14 +571,292 @@ export function createWorkspace({
     return { slug, pattern: needle, hits, truncated: hits.length >= maxHits };
   }
 
+  function list() {
+    fs.mkdirSync(root, { recursive: true });
+    const names = fs.readdirSync(root);
+    const entries = [];
+    let bytes = 0;
+    for (const name of names) {
+      const full = assertInsideRoot(root, path.join(root, name));
+      let st;
+      try {
+        st = fs.lstatSync(full);
+      } catch {
+        continue;
+      }
+      const size =
+        st.isDirectory() && !st.isSymbolicLink() ? directoryBytes(full).bytes : st.size;
+      bytes += size;
+      entries.push({
+        name,
+        bytes: size,
+        is_dir: st.isDirectory(),
+        is_symlink: st.isSymbolicLink(),
+      });
+    }
+    entries.sort((a, b) => a.name.localeCompare(b.name));
+    return { entries, bytes };
+  }
+
+  function parseTarget(relPath, activeSlug = "") {
+    const parsed = parseWorkspaceTarget(relPath);
+    if (parsed.wipe) {
+      return parsed;
+    }
+    const direct = path.join(root, parsed.rel);
+    if (fs.existsSync(direct)) {
+      return parsed;
+    }
+    const slug = String(activeSlug || "").replace(/[^A-Za-z0-9._-]/g, "");
+    if (slug) {
+      const nestedRel = path.posix.normalize(`${slug}/${parsed.rel}`);
+      if (!nestedRel.startsWith("..") && fs.existsSync(path.join(root, nestedRel))) {
+        return { wipe: false, rel: nestedRel };
+      }
+    }
+    return parsed;
+  }
+
+  function remove(relPath, { activeSlug = "" } = {}) {
+    const target = parseTarget(relPath, activeSlug);
+    fs.mkdirSync(root, { recursive: true });
+    const removed = [];
+    if (target.wipe) {
+      for (const name of fs.readdirSync(root)) {
+        const full = assertInsideRoot(root, path.join(root, name));
+        const st = fs.lstatSync(full);
+        if (st.isSymbolicLink()) {
+          fs.unlinkSync(full);
+        } else {
+          fs.rmSync(full, { recursive: true, force: true });
+        }
+        removed.push(name);
+      }
+      return { wiped: true, removed, rel: "" };
+    }
+    const full = assertInsideRoot(root, path.join(root, target.rel));
+    if (full === realpathOrAbs(root)) {
+      return remove(".", { activeSlug });
+    }
+    if (!fs.existsSync(full)) {
+      deny("workspace_missing", `no existe ./workspace/${target.rel}`);
+    }
+    const st = fs.lstatSync(full);
+    if (st.isSymbolicLink()) {
+      fs.unlinkSync(full);
+    } else {
+      fs.rmSync(full, { recursive: true, force: true });
+    }
+    removed.push(target.rel);
+    return { wiped: false, removed, rel: target.rel };
+  }
+
+  async function currentBranch(slug) {
+    const dest = requireRepo(slug);
+    const result = await gitRun(["-C", dest, "rev-parse", "--abbrev-ref", "HEAD"], {
+      timeoutMs: 10000,
+    });
+    if (result.code !== 0) {
+      failGit("git_failed", result);
+    }
+    return String(result.stdout || "").trim();
+  }
+
+  async function status(slug) {
+    const dest = requireRepo(slug);
+    const branch = await currentBranch(slug);
+    const result = await gitRun(["-C", dest, "status", "--porcelain=v1", "-b"], {
+      timeoutMs: 15000,
+    });
+    if (result.code !== 0) {
+      failGit("git_failed", result);
+    }
+    return {
+      slug,
+      branch,
+      protected: isProtectedBranch(branch),
+      porcelain: redact(result.stdout || "").slice(0, 4000),
+      files: porcelainFiles(result.stdout),
+    };
+  }
+
+  async function diff(slug) {
+    const dest = requireRepo(slug);
+    const stat = await gitRun(["-C", dest, "diff", "--stat"], { timeoutMs: 15000 });
+    const patch = await gitRun(["-C", dest, "diff"], { timeoutMs: 20000 });
+    const text = `${stat.stdout || ""}\n${patch.stdout || ""}`.trim();
+    return {
+      slug,
+      text: redact(text).slice(0, 6000),
+      truncated: text.length > 6000,
+    };
+  }
+
+  async function log(slug, { limit = 15 } = {}) {
+    const dest = requireRepo(slug);
+    const n = Math.min(Math.max(Number(limit) || 15, 1), 50);
+    const result = await gitRun(["-C", dest, "log", "-n", String(n), "--oneline"], {
+      timeoutMs: 15000,
+    });
+    if (result.code !== 0) {
+      failGit("git_failed", result);
+    }
+    return { slug, text: redact(result.stdout || "").slice(0, 3000) };
+  }
+
+  async function pull(slug) {
+    const dest = requireRepo(slug);
+    const env = await envForRepo(dest);
+    const history = await ensureHistory(dest, env);
+    const result = await gitRun(["-C", dest, "pull", "--ff-only", "--", "origin"], {
+      env,
+      timeoutMs: 180000,
+    });
+    if (result.code !== 0) {
+      failGit("git_pull_failed", result);
+    }
+    return {
+      slug,
+      unshallowed: history.unshallowed,
+      stdout: redact(`${result.stdout || ""}\n${result.stderr || ""}`.trim()).slice(0, 2000),
+    };
+  }
+
+  async function checkout(slug, { branch, create = false } = {}) {
+    const dest = requireRepo(slug);
+    const name = sanitizeBranchName(branch);
+    if (create && isProtectedBranch(name)) {
+      deny("git_protected_branch", "no creo ramas main/master");
+    }
+    if (create) {
+      const result = await gitRun(["-C", dest, "checkout", "-b", name], { timeoutMs: 30000 });
+      if (result.code !== 0) {
+        failGit("git_checkout_failed", result);
+      }
+      return { slug, branch: name, created: true, stdout: redact(result.stdout || "") };
+    }
+    const local = await gitRun(["-C", dest, "checkout", name], { timeoutMs: 15000 });
+    if (local.code === 0) {
+      return { slug, branch: name, created: false, stdout: redact(local.stdout || "") };
+    }
+    const env = await envForRepo(dest);
+    await ensureHistory(dest, env);
+    await gitRun(["-C", dest, "fetch", "--", "origin", name], { env, timeoutMs: 120000 });
+    const result = await gitRun(["-C", dest, "checkout", name], { timeoutMs: 30000 });
+    if (result.code !== 0) {
+      failGit("git_checkout_failed", result);
+    }
+    return { slug, branch: name, created: false, stdout: redact(result.stdout || "") };
+  }
+
+  async function commit(slug, { message, paths = [] } = {}) {
+    const dest = requireRepo(slug);
+    const msg = String(message || "").trim();
+    if (msg.length < 3) {
+      deny("git_commit_message", "pasame un mensaje de commit (≥ 3 caracteres)");
+    }
+    const ident = gitIdentity(gitName, gitEmail);
+    const statusResult = await gitRun(["-C", dest, "status", "--porcelain=v1"], {
+      timeoutMs: 15000,
+    });
+    if (statusResult.code !== 0) {
+      failGit("git_failed", statusResult);
+    }
+    let files = porcelainFiles(statusResult.stdout);
+    const wanted = (paths || []).map((item) => String(item).replace(/\\/g, "/")).filter(Boolean);
+    if (wanted.length) {
+      const allowed = new Set(wanted);
+      files = files.filter((file) => allowed.has(file));
+    }
+    const secrets = files.filter((file) => isSecretWorkspacePath(file));
+    files = files.filter((file) => !isSecretWorkspacePath(file));
+    if (!files.length) {
+      deny(
+        secrets.length ? "git_secret_path" : "git_nothing_to_commit",
+        secrets.length
+          ? `no commiteo secretos (${secrets.slice(0, 5).join(", ")})`
+          : "no hay cambios para commit"
+      );
+    }
+    for (const file of files) {
+      assertInsideRoot(dest, path.join(dest, file));
+    }
+    const added = await gitRun(["-C", dest, "add", "--", ...files], { timeoutMs: 30000 });
+    if (added.code !== 0) {
+      failGit("git_commit_failed", added);
+    }
+    const result = await gitRun(
+      ["-C", dest, "-c", `user.name=${ident.name}`, "-c", `user.email=${ident.email}`, "commit", "-m", msg],
+      {
+        timeoutMs: 30000,
+        env: {
+          GIT_AUTHOR_NAME: ident.name,
+          GIT_AUTHOR_EMAIL: ident.email,
+          GIT_COMMITTER_NAME: ident.name,
+          GIT_COMMITTER_EMAIL: ident.email,
+        },
+      }
+    );
+    if (result.code !== 0) {
+      failGit("git_commit_failed", result);
+    }
+    return {
+      slug,
+      files,
+      skipped_secrets: secrets,
+      stdout: redact(result.stdout || "").slice(0, 1500),
+    };
+  }
+
+  async function push(slug) {
+    const dest = requireRepo(slug);
+    const branch = await currentBranch(slug);
+    if (isProtectedBranch(branch) || !branch || branch === "HEAD") {
+      deny(
+        "git_protected_branch",
+        `estás en ${branch || "HEAD"}. Creá una rama feat/... antes de pushear. main/master están vedados.`
+      );
+    }
+    const env = await envForRepo(dest);
+    await ensureHistory(dest, env);
+    const result = await gitRun(["-C", dest, "push", "-u", "--", "origin", "HEAD"], {
+      env,
+      timeoutMs: 180000,
+      allowPush: true,
+    });
+    if (result.code !== 0) {
+      const err = new Error(result.stderr.slice(0, 400) || "git push falló");
+      err.code = /auth|403|401|could not read/i.test(result.stderr)
+        ? "git_auth_failed"
+        : "git_push_failed";
+      throw err;
+    }
+    return {
+      slug,
+      branch,
+      stdout: redact(`${result.stdout || ""}\n${result.stderr || ""}`.trim()).slice(0, 2000),
+    };
+  }
+
   return {
     root,
     parseHttpsGitUrl,
     extractHttpsGitUrl,
+    parseTarget,
     repoDir,
     clone,
     tree,
     read,
     grep,
+    list,
+    remove,
+    currentBranch,
+    status,
+    diff,
+    log,
+    pull,
+    checkout,
+    commit,
+    push,
   };
 }

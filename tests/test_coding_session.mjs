@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { detectStuck, isAgentDone, summarizeEvents } from "../config/murray-agent/openhands.mjs";
-import { classifyUserText } from "../config/murray-agent/intent.mjs";
+import { classifyUserText, extractDeletePath } from "../config/murray-agent/intent.mjs";
 import { parseWorkspaceCallback } from "../config/murray-agent/coding.mjs";
 
 test("classify: clone sin URL pregunta; mutate sin repo pregunta", () => {
@@ -17,6 +17,18 @@ test("classify: clone sin URL pregunta; mutate sin repo pregunta", () => {
   );
 });
 
+test("classify: borrar / push / pull / commit", () => {
+  assert.equal(extractDeletePath("borrá todo el workspace"), ".");
+  assert.equal(extractDeletePath("eliminá node_modules"), "node_modules");
+  assert.equal(classifyUserText("borrá octocat-Hello-World").action, "propose_delete");
+  assert.equal(classifyUserText("borrá").action, "clarify_delete_path");
+  assert.equal(classifyUserText("pusheá").action, "propose_push");
+  assert.equal(classifyUserText("hacé pull").action, "pull");
+  assert.equal(classifyUserText('commiteá "feat: disco"').message, "feat: disco");
+  assert.equal(classifyUserText("checkout -b feat/limpieza").action, "checkout");
+  assert.equal(classifyUserText("cambiá de rama feat/limpieza").branch, "feat/limpieza");
+});
+
 test("callback workspace cabe en 64 bytes y parsea", () => {
   const id = "aabbccddeeff0011";
   const approve = `APPROVE_CLONE:${id}`;
@@ -26,6 +38,10 @@ test("callback workspace cabe en 64 bytes y parsea", () => {
     verb: "APPROVE",
     id,
   });
+  assert.equal(parseWorkspaceCallback(`APPROVE_DELETE:${id}`).family, "delete");
+  assert.equal(parseWorkspaceCallback(`APPROVE_PUSH:${id}`).family, "push");
+  assert.equal(`APPROVE_DELETE:${id}`.length <= 64, true);
+  assert.equal(`APPROVE_PUSH:${id}`.length <= 64, true);
   assert.equal(parseWorkspaceCallback(`STUCK_RETRY:${id}`).verb, "RETRY");
   assert.equal(parseWorkspaceCallback("APPROVE_OPS:x"), null);
 });

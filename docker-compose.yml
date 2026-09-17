@@ -126,6 +126,8 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - GITLAB_TOKEN=${GITLAB_TOKEN:-}
+      - MURRAY_GIT_NAME=${MURRAY_GIT_NAME:-}
+      - MURRAY_GIT_EMAIL=${MURRAY_GIT_EMAIL:-}
     volumes:
       - ./config/murray-agent:/opt/agent:ro
       - ./docker-compose.yml:/opt/stack/docker-compose.yml:ro

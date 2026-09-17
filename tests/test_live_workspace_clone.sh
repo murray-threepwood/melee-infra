@@ -17,6 +17,10 @@ eval_json 'fetch("http://127.0.0.1:8080/chat",{method:"POST",headers:{"content-t
 
 eval_json 'fetch("http://127.0.0.1:8080/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:"live-ws",text:"mejorá el README"})}).then(async(r)=>{const b=await r.json(); if(!r.ok || b.needs_hitl!==false || !/repo activo/i.test(b.reply||"")) process.exit(1); console.log("LIVE_WORKSPACE_CLARIFY_REPO_OK");})'
 
+eval_json 'fetch("http://127.0.0.1:8080/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:"live-ws",text:"/workspace"})}).then(async(r)=>{const b=await r.json(); if(!r.ok || b.needs_hitl!==false || !/\.\/workspace/i.test(b.reply||"")) process.exit(1); console.log("LIVE_WORKSPACE_LIST_OK");})'
+
+eval_json 'fetch("http://127.0.0.1:8080/chat",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({chat_id:"live-ws",text:"borrá"})}).then(async(r)=>{const b=await r.json(); if(!r.ok || b.needs_hitl!==false || !/workspace/i.test(b.reply||"")) process.exit(1); console.log("LIVE_WORKSPACE_CLARIFY_DELETE_OK");})'
+
 eval_json 'fetch("http://127.0.0.1:8080/workspace/hitl",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({callback_data:"APPROVE_CLONE:deadbeefdeadbeef",chat_id:"live-ws"})}).then(async(r)=>{const b=await r.json(); if(r.status!==403) process.exit(1); console.log("LIVE_WORKSPACE_HITL_DENIED_OK");})'
 
 echo "LIVE_WORKSPACE_CLONE_OK"

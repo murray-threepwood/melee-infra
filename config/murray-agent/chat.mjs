@@ -35,6 +35,9 @@ export function parseSlash(text) {
   if (name === "repo") {
     return { cmd: "repo" };
   }
+  if (name === "workspace") {
+    return { cmd: "workspace" };
+  }
   return { cmd: name, service: rest[0] || "" };
 }
 
@@ -251,6 +254,93 @@ export function createChatEngine({
       }
       return { payload: { error: "code_not_proposed", reply: packed.reply } };
     }
+    if (name === "workspace_list") {
+      try {
+        return { payload: workspace.list() };
+      } catch (err) {
+        return { payload: { error: err.code || err.message } };
+      }
+    }
+    if (name === "propose_delete") {
+      const packed = coding.proposeDelete({
+        chatId: ctx.chatId,
+        relPath: args.path || args.rel || ".",
+      });
+      if (packed.needs_hitl) {
+        return { needs_hitl: true, hitl: packed.hitl, packed };
+      }
+      return { payload: { error: "delete_not_proposed", reply: packed.reply } };
+    }
+    if (name === "propose_push") {
+      const packed = await coding.proposePush({ chatId: ctx.chatId });
+      if (packed.needs_hitl) {
+        return { needs_hitl: true, hitl: packed.hitl, packed };
+      }
+      return { payload: { error: "push_not_proposed", reply: packed.reply } };
+    }
+    if (name === "workspace_git_status") {
+      if (!slug) {
+        return { payload: { error: "workspace_inactive" } };
+      }
+      try {
+        return { payload: await workspace.status(slug) };
+      } catch (err) {
+        return { payload: { error: err.code || err.message } };
+      }
+    }
+    if (name === "workspace_git_diff") {
+      if (!slug) {
+        return { payload: { error: "workspace_inactive" } };
+      }
+      try {
+        return { payload: await workspace.diff(slug) };
+      } catch (err) {
+        return { payload: { error: err.code || err.message } };
+      }
+    }
+    if (name === "workspace_git_log") {
+      if (!slug) {
+        return { payload: { error: "workspace_inactive" } };
+      }
+      try {
+        return { payload: await workspace.log(slug) };
+      } catch (err) {
+        return { payload: { error: err.code || err.message } };
+      }
+    }
+    if (name === "workspace_git_pull") {
+      const packed = coding.startPull({ chatId: ctx.chatId });
+      if (packed.needs_job) {
+        return { needs_job: true, packed };
+      }
+      return { payload: { error: "pull_not_started", reply: packed.reply } };
+    }
+    if (name === "workspace_git_checkout") {
+      const packed = coding.startCheckout({
+        chatId: ctx.chatId,
+        branch: args.branch,
+        create: Boolean(args.create),
+      });
+      if (packed.needs_job) {
+        return { needs_job: true, packed };
+      }
+      return { payload: { error: "checkout_not_started", reply: packed.reply } };
+    }
+    if (name === "workspace_git_commit") {
+      if (!slug) {
+        return { payload: { error: "workspace_inactive" } };
+      }
+      try {
+        return {
+          payload: await workspace.commit(slug, {
+            message: args.message,
+            paths: args.paths || [],
+          }),
+        };
+      } catch (err) {
+        return { payload: { error: err.code || err.message, message: err.message } };
+      }
+    }
     return { payload: { error: "unknown_tool", name } };
   }
 
@@ -286,7 +376,15 @@ export function createChatEngine({
             memory.append(chatId, "assistant", packed.reply);
             return packed;
           }
-          if (result.payload?.reply && result.payload?.error === "code_not_proposed") {
+          if (result.needs_job && result.packed) {
+            memory.append(chatId, "user", text);
+            memory.append(chatId, "assistant", result.packed.reply);
+            return result.packed;
+          }
+          if (
+            result.payload?.reply &&
+            /_not_proposed$|_not_started$/.test(String(result.payload.error || ""))
+          ) {
             const packed = packReply(result.payload.reply);
             memory.append(chatId, "user", text);
             memory.append(chatId, "assistant", packed.reply);
@@ -317,7 +415,7 @@ export function createChatEngine({
     const trimmed = String(text || "").trim();
     if (!trimmed) {
       return packReply(
-        "Mandame texto. Fotos mudas no diagnostico. /status /health /logs n8n /repo"
+        "Mandame texto. Fotos mudas no diagnostico. /status /health /logs n8n /repo /workspace"
       );
     }
     const slash = parseSlash(trimmed);
@@ -338,19 +436,25 @@ export function createChatEngine({
             : { slug: "" };
         if (!row.slug) {
           return packReply(
-            "No hay repo activo. cloná https://github.com/owner/repo (HITL). Cero push. No edito murray-infra."
+            "No hay repo activo. cloná https://github.com/owner/repo (HITL). Push a main vedado. No edito murray-infra."
           );
         }
         return packReply(
-          `Repo activo: ${row.slug}\n${row.url || ""}\nPreguntame o pedime un cambio con comando de test.`
+          `Repo activo: ${row.slug}\n${row.url || ""}\n/workspace lista el disco. Pull/commit sin HITL; push y borrar piden Aprobar.`
         );
       }
+      if (slash.cmd === "workspace") {
+        if (!coding || typeof coding.describeWorkspace !== "function") {
+          return packReply("./workspace no está configurado.");
+        }
+        return coding.describeWorkspace();
+      }
       return packReply(
-        `Comando /${slash.cmd} no existe. /status /health /logs <servicio> /repo`
+        `Comando /${slash.cmd} no existe. /status /health /logs <servicio> /repo /workspace`
       );
     }
     if (coding && typeof coding.interceptChat === "function") {
-      const intercepted = coding.interceptChat({ chatId, text: trimmed });
+      const intercepted = await coding.interceptChat({ chatId, text: trimmed });
       if (intercepted) {
         memory.append(chatId, "user", trimmed);
         memory.append(chatId, "assistant", intercepted.reply);
