@@ -41,6 +41,9 @@ export function parseSlash(text) {
   if (name === "jobs") {
     return { cmd: "jobs", jobId: rest[0] || "" };
   }
+  if (name === "triage") {
+    return { cmd: "triage" };
+  }
   return { cmd: name, service: rest[0] || "" };
 }
 
@@ -466,7 +469,7 @@ export function createChatEngine({
     const trimmed = String(text || "").trim();
     if (!trimmed) {
       return packReply(
-        "Mandame texto. Fotos mudas no diagnostico. /status /health /logs n8n /repo /workspace /jobs"
+        "Mandame texto. Fotos mudas no diagnostico. /status /health /logs n8n /repo /workspace /jobs /triage"
       );
     }
     const slash = parseSlash(trimmed);
@@ -506,8 +509,14 @@ export function createChatEngine({
         }
         return coding.describeJobs({ chatId, jobId: slash.jobId });
       }
+      if (slash.cmd === "triage") {
+        if (!coding || typeof coding.triage !== "function") {
+          return packReply("Triage no está configurado.");
+        }
+        return coding.triage({ chatId });
+      }
       return packReply(
-        `Comando /${slash.cmd} no existe. /status /health /logs <servicio> /repo /workspace /jobs`
+        `Comando /${slash.cmd} no existe. /status /health /logs <servicio> /repo /workspace /jobs /triage`
       );
     }
     if (coding && typeof coding.interceptChat === "function") {
@@ -539,6 +548,20 @@ export function createChatEngine({
       err.code = "ops_approval_denied";
       err.status = 403;
       throw err;
+    }
+    if (item.action === "heal_openhands") {
+      if (!ops || typeof ops.healOpenHands !== "function") {
+        const err = new Error("heal_openhands_unconfigured");
+        err.code = "heal_openhands_unconfigured";
+        err.status = 503;
+        throw err;
+      }
+      const result = await ops.healOpenHands();
+      const names = (result.removed || []).join(", ") || "(ninguno)";
+      const excerpt = (result.restart?.stdout || result.restart?.stderr || "").trim().slice(0, 800);
+      return packReply(
+        `Ops heal_openhands exit=${result.restart?.code ?? "?"}\nPurgados: ${names}\nrestart openhands: ${excerpt || "ok"}`
+      );
     }
     const fn = item.action === "recreate" ? ops.recreate : ops.restart;
     const result = await fn(item.service);

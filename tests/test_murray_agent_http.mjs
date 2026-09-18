@@ -419,6 +419,7 @@ function codingStack(overrides = {}) {
     approvals,
     openhands,
     telegram,
+    ops: overrides.ops,
     pollDelayMs: overrides.pollDelayMs ?? 1,
     worker: {
       kick(id) {
@@ -1140,4 +1141,226 @@ test("qué pasó con UUID de OpenHands diagnostica sin LLM", async () => {
   assert.equal(llmHits, 0);
   assert.match(bySlash.reply, new RegExp(job.id));
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("finished con git vacío es empty_finish, no misión lista", async () => {
+  const { engine, session, worker, notes, jobs, root } = codingStack({
+    statusStdout: "## feat/disk\n",
+    openhands: {
+      gitChanges: async () => ({ items: [] }),
+    },
+  });
+  fs.mkdirSync(path.join(root, "octocat-Hello-World"), { recursive: true });
+  session.patch("50", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  const proposed = await engine.dispatchTool(
+    "propose_code_mission",
+    { instruction: "creá test_embedder_determinism.py", test_command: "pytest" },
+    { chatId: "50" }
+  );
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "50",
+    callback_data: proposed.hitl.approve_data,
+  });
+  await worker.kick(hitl.job_id);
+  await worker.drain();
+  await worker.drain();
+  assert.equal(notes.some((row) => /Misión lista/.test(row.text)), false);
+  assert.equal(notes.some((row) => /empty_finish/.test(row.text)), true);
+  const poll = jobs.list({ chatId: "50" }).find((job) => job.type === "oh_poll");
+  assert.equal(poll.status, "stuck");
+  assert.equal(poll.error, "empty_finish");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("dos sandboxes vivos no arrancan un tercero", async () => {
+  const starts = [];
+  const { engine, session, worker, notes, jobs, root } = codingStack({
+    ops: {
+      listOpenHandsSandboxes: async () => [
+        { id: "aaa111", name: "oh-agent-server-a", running: true, status: "Up 1 minute" },
+        { id: "bbb222", name: "oh-agent-server-b", running: true, status: "Up 1 minute" },
+      ],
+    },
+    openhands: {
+      startConversation: async () => {
+        starts.push("start");
+        return { id: "t", app_conversation_id: "c" };
+      },
+    },
+  });
+  session.patch("51", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  const proposed = await engine.dispatchTool(
+    "propose_code_mission",
+    { instruction: "agregá un healthcheck HTTP", test_command: "npm test" },
+    { chatId: "51" }
+  );
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "51",
+    callback_data: proposed.hitl.approve_data,
+  });
+  await worker.kick(hitl.job_id);
+  assert.equal(starts.length, 0);
+  const codeJob = jobs.get(hitl.job_id);
+  assert.equal(codeJob.status, "stuck");
+  assert.equal(codeJob.error, "sandbox_busy");
+  assert.equal(notes.some((row) => /sandbox_busy/.test(row.text)), true);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("code job con startTaskId no abre otra conversación", async () => {
+  const starts = [];
+  const { jobs, worker, root } = codingStack({
+    openhands: {
+      startConversation: async () => {
+        starts.push("start");
+        return { id: "t2", app_conversation_id: "c2" };
+      },
+    },
+  });
+  const job = jobs.enqueue({
+    type: "code",
+    chatId: "52",
+    payload: {
+      slug: "octocat-Hello-World",
+      instruction: "creá un test",
+      testCommand: "npm test",
+      startTaskId: "already-started",
+    },
+  });
+  await worker.kick(job.id);
+  assert.equal(starts.length, 0);
+  assert.equal(jobs.get(job.id).status, "done");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("/triage y qué pasa diagnostican sin LLM y piden heal HITL", async () => {
+  let llmHits = 0;
+  const { engine, jobs, root } = codingStack({
+    llm: {
+      complete: async () => {
+        llmHits += 1;
+        return { content: "no", tool_calls: [] };
+      },
+    },
+    ops: {
+      listOpenHandsSandboxes: async () => [
+        {
+          id: "abc123def456",
+          name: "oh-agent-server-zombie",
+          running: true,
+          status: "Up 23 hours",
+          exitCode: null,
+        },
+        {
+          id: "aaa111bbb222",
+          name: "oh-agent-server-dead",
+          running: false,
+          status: "Exited (137) 1 minute ago",
+          exitCode: 137,
+        },
+      ],
+      memorySnapshot: async () => ({ usedMiB: 3600, limitMiB: 3826 }),
+    },
+  });
+  jobs.enqueue({
+    type: "code",
+    chatId: "53",
+    payload: { slug: "hbauzan-semantic-firewall" },
+    log: [
+      "OpenHands arrancó (task 94135884d0f84143aa95d700e70ea645).",
+      "OpenHands arrancó (task f860e3adbd324a1bbb29e5f746366519).",
+    ],
+  });
+  jobs.update(jobs.list({ chatId: "53" })[0].id, { status: "done" });
+  const spoken = await engine.handleChat({ chat_id: "53", text: "Murray, qué pasa?" });
+  assert.equal(llmHits, 0);
+  assert.equal(spoken.needs_hitl, true);
+  assert.equal(spoken.hitl.action, "heal_openhands");
+  assert.match(spoken.hitl.approve_data, /^APPROVE_OPS:[a-f0-9]{16}$/);
+  assert.match(spoken.reply, /zombie_sandbox|sandbox_oom_137|double_start/);
+  assert.equal(spoken.reply.includes("ConversationStateUpdateEvent"), false);
+  const slash = await engine.handleChat({ chat_id: "53", text: "/triage" });
+  assert.equal(llmHits, 0);
+  assert.equal(slash.needs_hitl, true);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("healOpenHands solo rm oh-agent-server y restart openhands", async () => {
+  const seen = [];
+  const ops = createOps({
+    runCommand: async (args) => {
+      seen.push(args);
+      if (args[0] === "ps") {
+        return {
+          code: 0,
+          stdout: [
+            "abc123def456 oh-agent-server-foo Exited (137) 1 minute ago",
+            "ffffeeeeaaaa murray-postgres Up 2 days",
+            "bbbbccccdddd murray-openhands Up 2 days",
+          ].join("\n"),
+          stderr: "",
+        };
+      }
+      return { code: 0, stdout: "ok", stderr: "" };
+    },
+    project: "murray-infra",
+    composeFile: "/opt/stack/docker-compose.yml",
+    projectDir: "/opt/stack",
+  });
+  const result = await ops.healOpenHands();
+  assert.deepEqual(result.removed, ["oh-agent-server-foo"]);
+  const rm = seen.find((args) => args[0] === "rm");
+  assert.deepEqual(rm, ["rm", "-f", "abc123def456"]);
+  assert.equal(seen.some((args) => args.includes("murray-postgres")), false);
+  assert.equal(seen.some((args) => args.includes("ffffeeeeaaaa")), false);
+  assert.equal(seen.some((args) => args.includes("restart") && args.at(-1) === "openhands"), true);
+});
+
+test("executeOps heal_openhands purga y restart; reject no toca Docker", async () => {
+  const seen = [];
+  const approvals = createApprovalStore();
+  const ops = createOps({
+    runCommand: async (args) => {
+      seen.push(args);
+      if (args[0] === "ps") {
+        return { code: 0, stdout: "", stderr: "" };
+      }
+      return { code: 0, stdout: "restarted", stderr: "" };
+    },
+  });
+  const engine = createChatEngine({
+    ops,
+    approvals,
+    memory: memoryStub(),
+    llm: { complete: async () => ({ content: "no", tool_calls: [] }) },
+    gmailMeta: async () => ({ unread_count: 0 }),
+    readDoc: () => "",
+    personaText: "x",
+  });
+  const id = approvals.issue({ kind: "ops", action: "heal_openhands", service: "openhands" });
+  const rejected = await engine.rejectOps({ approval_id: id });
+  assert.match(rejected.reply, /RECHAZADA/);
+  assert.equal(seen.length, 0);
+  const id2 = approvals.issue({ kind: "ops", action: "heal_openhands", service: "openhands" });
+  const done = await engine.executeOps({ approval_id: id2 });
+  assert.match(done.reply, /heal_openhands/);
+  assert.equal(seen.some((args) => args.includes("restart")), true);
+  assert.equal(seen.some((args) => args[0] === "rm"), false);
+});
+
+test("propose_ops del LLM no acepta heal_openhands", async () => {
+  const { engine } = makeEngine();
+  const result = await engine.dispatchTool(
+    "propose_ops",
+    { action: "heal_openhands", service: "openhands" },
+    { chatId: "99" }
+  );
+  assert.equal(result.needs_hitl, undefined);
+  assert.equal(result.payload.error, "action_denied");
 });

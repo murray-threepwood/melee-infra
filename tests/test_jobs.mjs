@@ -157,3 +157,30 @@ test("find por job id, conversationId y startTaskId; paused es terminal", async 
   assert.equal(hits.length, 0);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("kick concurrente corre el handler una sola vez", async () => {
+  const { dir, store } = tmpStore();
+  const job = store.enqueue({ type: "code", chatId: "1", payload: { slug: "repo-a" } });
+  let started = 0;
+  let release;
+  const gate = new Promise((resolve) => {
+    release = resolve;
+  });
+  const worker = createJobWorker({
+    store,
+    handlers: {
+      code: async () => {
+        started += 1;
+        await gate;
+      },
+    },
+  });
+  const first = worker.kick(job.id);
+  const second = worker.kick(job.id);
+  await Promise.resolve();
+  assert.equal(started, 1);
+  release();
+  await Promise.all([first, second]);
+  assert.equal(started, 1);
+  fs.rmSync(dir, { recursive: true, force: true });
+});

@@ -461,7 +461,7 @@ inspect_openhands() {
 
     echo -e "\n${CYAN}Contenedores sandbox activos de OpenHands en Docker:${RESET}"
     local sandboxes
-    sandboxes="$(docker ps --filter "name=openhands-runtime" --format "table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}" 2>/dev/null)"
+    sandboxes="$(docker ps --filter "name=oh-agent-server" --format "table {{.ID}}\t{{.Image}}\t{{.Status}}\t{{.Names}}" 2>/dev/null)"
     if [ -n "$sandboxes" ] && [ "$(echo "$sandboxes" | wc -l)" -gt 1 ]; then
         echo "$sandboxes"
     else
@@ -632,7 +632,7 @@ triage_auto_scanner() {
     # 4. Incidente C: Sandboxes huérfanos de OpenHands
     echo -ne "  [4/4] Verificando contenedores huérfanos de OpenHands... "
     local oh_count
-    oh_count="$(docker ps -a --filter "ancestor=ghcr.io/openhands/runtime" --format "{{.ID}}" 2>/dev/null | wc -l | tr -d ' ')"
+    oh_count="$(docker ps -a --filter "name=oh-agent-server" --format "{{.ID}}" 2>/dev/null | wc -l | tr -d ' ')"
     if [ "$oh_count" -gt 3 ]; then
         echo -e "${YELLOW}⚠️ Advertencia: Hay ${oh_count} sandboxes registrados en Docker.${RESET}"
         echo -e "        ${DIM}Usa la opción 13 del menú para purgar contenedores temporales.${RESET}"
@@ -817,7 +817,7 @@ clean_menu() {
         3)
             echo -e "\n${YELLOW}Buscando y purgando sandboxes huérfanos de OpenHands...${RESET}"
             local orphans
-            orphans="$(docker ps -a --filter "ancestor=ghcr.io/openhands/runtime" -q)"
+            orphans="$(docker ps -a --filter "name=oh-agent-server" -q)"
             if [ -n "$orphans" ]; then
                 # shellcheck disable=SC2086
                 docker rm -f $orphans

@@ -59,6 +59,19 @@ export function extractJobRefs(text) {
   return { jobId, ohId, ref: jobId || ohId };
 }
 
+export function isTriageIntent(text) {
+  let t = String(text || "").trim();
+  t = t.replace(/^\/+/, "");
+  t = t.replace(/^murray[,:\s]+/i, "").trim();
+  t = t.replace(/[?.!]+$/g, "").trim();
+  if (!t || t.length > 140) {
+    return false;
+  }
+  return /^(?:triage|qu[eé] pasa(?:s)?(?: con(?: el)? (?:obrero|openhands|sandbox|la misi[oó]n)?)?|qu[eé] pas[oó](?: con(?: el)? (?:obrero|openhands|sandbox|la misi[oó]n)?)?|diagnostic[áa](?:me|lo)?(?: el obrero)?|c[oó]mo (?:est[áa]|anda) (?:el )?obrero)$/i.test(
+    t
+  );
+}
+
 export function extractJobId(text) {
   return extractJobRefs(text).jobId;
 }
@@ -188,6 +201,9 @@ export function classifyUserText(text, { hasSession = false } = {}) {
   }
   if (isHitlStuck(trimmed)) {
     return { action: "hitl_help" };
+  }
+  if (isTriageIntent(trimmed) && !refs.ref) {
+    return { action: "triage" };
   }
   if (
     DIAGNOSE_INTENT.test(trimmed) ||

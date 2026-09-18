@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import { redact } from "./redact.mjs";
+import { parseMemStats, parseSandboxPs } from "./triage.mjs";
 
 export const ALLOWED_SERVICES = [
   "postgres_db",
@@ -9,6 +10,12 @@ export const ALLOWED_SERVICES = [
   "openhands",
   "murray-agent",
 ];
+
+export const OH_SANDBOX_NAME_RE = /^oh-agent-server-/;
+
+export function isOpenHandsSandboxName(name) {
+  return OH_SANDBOX_NAME_RE.test(String(name || "").replace(/^\//, ""));
+}
 
 const FORBIDDEN_TOKENS = new Set([
   "down",
@@ -64,8 +71,31 @@ export function assertAllowedService(service) {
   return name;
 }
 
+function assertHealRmArgs(args, allowedIds) {
+  const tokens = (args || []).map((item) => String(item));
+  if (tokens[0] !== "rm" || tokens[1] !== "-f") {
+    const err = new Error("ops_forbidden: rm");
+    err.code = "ops_forbidden";
+    throw err;
+  }
+  const allow = new Set((allowedIds || []).map(String));
+  const ids = tokens.slice(2);
+  if (!ids.length) {
+    const err = new Error("ops_forbidden: rm sin ids");
+    err.code = "ops_forbidden";
+    throw err;
+  }
+  for (const id of ids) {
+    if (!allow.has(id) || !/^[a-f0-9]{6,64}$/i.test(id)) {
+      const err = new Error(`ops_forbidden: rm ${id}`);
+      err.code = "ops_forbidden";
+      throw err;
+    }
+  }
+  return tokens;
+}
+
 function defaultRunCommand(args, { timeoutMs = 45000 } = {}) {
-  assertSafeComposeArgs(args);
   return new Promise((resolve, reject) => {
     const child = spawn("docker", args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -144,6 +174,49 @@ export function createOps({
         "--no-deps",
         name,
       ]);
+    },
+    async listOpenHandsSandboxes() {
+      const result = await runCommand([
+        "ps",
+        "-a",
+        "--filter",
+        "name=oh-agent-server",
+        "--format",
+        "{{.ID}} {{.Names}} {{.Status}}",
+      ]);
+      return parseSandboxPs(result.stdout || "").filter((row) =>
+        isOpenHandsSandboxName(row.name)
+      );
+    },
+    async memorySnapshot() {
+      const result = await runCommand([
+        "stats",
+        "--no-stream",
+        "--format",
+        "{{.Name}}\t{{.MemUsage}}",
+      ]);
+      return parseMemStats(result.stdout || "");
+    },
+    async healOpenHands() {
+      const sandboxes = await this.listOpenHandsSandboxes();
+      const targets = sandboxes.filter((row) => isOpenHandsSandboxName(row.name));
+      const removed = [];
+      if (targets.length) {
+        const ids = targets.map((row) => row.id);
+        const rmArgs = assertHealRmArgs(["rm", "-f", ...ids], ids);
+        const rm = await runCommand(rmArgs);
+        removed.push(...targets);
+        if (rm.code !== 0) {
+          const err = new Error(rm.stderr || "heal_rm_failed");
+          err.code = "heal_rm_failed";
+          throw err;
+        }
+      }
+      const restarted = await this.restart("openhands");
+      return {
+        removed: removed.map((row) => row.name),
+        restart: restarted,
+      };
     },
   };
 }
