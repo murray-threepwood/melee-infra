@@ -101,8 +101,13 @@
 
 ### Incidente S: OpenHands PAUSED / «error: 23» / misión lista falsa
 - Causa: sandbox `PAUSED` + `execution_status` null no es finished. El poll viejo reencolaba y `/jobs` mostraba `error: 23` de un GET transitorio. Murray no avisaba hasta que el CEO preguntaba.
-- Verificación: con misión en vuelo, Murray manda Telegram al pausar, trancar o terminar. `/jobs` o «qué pasó» + UUID 32 hex diagnostica `sandbox=PAUSED`. Árbol sucio → status `paused` (no HITL stuck). Limpio → teclado Reintentar/Parar. `seguí con L01` re-arma HITL. `node --test tests/test_jobs.mjs tests/test_coding_session.mjs tests/test_murray_agent_http.mjs`.
+- Verificación: con misión en vuelo, Murray manda Telegram al pausar, trancar o terminar. `/triage` o «qué pasa» diagnostica el obrero. `/jobs` o UUID 32 hex diagnostica un job (`sandbox=PAUSED`). Árbol sucio → status `paused` (no HITL stuck). Limpio → teclado Reintentar/Parar. `seguí con L01` re-arma HITL. `node --test tests/test_jobs.mjs tests/test_coding_session.mjs tests/test_murray_agent_http.mjs`.
 - Mitigación: `docker compose up -d --force-recreate murray-agent`. El worker drena `oh_poll` queued y corta PAUSED. No fingir «misión lista». Si hay diff: `commiteá`. Si no: Reintentar o `seguí`.
+
+### Incidente T: OpenHands sandbox_error / 137 / dos arranques / «misión lista» vacía
+- Causa: `kick` duplicado arrancaba dos `oh-agent-server`; Docker Desktop ~3.8 GiB los mata (exit 137); `finished` + git vacío se vendía como listo. El panel buscaba `openhands-runtime` y no veía los hijos.
+- Verificación: Telegram `/triage` o «qué pasa» (sin LLM). Hallazgos `double_start`, `sandbox_oom_137`, `zombie_sandbox`, `empty_finish`, `sandbox_busy`. HITL Aprobar = `heal_openhands` (rm solo `oh-agent-server-*` + restart `openhands`). UUID suelto sigue siendo `/jobs <id>`. `node --test tests/test_triage.mjs tests/test_jobs.mjs tests/test_coding_session.mjs tests/test_murray_agent_http.mjs`.
+- Mitigación: Aprobar el heal, o `./el_corazon_de_Murray.sh` menú 3. No Reintentar a ciegas (otro 429). BGE-M3 / N=100 no corre en el sandbox Linux: medilo en el Mac. `docker compose up -d --force-recreate murray-agent` para el conductor nuevo.
 
 ### Incidente O: Murray no contesta / 403 en ops
 - Causa 1: `murray-agent` unhealthy o n8n no publicado con `/chat`.

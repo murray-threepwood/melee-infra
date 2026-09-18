@@ -140,6 +140,7 @@ export function createEngineFromEnv() {
     approvals,
     openhands,
     telegram,
+    ops,
     worker: {
       kick(id) {
         return workerRef.current ? workerRef.current.kick(id) : Promise.resolve(null);

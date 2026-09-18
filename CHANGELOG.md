@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.13 — Triage del obrero y cortes de doble sandbox
+
+- `/triage` y «qué pasa» (sin LLM) diagnostican sandboxes `oh-agent-server-*`, OOM 137, doble start y git vacío. Si hay que sanar: HITL `heal_openhands` (purga solo esos nombres + restart `openhands`). `propose_ops` del LLM no puede inventar ese action.
+- El worker de jobs no relanza un `kick` en vuelo: dos arranques de OpenHands en el mismo job ya no pasan. `finished` con git vacío es `empty_finish`, no «misión lista». ≥2 sandboxes vivos → `sandbox_busy`.
+- El panel `el_corazon_de_Murray.sh` lista y purga `oh-agent-server-*` (ya no el ancestor `runtime` fantasma).
+
 ## 0.1.12 — Conductor: aviso al pausar/trancar/terminar
 
 - OpenHands `sandbox PAUSED` ya no se finge «misión lista». Árbol sucio → Telegram de pausa + commit; limpio o sin archivo → stuck HITL (Reintentar/Parar).

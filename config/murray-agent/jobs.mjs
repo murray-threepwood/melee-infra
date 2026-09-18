@@ -261,33 +261,57 @@ export function createJobWorker({
 } = {}) {
   let timer = null;
   let busy = false;
+  const inFlight = new Map();
 
-  async function kick(jobId) {
-    const job = store.get(jobId);
+  function kick(jobId) {
+    const id = String(jobId || "");
+    const job = store.get(id);
     if (!job) {
-      return null;
+      return Promise.resolve(null);
     }
     if (TERMINAL.has(job.status)) {
-      return job;
+      return Promise.resolve(job);
     }
-    const handler = handlers[job.type];
-    if (!handler) {
-      store.update(jobId, {
-        status: "failed",
-        error: `unknown_job_type:${job.type}`,
-      });
-      return store.get(jobId);
+    if (inFlight.has(id)) {
+      return inFlight.get(id);
     }
-    store.update(jobId, { status: "running", error: "" });
-    try {
-      await handler(store.get(jobId));
-    } catch (err) {
-      store.update(jobId, {
-        status: "failed",
-        error: err.code || err.message || "job_failed",
-      });
-    }
-    return store.get(jobId);
+    let settle;
+    const pending = new Promise((resolve, reject) => {
+      settle = { resolve, reject };
+    });
+    inFlight.set(id, pending);
+    (async () => {
+      try {
+        const current = store.get(id);
+        if (!current || TERMINAL.has(current.status)) {
+          settle.resolve(current);
+          return;
+        }
+        const handler = handlers[current.type];
+        if (!handler) {
+          store.update(id, {
+            status: "failed",
+            error: `unknown_job_type:${current.type}`,
+          });
+          settle.resolve(store.get(id));
+          return;
+        }
+        if (current.status !== "running") {
+          store.update(id, { status: "running", error: "" });
+        }
+        await handler(store.get(id));
+        settle.resolve(store.get(id));
+      } catch (err) {
+        store.update(id, {
+          status: "failed",
+          error: err.code || err.message || "job_failed",
+        });
+        settle.resolve(store.get(id));
+      } finally {
+        inFlight.delete(id);
+      }
+    })();
+    return pending;
   }
 
   async function drain() {

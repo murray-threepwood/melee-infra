@@ -5,6 +5,19 @@ function deny(code, message, status = 502) {
   throw err;
 }
 
+export function gitChangeCount(changes) {
+  if (!changes) {
+    return 0;
+  }
+  if (Array.isArray(changes.items)) {
+    return changes.items.length;
+  }
+  if (Array.isArray(changes)) {
+    return changes.length;
+  }
+  return 0;
+}
+
 export function consecutiveFailedCommands(events = []) {
   const fails = [];
   for (const event of events) {

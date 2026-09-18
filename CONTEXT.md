@@ -30,6 +30,12 @@ Fila async en `jobs.json`: clone, code, oh_poll, pull, push, delete, checkout. S
 ## Coding session
 Loop HITL por Telegram: clonar un repo público/privado (token en `.env`) a `./workspace/<slug>`, preguntar, editar/testear con OpenHands, y (con Aprobar) pushear una rama feature o borrar paths bajo `./workspace`. Stuck → opciones (retry/cambiar/parar/log).
 
+## Triage
+Diagnóstico del obrero OpenHands sin LLM. Frase canónica `/triage`; hablado: «qué pasa», «qué pasa con el obrero», «diagnosticá». Resume jobs, sandboxes `oh-agent-server-*`, git del slug y RAM Docker. No vuelca eventos JSON. Sanar (purgar sandboxes + restart openhands) pide HITL `heal_openhands`.
+
+## empty_finish
+OpenHands `finished` con `git changes` vacío y working tree limpio. No es misión lista: job `stuck` + teclado. Casi siempre el obrero ni tocó el repo.
+
 _Avoid_: llamar “MCP” al workflow n8n; el MCP es el servicio `workspace-mcp`.
 _Avoid_: mapear Postgres a `0.0.0.0`.
 _Avoid_: segundo bot Telegram / segundo webhook.

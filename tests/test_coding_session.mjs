@@ -77,7 +77,12 @@ test("classify: estado de jobs no va al LLM de código", () => {
     extractJobRefs("fijate el bff74f890aed3d41").ref,
     "bff74f890aed3d41"
   );
-  assert.equal(classifyUserText("qué pasó").action, "diagnose_job");
+  assert.equal(classifyUserText("qué pasó").action, "triage");
+  assert.equal(classifyUserText("qué pasa").action, "triage");
+  assert.equal(classifyUserText("Murray, qué pasa?").action, "triage");
+  assert.equal(classifyUserText("qué pasa con el obrero").action, "triage");
+  assert.equal(classifyUserText("diagnosticá").action, "triage");
+  assert.equal(classifyUserText("triage").action, "triage");
   assert.equal(
     classifyUserText("en qué quedó task 460fdf35f8e54fb996d8c52d9eb01057").action,
     "diagnose_job"

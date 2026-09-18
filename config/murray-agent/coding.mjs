@@ -1,7 +1,8 @@
 import { classifyUserText, extractTestCommand, isAffirmative, isHitlStuck, isResumeMission } from "./intent.mjs";
 import { formatJobDetail, formatJobsSummary, jobsHint } from "./jobs.mjs";
-import { detectStuck, isAgentDone, isSandboxPaused, summarizeEvents } from "./openhands.mjs";
+import { detectStuck, gitChangeCount, isAgentDone, isSandboxPaused, summarizeEvents } from "./openhands.mjs";
 import { packHitl, packHitlHelp, packReply } from "./reply.mjs";
+import { analyzeSnapshot, formatTriage } from "./triage.mjs";
 import { stuckKeyboard } from "./telegram.mjs";
 import { parseHttpsGitUrl } from "./workspace.mjs";
 
@@ -59,6 +60,7 @@ export function createCodingSession({
   approvals,
   openhands,
   telegram,
+  ops,
   now = () => Date.now(),
   pollDelayMs = 4000,
   missionMaxMs = 12 * 60 * 1000,
@@ -348,6 +350,9 @@ export function createCodingSession({
         create: Boolean(verdict.create),
       });
     }
+    if (verdict.action === "triage") {
+      return runTriage({ chatId });
+    }
     if (verdict.action === "list_jobs" || verdict.action === "diagnose_job") {
       return describeJobs({
         chatId,
@@ -563,10 +568,91 @@ export function createCodingSession({
     return job;
   }
 
+  async function listOhSandboxes() {
+    if (!ops || typeof ops.listOpenHandsSandboxes !== "function") {
+      return [];
+    }
+    try {
+      return await ops.listOpenHandsSandboxes();
+    } catch {
+      return [];
+    }
+  }
+
+  async function runTriage({ chatId }) {
+    const listed = typeof jobs.list === "function" ? jobs.list({ chatId, limit: 20 }) : [];
+    const sess = session.get(chatId) || {};
+    let git = { files: [] };
+    try {
+      if (sess.slug && workspace && typeof workspace.status === "function") {
+        git = await workspace.status(sess.slug);
+      }
+    } catch {
+      git = { files: [] };
+    }
+    const sandboxes = await listOhSandboxes();
+    let mem = {};
+    if (ops && typeof ops.memorySnapshot === "function") {
+      try {
+        mem = await ops.memorySnapshot();
+      } catch {
+        mem = {};
+      }
+    }
+    let live = {};
+    const poll = listed.find((row) => row.type === "oh_poll" && row.payload?.conversationId);
+    if (poll?.payload?.conversationId && openhands && typeof openhands.getConversation === "function") {
+      try {
+        const conv = await openhands.getConversation(poll.payload.conversationId);
+        live = {
+          sandbox: conv?.sandbox_status,
+          exec: conv?.execution_status,
+        };
+      } catch {
+        live = {};
+      }
+    }
+    const report = analyzeSnapshot({ jobs: listed, sandboxes, git, mem, live });
+    const extra = live.sandbox
+      ? `\nlive: sandbox=${live.sandbox} exec=${live.exec ?? "null"}`
+      : "";
+    const text = `${formatTriage(report)}${extra}`;
+    if (report.heal?.action === "heal_openhands" && approvals && typeof approvals.issue === "function") {
+      const approvalId = approvals.issue({
+        kind: "ops",
+        action: "heal_openhands",
+        service: "openhands",
+      });
+      return packHitl(
+        `${text}\nTocá Aprobar. Rechazar no toca Docker.`,
+        {
+          kind: "ops",
+          approval_id: approvalId,
+          action: "heal_openhands",
+          service: "openhands",
+          approve_data: `APPROVE_OPS:${approvalId}`,
+          reject_data: `REJECT_OPS:${approvalId}`,
+        }
+      );
+    }
+    return packReply(text);
+  }
+
   async function handleCodeJob(job) {
-    const payload = job.payload || {};
+    const fresh = jobs.get(job.id) || job;
+    const payload = fresh.payload || {};
     const text = missionText(payload);
     try {
+      const sandboxes = await listOhSandboxes();
+      const running = sandboxes.filter((row) => row.running);
+      if (running.length >= 2) {
+        await markStuck(job, "sandbox_busy", []);
+        return;
+      }
+      if (payload.startTaskId && !payload.followUp) {
+        jobs.update(job.id, { status: "done" });
+        return;
+      }
       if (payload.followUp && payload.conversationId) {
         try {
           await openhands.sendMessage(payload.conversationId, text);
@@ -589,7 +675,14 @@ export function createCodingSession({
         text,
       });
       const startTaskId = task.id || task.start_task_id || "";
-      jobs.update(job.id, { status: "done" });
+      jobs.update(job.id, {
+        status: "done",
+        payload: {
+          ...payload,
+          startTaskId,
+          conversationId: task.app_conversation_id || payload.conversationId || "",
+        },
+      });
       enqueuePoll(job.chatId, {
         startTaskId,
         conversationId: task.app_conversation_id || "",
@@ -629,7 +722,11 @@ export function createCodingSession({
     });
     await notifyJob(
       job,
-      `Me trancé (${reason}) en ${payload.slug}. No sigo solo. Elegí: Reintentar / Cambiar instrucción / Parar / Ver log.`,
+      reason === "sandbox_busy"
+        ? `Me trancé (sandbox_busy) en ${payload.slug}. Hay sandboxes oh-agent-server vivos; no arranco otro. /triage para sanar con HITL.`
+        : reason === "empty_finish"
+          ? `Me trancé (empty_finish) en ${payload.slug}. OpenHands dijo finished y el árbol quedó limpio. No es misión lista. /triage.`
+        : `Me trancé (${reason}) en ${payload.slug}. No sigo solo. Elegí: Reintentar / Cambiar instrucción / Parar / Ver log.`,
       stuckKeyboard(hitl.approval_id)
     );
   }
@@ -726,6 +823,19 @@ export function createCodingSession({
         sandboxStatus: conversation?.sandbox_status,
       })) {
         const changes = await openhands.gitChanges(conversationId);
+        let files = [];
+        try {
+          if (payload.slug && workspace && typeof workspace.status === "function") {
+            const st = await workspace.status(payload.slug);
+            files = Array.isArray(st.files) ? st.files : [];
+          }
+        } catch {
+          files = [];
+        }
+        if (gitChangeCount(changes) === 0 && files.length === 0) {
+          await markStuck(job, "empty_finish", events);
+          return;
+        }
         const changeText = JSON.stringify(changes).slice(0, 800);
         const summary = summarizeEvents(events);
         jobs.update(job.id, { status: "done", error: "" });
@@ -977,6 +1087,7 @@ export function createCodingSession({
     startCheckout,
     describeWorkspace,
     describeJobs,
+    triage: runTriage,
     handleHitl,
     handlers,
     parseWorkspaceCallback,
