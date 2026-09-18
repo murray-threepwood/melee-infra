@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.14 — Exportación de blueprint y especificación determinista para IA
+
+- Opción 14 agregada a `el_corazon_de_Murray.sh` con submenú interactivo (visualización en pager, guardado en `MURRAY_SYSTEM_BLUEPRINT_FOR_AI.md`, copia al clipboard de macOS con `pbcopy` y volcado directo).
+- Soporte de flags CLI (`--export-spec`, `--spec`, `--ai-spec`, `--ai-blueprint`, `14`) para piping a stdout.
+- Blueprint arquitectónico y de implementación completo redactado en inglés (10 secciones): invariantes Zero Trust, contratos Compose de 6 servicios, guardrail Draft-Only en Gmail, orquestador DeepSeek con jail git y tokens HITL ≤64b, lifecycle OpenHands 1.11 (`oh-agent-server-*`), router n8n (`parse_mode=HTML`), matriz de triage y runbook determinista de recreación paso a paso.
+
 ## 0.1.13 — Triage del obrero y cortes de doble sandbox
 
 - `/triage` y «qué pasa» (sin LLM) diagnostican sandboxes `oh-agent-server-*`, OOM 137, doble start y git vacío. Si hay que sanar: HITL `heal_openhands` (purga solo esos nombres + restart `openhands`). `propose_ops` del LLM no puede inventar ese action.
