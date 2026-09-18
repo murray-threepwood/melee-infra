@@ -130,6 +130,7 @@ Desde este panel interactivo podés:
 - **Capa 2 (Infraestructura)**: Monitorear el estado de salud (`healthy`/`sick`/`down`), seguir logs en vivo coloreados por servicio y vigilar el presupuesto de RAM (<4.5 GB).
 - **Capa 3 (Workflows & Errores)**: Inspeccionar ejecuciones de n8n en Postgres y ejecutar el scanner automático de incidentes del RUNBOOK.
 - **Mantenimiento**: Limpiezas quirúrgicas de repos, reinicio de memoria del agente, purga de sandboxes de OpenHands o reconstrucción total del stack.
+- **Exportación para IA (Opción 14 / `--export-spec`)**: Emisión del blueprint y especificación técnica exhaustiva en inglés para recreación determinista del stack por otra IA.
 
 ### 3. Ejecutar la Suite de Pruebas End-to-End
 ```bash
