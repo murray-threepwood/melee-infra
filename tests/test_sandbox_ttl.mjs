@@ -55,6 +55,10 @@ test("isCodeFlight true bloquea la decisión del watcher", () => {
     true
   );
   assert.equal(
+    isCodeFlight([{ id: "1", type: "oh_poll", status: "queued" }]),
+    true
+  );
+  assert.equal(
     isCodeFlight([{ id: "1", type: "code", status: "done" }]),
     false
   );
@@ -110,6 +114,31 @@ test("kick code sin vuelo llama purge; pull no; otro running no", async () => {
   assert.equal(purged.length, 1);
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("tick: oh_poll queued también bloquea el watcher", async () => {
+  const rows = [
+    { id: "aaa111", name: "oh-agent-server-old", createdAt: NOW - 31 * 60 * 1000 },
+  ];
+  const purged = [];
+  const janitor = createSandboxJanitor({
+    store: {
+      running: ({ statuses } = {}) => {
+        if (statuses && statuses.includes("queued")) {
+          return [{ id: "1", type: "oh_poll", status: "queued" }];
+        }
+        return [];
+      },
+    },
+    now: () => NOW,
+    list: async () => rows,
+    purge: async (ids) => {
+      purged.push(ids);
+      return { removed: ids };
+    },
+  });
+  await janitor.tick();
+  assert.equal(purged.length, 0);
 });
 
 test("tick: vuelo no purge; 31 min sí; 10 min no", async () => {

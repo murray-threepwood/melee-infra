@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.19 — Conductor de Garfio no abandona una misión viva
+
+- Timeout de 12 min **no** aplica si el sandbox sigue `RUNNING` (tope duro 4 h).
+- `finished` con árbol limpio y commits ahead es misión lista, no `empty_finish`.
+- `oh_poll` `queued` cuenta como vuelo: el TTL no mata el sandbox a mitad de faena.
+- `MURRAY_TELEGRAM_QUIET` silencia progreso; pausa / tranca / fin sí suenan.
+
+## 0.1.18 — Secrets de Garfio sin prefijo LLM_
+
+- Causa: `POST /api/v1/app-conversations` con `secrets.LLM_API_KEY` → OpenHands 1.36 `validate_secret_name` → start-task ERROR → poll `start_error`.
+- `conversationSecrets()` manda solo `OPENAI_API_KEY`. El sandbox sigue tomando la key por `OH_AGENT_SERVER_ENV` (P10).
+
+## 0.1.17 — Sandbox de Garfio alcanza LiteLLM y el repo
+
+- Causa: `oh-agent-server` en Docker `bridge` no resuelve `litellm`, no tenía `OPENAI_API_KEY`, y `WORKSPACE_MOUNT_PATH=./workspace` no montaba `./workspace`. El poll quedaba `stuck`/`error` a los pocos segundos.
+- LiteLLM sale a `127.0.0.1:4000`. OpenHands usa `host.docker.internal` + `OPENAI_API_KEY`. Mount absoluto + `SANDBOX_VOLUMES`.
+- `MURRAY_HITL_BYPASS=code,clone` y `MURRAY_TELEGRAM_QUIET=1` (ventana permisiva, inventario en `roadmap/91_PERMISSIVE_WINDOW.md`).
+
 ## 0.1.16 — OpenHands habla OpenAI-compat al proxy
 
 - `LLM_MODEL=openai/garfio-worker`. El SDK de OpenHands exige el prefijo `openai/` o muere con `LLM Provider NOT provided`.

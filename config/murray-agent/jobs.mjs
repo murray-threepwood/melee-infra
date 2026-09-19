@@ -299,13 +299,15 @@ export function createJobStore({
     return selectDue.all(Number(now)).map(rowToJob);
   }
 
-  function running({ types } = {}) {
+  function running({ types, statuses } = {}) {
     const allow = types ? new Set(types) : null;
+    const st =
+      statuses && statuses.length ? new Set(statuses) : new Set(["running"]);
     return selectAll
       .all()
       .map(rowToJob)
       .filter((job) => {
-        if (job.status !== "running") {
+        if (!st.has(job.status)) {
           return false;
         }
         if (allow && !allow.has(job.type)) {

@@ -1,6 +1,7 @@
+import { parseHitlBypass, shouldBypassHitl } from "./hitl-policy.mjs";
 import { classifyUserText, extractTestCommand, isAffirmative, isHitlStuck, isResumeMission } from "./intent.mjs";
 import { formatJobDetail, formatJobsSummary, jobsHint } from "./jobs.mjs";
-import { detectStuck, extractGarfioRationale, gitChangeCount, isAgentDone, isSandboxPaused, summarizeEvents } from "./openhands.mjs";
+import { detectStuck, extractGarfioRationale, isAgentDone, isSandboxPaused, missionHasDeliverable, summarizeEvents } from "./openhands.mjs";
 import { packHitl, packHitlHelp, packReply } from "./reply.mjs";
 import { analyzeSnapshot, formatTriage } from "./triage.mjs";
 import { stuckKeyboard } from "./telegram.mjs";
@@ -46,7 +47,8 @@ function denied(message = "approval_id inválido, usado o vencido") {
 function missionText({ slug, instruction, testCommand }) {
   return [
     "Misión Garfio (Obrero Mecánico Senior - OpenHands HITL CEO).",
-    `Repo ya clonado en el mount OpenHands /opt/workspace_base/${slug} (host ./workspace/${slug}).`,
+    `Repo ya clonado. En el sandbox está en /workspace/project/${slug} (a veces /workspace/project si el mount YA es el slug). El host es ./workspace/${slug}.`,
+    "Listá, cd al directorio que tenga roadmap/ y .git, y laburá SOLO ahí.",
     "No clones de nuevo. No hagas git push. No toques murray-infra ni archivos fuera de ese directorio.",
     `Instrucción: ${instruction}`,
     `Tests a correr: ${testCommand}`,
@@ -64,6 +66,7 @@ export function createCodingSession({
   telegram,
   ops,
   garfioStore,
+  hitlBypass = parseHitlBypass(process.env.MURRAY_HITL_BYPASS),
   now = () => Date.now(),
   pollDelayMs = 4000,
   missionMaxMs = 12 * 60 * 1000,
@@ -90,19 +93,23 @@ export function createCodingSession({
         `Esa URL no pasa el cerrojo: ${err.message}. Solo https://github.com o https://gitlab.com, sin token en la URL.`
       );
     }
-    const hitl = issueHitl("clone", {
+    const item = {
       chatId: String(chatId || ""),
       url: parsed.href,
       slug: parsed.slug,
       host: parsed.host,
-    });
+    };
+    if (shouldBypassHitl("clone", hitlBypass)) {
+      return startCloneJob(item);
+    }
+    const hitl = issueHitl("clone", item);
     return packHitl(
       `Pido Aprobar clone de ${parsed.href} → ./workspace/${parsed.slug} (shallow, un uso).\nPrivados: el token vive en .env, no en el chat.\nTocá Aprobar. Sin eso no clono.`,
       hitl
     );
   }
 
-  function proposeCode({ chatId, instruction, testCommand, filesPlan }) {
+  async function proposeCode({ chatId, instruction, testCommand, filesPlan }) {
     const sess = session.get(chatId);
     if (!sess.slug) {
       return packReply(
@@ -121,18 +128,22 @@ export function createCodingSession({
         `Repo activo: ${sess.slug}. ¿Con qué comando verifico el cambio? (npm test / pytest / cargo test). Sin eso no disparo OpenHands.`
       );
     }
-    const hitl = issueHitl("code", {
+    const item = {
       chatId: String(chatId || ""),
       slug: sess.slug,
       url: sess.url,
       instruction: instructionText.slice(0, 2000),
       testCommand: tests.slice(0, 400),
       filesPlan: String(filesPlan || "").slice(0, 800),
-    });
+    };
     session.patch(chatId, {
       lastMission: instructionText.slice(0, 2000),
       lastTestCommand: tests.slice(0, 400),
     });
+    if (shouldBypassHitl("code", hitlBypass)) {
+      return startCodeJob(item);
+    }
+    const hitl = issueHitl("code", item);
     return packHitl(
       [
         `Plan (no toqué nada todavía):`,
@@ -252,7 +263,7 @@ export function createCodingSession({
     );
   }
 
-  function recoverCodeHitl({ chatId, text, lastAssistant = "" }) {
+  async function recoverCodeHitl({ chatId, text, lastAssistant = "" }) {
     const sess = session.get(chatId) || {};
     if (!sess.slug) {
       return null;
@@ -276,20 +287,20 @@ export function createCodingSession({
     if (!instruction || instruction.length < 8) {
       return null;
     }
-    const packed = proposeCode({
+    const packed = await proposeCode({
       chatId,
       instruction,
       testCommand: tests,
       filesPlan: "pendiente del obrero",
     });
-    return packed.needs_hitl ? packed : null;
+    return packed.needs_hitl || packed.needs_job ? packed : null;
   }
 
   async function interceptChat({ chatId, text, lastAssistant = "" }) {
     const sess = session.get(chatId) || {};
     if (sess.awaiting_instruction) {
       session.patch(chatId, { awaiting_instruction: false });
-      return proposeCode({
+      return await proposeCode({
         chatId,
         instruction: text,
         testCommand: sess.lastTestCommand || "",
@@ -378,7 +389,7 @@ export function createCodingSession({
       });
     }
     if (verdict.action === "maybe_code_mission") {
-      const recovered = recoverCodeHitl({ chatId, text, lastAssistant });
+      const recovered = await recoverCodeHitl({ chatId, text, lastAssistant });
       if (recovered) {
         return recovered;
       }
@@ -388,7 +399,7 @@ export function createCodingSession({
       });
     }
     if (verdict.action === "confirm_code") {
-      const recovered = recoverCodeHitl({ chatId, text, lastAssistant });
+      const recovered = await recoverCodeHitl({ chatId, text, lastAssistant });
       if (recovered) {
         return recovered;
       }
@@ -398,7 +409,7 @@ export function createCodingSession({
       });
     }
     if (verdict.action === "hitl_help") {
-      const recovered = recoverCodeHitl({ chatId, text, lastAssistant });
+      const recovered = await recoverCodeHitl({ chatId, text, lastAssistant });
       if (recovered) {
         return recovered;
       }
@@ -411,22 +422,22 @@ export function createCodingSession({
     return null;
   }
 
-  async function notify(chatId, text, buttons) {
+  async function notify(chatId, text, buttons, { terminal = false } = {}) {
     if (!telegram || typeof telegram.send !== "function") {
       return;
     }
     try {
-      await telegram.send({ chat_id: chatId, text, buttons });
+      await telegram.send({ chat_id: chatId, text, buttons, terminal });
     } catch {
       // El ACK de n8n ya salió; un fallo de progreso no tumba el job.
     }
   }
 
-  async function notifyJob(job, text, buttons) {
+  async function notifyJob(job, text, buttons, { terminal = false } = {}) {
     if (job?.id && typeof jobs.appendLog === "function") {
       jobs.appendLog(job.id, text);
     }
-    return notify(job.chatId, text, buttons);
+    return notify(job.chatId, text, buttons, { terminal });
   }
 
   function lookupJob(chatId, jobId, { fallbackLast = false } = {}) {
@@ -557,13 +568,17 @@ export function createCodingSession({
           result.reused ? `Repo ya estaba en ./workspace/${result.slug}.` : `Clon listo: ./workspace/${result.slug}`,
           `archivos (cap ${listing.files.length}${listing.truncated ? "+" : ""}). Preguntame por el código.`,
           "No soy Cursor de murray-infra. Pull/commit los hago yo; push pide Aprobar y nunca va a main.",
-        ].join("\n")
+        ].join("\n"),
+        undefined,
+        { terminal: true }
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
       await notifyJob(
         job,
-        `Clone falló (${err.code || "git_clone_failed"}): ${String(err.message || "").slice(0, 400)}`
+        `Clone falló (${err.code || "git_clone_failed"}): ${String(err.message || "").slice(0, 400)}`,
+        undefined,
+        { terminal: true }
       );
     }
   }
@@ -721,7 +736,9 @@ export function createCodingSession({
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
       await notifyJob(
         job,
-        `No pude disparar a Garfio (${err.code || err.message}). Revisá que OpenHands esté healthy.`
+        `No pude disparar a Garfio (${err.code || err.message}). Revisá que OpenHands esté healthy.`,
+        undefined,
+        { terminal: true }
       );
     }
   }
@@ -750,7 +767,8 @@ export function createCodingSession({
         : reason === "empty_finish"
           ? `Me trancé (empty_finish) en ${payload.slug}. OpenHands dijo finished y el árbol quedó limpio. No es misión lista. /triage.`
         : `Me trancé (${reason}) en ${payload.slug}. No sigo solo. Elegí: Reintentar / Cambiar instrucción / Parar / Ver log.`,
-      stuckKeyboard(hitl.approval_id)
+      stuckKeyboard(hitl.approval_id),
+      { terminal: true }
     );
   }
 
@@ -779,7 +797,9 @@ export function createCodingSession({
           `🪝 Garfio pausó en ${slug}. Sandbox PAUSED, no es misión lista.`,
           `Hay cambios sin commit: ${names}${files.length > 8 ? "…" : ""}.`,
           "Si el diff es el trabajo: commiteá. Si querés que siga: escribí seguí / retomá y re-armo HITL.",
-        ].join("\n")
+        ].join("\n"),
+        undefined,
+        { terminal: true }
       );
       return;
     }
@@ -855,7 +875,15 @@ export function createCodingSession({
         } catch {
           files = [];
         }
-        if (gitChangeCount(changes) === 0 && files.length === 0) {
+        let commitsAhead = 0;
+        try {
+          if (payload.slug && workspace && typeof workspace.commitsAhead === "function") {
+            commitsAhead = await workspace.commitsAhead(payload.slug);
+          }
+        } catch {
+          commitsAhead = 0;
+        }
+        if (!missionHasDeliverable({ changes, files, commitsAhead })) {
           await markStuck(job, "empty_finish", events);
           return;
         }
@@ -887,10 +915,14 @@ export function createCodingSession({
             rationale.decisions ? `<b>Racional Técnico y Decisiones:</b>\n${rationale.decisions}` : "",
             rationale.antiPatternsAvoided ? `<b>Humo y Antipatrones Descartados:</b>\n${rationale.antiPatternsAvoided}` : "",
             changeText && changeText !== "{}" ? `git changes: ${changeText}` : "",
-            "Si está bien, pedime commit y después push (HITL, nunca main).",
+            Number(commitsAhead) > 0
+              ? `<b>GitHub:</b> ${commitsAhead} commit(s) en la rama local. NO están pusheados. Pedime push (HITL, nunca main) para abrir PR.`
+              : "Si está bien, pedime commit y después push (HITL, nunca main).",
           ]
             .filter(Boolean)
-            .join("\n\n")
+            .join("\n\n"),
+          undefined,
+          { terminal: true }
         );
         return;
       }

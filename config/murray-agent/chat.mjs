@@ -216,7 +216,7 @@ export function createChatEngine({
     return "";
   }
 
-  function recoverCodeHitl(chatId, text, lastAssistant = "") {
+  async function recoverCodeHitl(chatId, text, lastAssistant = "") {
     if (!coding || typeof coding.recoverCodeHitl !== "function") {
       return null;
     }
@@ -362,14 +362,17 @@ export function createChatEngine({
       }
     }
     if (name === "propose_clone") {
-      const packed = coding.proposeClone({ chatId: ctx.chatId, url: args.url });
+      const packed = await coding.proposeClone({ chatId: ctx.chatId, url: args.url });
       if (packed.needs_hitl) {
         return { needs_hitl: true, hitl: packed.hitl, packed };
+      }
+      if (packed.needs_job) {
+        return { needs_job: true, packed };
       }
       return { payload: { error: "clone_not_proposed", reply: packed.reply } };
     }
     if (name === "propose_code_mission") {
-      const packed = coding.proposeCode({
+      const packed = await coding.proposeCode({
         chatId: ctx.chatId,
         instruction: args.instruction,
         testCommand: args.test_command,
@@ -377,6 +380,9 @@ export function createChatEngine({
       });
       if (packed.needs_hitl) {
         return { needs_hitl: true, hitl: packed.hitl, packed };
+      }
+      if (packed.needs_job) {
+        return { needs_job: true, packed };
       }
       return { payload: { error: "code_not_proposed", reply: packed.reply } };
     }
@@ -548,7 +554,7 @@ export function createChatEngine({
         continue;
       }
       if (looksLikeHitlCopy(out.content)) {
-        const recovered = recoverCodeHitl(chatId, text, out.content);
+        const recovered = await recoverCodeHitl(chatId, text, out.content);
         if (recovered) {
           memory.append(chatId, "user", text);
           memory.append(chatId, "assistant", recovered.reply);

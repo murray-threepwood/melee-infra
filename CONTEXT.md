@@ -49,10 +49,10 @@ Diagnóstico del obrero OpenHands sin LLM. Frase canónica `/triage`; hablado: �
 Tabla de `murray.db` con IDs de Gmail ya procesados (`message_id`, `thread_id`, `processed_at`). Sin asuntos ni cuerpos. El cron pregunta `POST /triage/filter` y marca `POST /triage/mark-seen` solo si el draft respondió 2xx. `workspace-mcp` no guarda vistos.
 
 ## sandbox TTL
-Purga automática de contenedores `oh-agent-server-*` con más de 30 minutos si no hay job `code`/`oh_poll` en vuelo. Watcher cada 5 min. Hook al inicio de un job `code`. No reemplaza el HITL `heal_openhands`.
+Purga automática de contenedores `oh-agent-server-*` con más de 30 minutos si no hay job `code`/`oh_poll` en vuelo (`running` **o** `queued`). Watcher cada 5 min. Hook al inicio de un job `code`. No reemplaza el HITL `heal_openhands`.
 
 ## empty_finish
-OpenHands `finished` con `git changes` vacío y working tree limpio. No es misión lista: job `stuck` + teclado. Casi siempre el obrero ni tocó el repo.
+OpenHands `finished` con `git changes` vacío, working tree limpio **y cero commits** ahead de `main`. No es misión lista: job `stuck` + teclado. Si Garfio ya commiteó en la rama, es misión lista aunque porcelain esté limpio — y hay que decir si eso **no** está en GitHub.
 
 _Avoid_: llamar “MCP” al workflow n8n; el MCP es el servicio `workspace-mcp`.
 _Avoid_: mapear Postgres a `0.0.0.0`.

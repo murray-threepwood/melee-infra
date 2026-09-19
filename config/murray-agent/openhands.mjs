@@ -21,6 +21,16 @@ function deny(code, message, status = 502) {
   throw err;
 }
 
+const SANDBOX_UNREACHABLE_LLM_HOSTS = new Set([
+  "litellm",
+  "openhands",
+  "murray-agent",
+  "n8n",
+  "postgres_db",
+  "workspace-mcp",
+  "cloudflared",
+]);
+
 export function openHandsLlmModel(llmModel) {
   const clean = String(llmModel || "").trim();
   if (!clean) {
@@ -28,6 +38,59 @@ export function openHandsLlmModel(llmModel) {
   }
   return clean.startsWith("openai/") ? clean : `openai/${clean}`;
 }
+
+export function sandboxLlmBaseUrl({
+  baseUrl = process.env.OPENHANDS_SANDBOX_LLM_BASE_URL ||
+    "http://host.docker.internal:4000",
+} = {}) {
+  return assertSandboxReachableLlmBaseUrl(baseUrl);
+}
+
+export function assertSandboxReachableLlmBaseUrl(url) {
+  const raw = String(url || "").trim();
+  let parsed;
+  try {
+    parsed = new URL(raw);
+  } catch {
+    const err = new Error("sandbox_llm_unreachable: URL inválida");
+    err.code = "sandbox_llm_unreachable";
+    throw err;
+  }
+  if (SANDBOX_UNREACHABLE_LLM_HOSTS.has(parsed.hostname)) {
+    const err = new Error(
+      `sandbox_llm_unreachable: ${parsed.hostname} no resuelve en oh-agent-server (bridge). Usá host.docker.internal.`
+    );
+    err.code = "sandbox_llm_unreachable";
+    throw err;
+  }
+  return raw.replace(/\/+$/, "");
+}
+
+const RESERVED_SECRET_PREFIXES = ["LLM_"];
+
+export function conversationSecrets(llmApiKey) {
+  const key = String(llmApiKey || "").trim();
+  if (!key) {
+    return undefined;
+  }
+  return assertNoReservedSecretNames({ OPENAI_API_KEY: key });
+}
+
+export function assertNoReservedSecretNames(secrets) {
+  for (const name of Object.keys(secrets || {})) {
+    if (RESERVED_SECRET_PREFIXES.some((prefix) => name.startsWith(prefix))) {
+      const err = new Error(
+        `reserved_secret_name: '${name}' starts with reserved prefix and cannot be used`
+      );
+      err.code = "reserved_secret_name";
+      throw err;
+    }
+  }
+  return secrets;
+}
+
+export const DEFAULT_MISSION_MAX_MS = 12 * 60 * 1000;
+export const DEFAULT_MISSION_HARD_MAX_MS = 4 * 60 * 60 * 1000;
 
 export function gitChangeCount(changes) {
   if (!changes) {
@@ -74,13 +137,30 @@ export function consecutiveFailedCommands(events = []) {
   return { repeats, command: last };
 }
 
+export function missionHasDeliverable({ changes, files, commitsAhead } = {}) {
+  if (gitChangeCount(changes) > 0) {
+    return true;
+  }
+  if (Array.isArray(files) && files.length > 0) {
+    return true;
+  }
+  return Number(commitsAhead) > 0;
+}
+
+function sandboxIsLive(executionStatus, sandboxStatus) {
+  const status = String(executionStatus || "").toLowerCase();
+  const sandbox = String(sandboxStatus || "").toUpperCase();
+  return sandbox === "RUNNING" || status === "running";
+}
+
 export function detectStuck({
   executionStatus = "",
   sandboxStatus = "",
   events = [],
   startedAt = Date.now(),
   now = Date.now(),
-  maxMs = 12 * 60 * 1000,
+  maxMs = DEFAULT_MISSION_MAX_MS,
+  hardMaxMs = DEFAULT_MISSION_HARD_MAX_MS,
   maxRepeats = 3,
 } = {}) {
   const status = String(executionStatus || "").toLowerCase();
@@ -94,7 +174,11 @@ export function detectStuck({
   if (sandbox === "ERROR") {
     return { stuck: true, reason: "sandbox_error" };
   }
-  if (now - Number(startedAt || 0) > maxMs) {
+  const elapsed = now - Number(startedAt || 0);
+  if (elapsed > Number(hardMaxMs || DEFAULT_MISSION_HARD_MAX_MS)) {
+    return { stuck: true, reason: "timeout" };
+  }
+  if (elapsed > maxMs && !sandboxIsLive(status, sandbox)) {
     return { stuck: true, reason: "timeout" };
   }
   const loop = consecutiveFailedCommands(events);
@@ -205,6 +289,7 @@ export function extractGarfioRationale(events = []) {
 
 export function createOpenHandsClient({
   baseUrl = process.env.OPENHANDS_URL || "http://openhands:3000",
+  llmApiKey = process.env.LITELLM_MASTER_KEY || "",
   fetchImpl = fetch,
   timeoutMs = 20000,
 } = {}) {
@@ -267,6 +352,10 @@ export function createOpenHandsClient({
     const prefixed = openHandsLlmModel(llmModel);
     if (prefixed) {
       body.llm_model = prefixed;
+    }
+    const secrets = conversationSecrets(llmApiKey);
+    if (secrets) {
+      body.secrets = secrets;
     }
     return request("POST", "/api/v1/app-conversations", { body });
   }

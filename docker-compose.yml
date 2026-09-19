@@ -105,6 +105,9 @@ services:
     security_opt:
       - "no-new-privileges:true"
     command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      # PERMISSIVE (roadmap/91): el sandbox oh-agent-server vive en bridge y no resuelve `litellm`.
+      - "127.0.0.1:${LITELLM_PORT:-4000}:4000"
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
@@ -154,6 +157,8 @@ services:
       - MURRAY_WORKSPACE_ROOT=/opt/workspace
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - MURRAY_HITL_BYPASS=${MURRAY_HITL_BYPASS:-code,clone}
+      - MURRAY_TELEGRAM_QUIET=${MURRAY_TELEGRAM_QUIET:-1}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - GITLAB_TOKEN=${GITLAB_TOKEN:-}
       - MURRAY_GIT_NAME=${MURRAY_GIT_NAME:-}
@@ -193,12 +198,23 @@ services:
       - "no-new-privileges:true"
     environment:
       - SANDBOX_RUNTIME_CONTAINER_IMAGE=ghcr.io/openhands/runtime:latest
-      - WORKSPACE_MOUNT_PATH=./workspace
+      # PERMISSIVE (roadmap/91): path absoluto. `./workspace` deja el sandbox SIN mounts.
+      - WORKSPACE_MOUNT_PATH=${WORKSPACE_HOST_PATH:-${PWD}/workspace}
+      - SANDBOX_VOLUMES=${WORKSPACE_HOST_PATH:-${PWD}/workspace}:/workspace/project:rw
       - LLM_MODEL=openai/garfio-worker
-      - LLM_BASE_URL=http://litellm:4000
+      # PERMISSIVE (roadmap/91): oh-agent-server no resuelve DNS `litellm`. Loopback vía Desktop.
+      - LLM_BASE_URL=http://host.docker.internal:${LITELLM_PORT:-4000}
       - LLM_API_KEY=${LITELLM_MASTER_KEY:-}
+      - OPENAI_API_KEY=${LITELLM_MASTER_KEY:-}
+      - OPENAI_BASE_URL=http://host.docker.internal:${LITELLM_PORT:-4000}
+      # OpenHands 1.36 solo reenvía LLM_* al sandbox. openai/ exige OPENAI_API_KEY ahí.
+      - OH_AGENT_SERVER_ENV={"OPENAI_API_KEY":"${LITELLM_MASTER_KEY:-}","OPENAI_BASE_URL":"http://host.docker.internal:${LITELLM_PORT:-4000}","LITELLM_PROXY_API_KEY":"${LITELLM_MASTER_KEY:-}"}
+      - SANDBOX_ENV_OPENAI_API_KEY=${LITELLM_MASTER_KEY:-}
+      - SANDBOX_ENV_OPENAI_BASE_URL=http://host.docker.internal:${LITELLM_PORT:-4000}
+      - SANDBOX_ENV_LLM_API_KEY=${LITELLM_MASTER_KEY:-}
+      - SANDBOX_ENV_LLM_BASE_URL=http://host.docker.internal:${LITELLM_PORT:-4000}
       - LOG_LEVEL=INFO
-      - MAX_ITERATIONS=30
+      - MAX_ITERATIONS=80
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./workspace:/opt/workspace_base
