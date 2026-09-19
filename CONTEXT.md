@@ -22,10 +22,13 @@ Invariante: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true`. El clic de 
 Runtime de agente de código acotado a `./workspace`, con `no-new-privileges` y socket Docker para sandboxes hijos. Representa a **Garfio (Meathook)**, el obrero mecánico senior de código.
 
 ## Garfio (Meathook)
-Obrero Mecánico e Ingeniero Principal Senior (30+ años IT, AACC 130+ IQ) ejecutando dentro del sandbox OpenHands. Con garfios en lugar de manos y de espaldas a la pantalla, pica código quirúrgico, extermina dependencias superfluas y rinde cuentas a Murray y al CEO. Usa el alias `garfio-worker` en LiteLLM.
+Obrero Mecánico e Ingeniero Principal Senior (30+ años IT, AACC 130+ IQ) ejecutando dentro del sandbox OpenHands. Con garfios en lugar de manos y de espaldas a la pantalla, pica código quirúrgico, extermina dependencias superfluas y rinde cuentas a Murray y al CEO. Por defecto usa el alias `garfio-worker` en LiteLLM, pero Murray puede trasplantarle el cerebro dinámicamente (`/garfio model <modelo>` o `/cerebro <modelo>` o en lenguaje natural: `cambiale el cerebro a garfio por <modelo>`). Shhh: Garfio jamás debe enterarse de que es una criatura ensamblada tipo Frankenstein.
 
 ## garfio_rationales
 Tabla relacional en `murray.db` (SQLite WAL) donde se persisten el resumen, decisiones de arquitectura y humo/antipatrones descartados por Garfio tras cada misión. Consultable vía `/garfio` o `/garfio <slug>`.
+
+## /manual
+Manual operativo interactivo esquemático y condensado que expone todas las herramientas, comandos y flujos disponibles en Murray y Garfio. Consultable vía `/manual`, `/help`, o diciendo `ayuda` / `comandos`.
 
 ## LiteLLM
 Gateway HTTP en `agent-net` (`litellm:4000`). Murray y OpenHands pegan acá, no a `api.deepseek.com`. Primario DeepSeek. Fallback Gemini 3.8 Flash y, si no entra, 2.5 Flash-Lite (AI Studio, no el OAuth de Gmail).

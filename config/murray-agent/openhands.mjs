@@ -246,18 +246,20 @@ export function createOpenHandsClient({
     return { ok: res.ok, status: res.status, body: text.slice(0, 80) };
   }
 
-  async function startConversation({ title, text }) {
+  async function startConversation({ title, text, llmModel }) {
     const mission = String(text || "");
-    return request("POST", "/api/v1/app-conversations", {
-      body: {
-        title: String(title || "garfio-code").slice(0, 80),
-        initial_message: {
-          role: "user",
-          content: [{ type: "text", text: mission }],
-        },
-        system_message_suffix: garfioPersonaText,
+    const body = {
+      title: String(title || "garfio-code").slice(0, 80),
+      initial_message: {
+        role: "user",
+        content: [{ type: "text", text: mission }],
       },
-    });
+      system_message_suffix: garfioPersonaText,
+    };
+    if (llmModel && typeof llmModel === "string" && llmModel.trim()) {
+      body.llm_model = llmModel.trim();
+    }
+    return request("POST", "/api/v1/app-conversations", { body });
   }
 
   async function getStartTask(id) {

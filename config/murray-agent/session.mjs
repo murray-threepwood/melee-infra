@@ -9,12 +9,15 @@ const EMPTY = {
   lastJobId: "",
   awaiting_instruction: false,
   active_model: "",
+  garfio_model: "",
+  garfioModel: "",
 };
 
 function rowToSession(row) {
   if (!row) {
     return { ...EMPTY };
   }
+  const gm = row.garfio_model || "";
   return {
     slug: row.slug || "",
     url: row.url || "",
@@ -24,6 +27,8 @@ function rowToSession(row) {
     lastJobId: row.last_job_id || "",
     awaiting_instruction: Boolean(row.awaiting_instruction),
     active_model: row.active_model || "",
+    garfio_model: gm,
+    garfioModel: gm,
   };
 }
 
@@ -43,14 +48,14 @@ export function createSessionStore({
 
   const select = database.prepare(
     `SELECT slug, url, conversation_id, last_test_command, last_mission,
-            last_job_id, awaiting_instruction, active_model
+            last_job_id, awaiting_instruction, active_model, garfio_model
        FROM session_context WHERE chat_id = ?`
   );
   const upsert = database.prepare(
     `INSERT INTO session_context (
       chat_id, slug, url, conversation_id, last_test_command, last_mission,
-      last_job_id, awaiting_instruction, active_model
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      last_job_id, awaiting_instruction, active_model, garfio_model
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(chat_id) DO UPDATE SET
       slug = excluded.slug,
       url = excluded.url,
@@ -59,7 +64,8 @@ export function createSessionStore({
       last_mission = excluded.last_mission,
       last_job_id = excluded.last_job_id,
       awaiting_instruction = excluded.awaiting_instruction,
-      active_model = excluded.active_model`
+      active_model = excluded.active_model,
+      garfio_model = excluded.garfio_model`
   );
 
   return {
@@ -68,6 +74,9 @@ export function createSessionStore({
     },
     patch(chatId, fields) {
       const next = { ...EMPTY, ...rowToSession(select.get(String(chatId))), ...fields };
+      const gm = String(fields.garfio_model !== undefined ? fields.garfio_model : (fields.garfioModel !== undefined ? fields.garfioModel : (next.garfio_model || "")));
+      next.garfio_model = gm;
+      next.garfioModel = gm;
       upsert.run(
         String(chatId),
         String(next.slug || ""),
@@ -77,7 +86,8 @@ export function createSessionStore({
         String(next.lastMission || ""),
         String(next.lastJobId || ""),
         next.awaiting_instruction ? 1 : 0,
-        String(next.active_model || "")
+        String(next.active_model || ""),
+        gm
       );
       return next;
     },

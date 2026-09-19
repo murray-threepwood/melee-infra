@@ -40,7 +40,8 @@ CREATE TABLE IF NOT EXISTS session_context (
   last_mission TEXT NOT NULL DEFAULT '',
   last_job_id TEXT NOT NULL DEFAULT '',
   awaiting_instruction INTEGER NOT NULL DEFAULT 0,
-  active_model TEXT NOT NULL DEFAULT ''
+  active_model TEXT NOT NULL DEFAULT '',
+  garfio_model TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS seen_emails (
@@ -307,6 +308,9 @@ export function openMurrayDb({
   }
   const db = new DatabaseSync(resolved);
   db.exec(SCHEMA_SQL);
+  try {
+    db.exec("ALTER TABLE session_context ADD COLUMN garfio_model TEXT NOT NULL DEFAULT '';");
+  } catch {}
   migrateJsonIfNeeded(db, {
     dbFile: resolved,
     jobsPath,

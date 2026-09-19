@@ -6,6 +6,7 @@ import { analyzeSnapshot, formatTriage } from "./triage.mjs";
 import { stuckKeyboard } from "./telegram.mjs";
 import { parseHttpsGitUrl } from "./workspace.mjs";
 import { formatGarfioLog } from "./garfio-store.mjs";
+import { formatManual, handleGarfioBrain } from "./chat.mjs";
 
 export function parseWorkspaceCallback(data) {
   const raw = String(data || "").trim();
@@ -296,6 +297,12 @@ export function createCodingSession({
       });
     }
     const verdict = classifyUserText(text, { hasSession: Boolean(sess.slug) });
+    if (verdict.action === "manual") {
+      return packReply(formatManual());
+    }
+    if (verdict.action === "garfio_brain") {
+      return handleGarfioBrain({ session, chatId, model: verdict.model });
+    }
     if (verdict.action === "clarify_clone_url") {
       return packReply(
         "¿Clonar qué? Pasame la URL https de GitHub o GitLab (sin token). Ejemplo: cloná https://github.com/owner/repo"
@@ -680,9 +687,12 @@ export function createCodingSession({
           // start a new conversation
         }
       }
+      const sess = session && typeof session.get === "function" ? session.get(job.chatId) : {};
+      const garfioModel = sess.garfioModel || sess.garfio_model || "";
       const task = await openhands.startConversation({
-        title: `murray-${payload.slug}`.slice(0, 80),
+        title: `garfio-${payload.slug}`.slice(0, 80),
         text,
+        llmModel: garfioModel || "garfio-worker",
       });
       const startTaskId = task.id || task.start_task_id || "";
       jobs.update(job.id, {
@@ -691,6 +701,7 @@ export function createCodingSession({
           ...payload,
           startTaskId,
           conversationId: task.app_conversation_id || payload.conversationId || "",
+          garfioModel,
         },
       });
       enqueuePoll(job.chatId, {
@@ -699,10 +710,12 @@ export function createCodingSession({
         slug: payload.slug,
         instruction: payload.instruction,
         testCommand: payload.testCommand,
+        garfioModel,
       });
+      const brainLabel = garfioModel ? ` [cerebro: ${garfioModel}]` : "";
       await notifyJob(
         job,
-        `🪝 Garfio arrancó la misión (task ${startTaskId || "n/a"}). OpenHands arrancó. Te aviso si pausa, se tranca o termina.`
+        `🪝 Garfio arrancó la misión (task ${startTaskId || "n/a"})${brainLabel}. OpenHands arrancó. Te aviso si pausa, se tranca o termina.`
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });

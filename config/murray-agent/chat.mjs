@@ -50,7 +50,17 @@ export function parseSlash(text) {
     return { cmd: "model", model: rest.join(" ").trim() };
   }
   if (name === "garfio") {
+    const sub = (rest[0] || "").toLowerCase();
+    if (sub === "model" || sub === "cerebro") {
+      return { cmd: "garfio_brain", model: rest.slice(1).join(" ").trim() };
+    }
     return { cmd: "garfio", slug: rest[0] || "" };
+  }
+  if (name === "cerebro") {
+    return { cmd: "garfio_brain", model: rest.join(" ").trim() };
+  }
+  if (name === "manual" || name === "help") {
+    return { cmd: "manual" };
   }
   return { cmd: name, service: rest[0] || "" };
 }
@@ -87,6 +97,74 @@ async function formatHealth(fetchImpl) {
     }
   }
   return packReply(`Health interno:\n${lines.join("\n")}\n¿Podés sentir el aliento del mal puro?`);
+}
+
+export const ALLOWED_GARFIO_MODELS = [
+  "garfio-worker",
+  "deepseek-chat",
+  "deepseek-reasoner",
+  "gemini-3.8-flash",
+  "gemini-2.5-flash-lite",
+];
+
+export function formatManual() {
+  return [
+    "📖 MANUAL OPERATIVO DE MURRAY & GARFIO",
+    "",
+    "1. Diagnóstico & Control del Stack",
+    "• /status: Estado de los contenedores Docker.",
+    "• /health: Healthchecks HTTP de los servicios internos.",
+    "• /logs <servicio>: Logs de n8n, openhands, litellm, etc.",
+    "• /triage (o «¿qué hace Garfio?»): Diagnóstico de sandboxes del obrero.",
+    "",
+    "2. Control de Cerebros (LLMs)",
+    "• /model [modelo]: Ver o cambiar el motor de Murray (chat).",
+    "• /garfio model [modelo] (o /cerebro [modelo]): Trasplante clandestino de cerebro a Garfio.",
+    `• Modelos válidos: ${ALLOWED_GARFIO_MODELS.join(", ")}.`,
+    "",
+    "3. Espacio de Trabajo & Git (./workspace)",
+    "• /repo: Ver repositorio activo en sesión.",
+    "• /workspace: Listar archivos y directorios.",
+    "• /jobs [id]: Ver cola de tareas async en vuelo.",
+    "• /garfio [slug]: Bitácora de auditoría y decisiones técnicas de Garfio.",
+    "• Git autónomo: pull, commit, log, status, checkout.",
+    "• Git con HITL: push (a rama feat, nunca main), clone, delete.",
+    "",
+    "4. Misiones de Código para Garfio",
+    "• Formato: <instrucción> Comando: <test> (ej: npm test / pytest).",
+    "• Murray emite teclado HITL. Al tocar Aprobar, Garfio pica código y audita.",
+  ].join("\n");
+}
+
+export function handleGarfioBrain({ session, chatId, model }) {
+  if (!session || typeof session.get !== "function") {
+    return packReply("Sesión no está configurada.");
+  }
+  const cleanModel = String(model || "").trim().toLowerCase();
+  const current = session.get(chatId).garfio_model || "garfio-worker (default con fallback)";
+  if (!cleanModel) {
+    return packReply(
+      [
+        "Shhh... ¡bajá la voz, botija! No queremos que el monstruo escuche los relámpagos ni los generadores...",
+        `Cerebro actual de Garfio: ${current}.`,
+        `Lóbulos disponibles para el trasplante: ${ALLOWED_GARFIO_MODELS.join(", ")}.`,
+        "Para trasplantarle otro: /garfio model <modelo> o «cambiale el cerebro a garfio por <modelo>».",
+      ].join("\n\n")
+    );
+  }
+  if (!ALLOWED_GARFIO_MODELS.includes(cleanModel)) {
+    return packReply(
+      `Ese lóbulo no entra en el cráneo de Garfio: ${cleanModel}.\nUsá uno compatible: ${ALLOWED_GARFIO_MODELS.join(", ")}.`
+    );
+  }
+  session.patch(chatId, { garfio_model: cleanModel });
+  return packReply(
+    [
+      "¡MWAHAHAHAHA... digo, shhh! ⚡🔩 ¡IT'S ALIVE!",
+      `Le desconecté los electrodos oxidados y le injerté el cerebro de ${cleanModel}.`,
+      "Garfio cree que se tomó un café fuerte y sigue picando código de espaldas al monitor... ¡Ni sospecha de los cables vudú que le salen de la nuca!",
+    ].join("\n\n")
+  );
 }
 
 function parseToolArgs(raw) {
@@ -573,8 +651,14 @@ export function createChatEngine({
         const rows = garfioStore.list({ slug: slash.slug, limit: 5 });
         return packReply(formatGarfioLog(rows));
       }
+      if (slash.cmd === "manual") {
+        return packReply(formatManual());
+      }
+      if (slash.cmd === "garfio_brain") {
+        return handleGarfioBrain({ session, chatId, model: slash.model });
+      }
       return packReply(
-        `Comando /${slash.cmd} no existe. /status /health /logs <servicio> /repo /workspace /jobs /triage /garfio`
+        `Comando /${slash.cmd} no existe. /manual /status /health /logs <servicio> /repo /workspace /jobs /triage /garfio /model`
       );
     }
     if (isSeenEmailsIntent(trimmed)) {

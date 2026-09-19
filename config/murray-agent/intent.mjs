@@ -82,6 +82,38 @@ export function isGarfioLogIntent(text) {
          /^(?:qu[eé] decidi[oó]|qu[eé] descart[oó]|qu[eé] lecciones dej[oó]) garfio(?:\s+(\S+))?$/i.test(t);
 }
 
+export function isManualIntent(text) {
+  let t = String(text || "").trim();
+  t = t.replace(/^\/+/, "");
+  t = t.replace(/^murray[,:\s]+/i, "").trim();
+  t = t.replace(/[?.!¿¡]+$/g, "").trim();
+  t = t.replace(/^[¿¡]+/g, "").trim();
+  if (!t || t.length > 140) {
+    return false;
+  }
+  return /^(?:manual|help|ayuda(?: (?:con los |de )?comandos)?|(?:mostra(?:me)?|pasame|ver|cu[aá]les son) (?:los )?comandos|qu[eé] comandos ten[eé]s|qu[eé] sab[eé]s hacer|gu[ií]a(?: de comandos)?|lista(?: de)? comandos)$/i.test(
+    t
+  );
+}
+
+export function isGarfioBrainIntent(text) {
+  let t = String(text || "").trim();
+  t = t.replace(/^\/+/, "");
+  t = t.replace(/^murray[,:\s]+/i, "").trim();
+  t = t.replace(/[?.!¿¡]+$/g, "").trim();
+  t = t.replace(/^[¿¡]+/g, "").trim();
+  if (!t || t.length > 140) {
+    return null;
+  }
+  const m = t.match(
+    /^(?:cambi[aá](?:le)? (?:el )?cerebro (?:a|de) garfio|qu[eé] cerebro tiene garfio|cerebro (?:de )?garfio|pon[eé] a garfio con|trasplante (?:de )?garfio)(?:\s+(?:a |con |por )?(\S+))?$/i
+  );
+  if (m) {
+    return { model: m[1] || "" };
+  }
+  return null;
+}
+
 export function extractJobId(text) {
   return extractJobRefs(text).jobId;
 }
@@ -211,6 +243,13 @@ export function classifyUserText(text, { hasSession = false } = {}) {
   }
   if (isHitlStuck(trimmed)) {
     return { action: "hitl_help" };
+  }
+  if (isManualIntent(trimmed)) {
+    return { action: "manual" };
+  }
+  const brainMatch = isGarfioBrainIntent(trimmed);
+  if (brainMatch) {
+    return { action: "garfio_brain", model: brainMatch.model || "" };
   }
   if (isGarfioLogIntent(trimmed)) {
     const match =

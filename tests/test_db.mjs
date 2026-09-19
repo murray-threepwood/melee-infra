@@ -115,3 +115,23 @@ test("HITL persistido: un uso y expirados no vuelven", () => {
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test("session_context persiste garfio_model y sobrevive a reabrir la DB", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "murray-garfio-model-"));
+  const filePath = path.join(dir, "murray.db");
+  const db1 = openMurrayDb({ filePath });
+  const store1 = createSessionStore({ db: db1 });
+  store1.patch("42", { slug: "test-repo", garfio_model: "deepseek-chat" });
+  assert.equal(store1.get("42").garfio_model, "deepseek-chat");
+  assert.equal(store1.get("42").garfioModel, "deepseek-chat");
+  db1.close();
+
+  const db2 = openMurrayDb({ filePath });
+  const store2 = createSessionStore({ db: db2 });
+  const got = store2.get("42");
+  assert.equal(got.slug, "test-repo");
+  assert.equal(got.garfio_model, "deepseek-chat");
+  assert.equal(got.garfioModel, "deepseek-chat");
+  db2.close();
+  fs.rmSync(dir, { recursive: true, force: true });
+});

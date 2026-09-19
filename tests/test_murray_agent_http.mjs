@@ -1364,3 +1364,99 @@ test("propose_ops del LLM no acepta heal_openhands", async () => {
   assert.equal(result.needs_hitl, undefined);
   assert.equal(result.payload.error, "action_denied");
 });
+
+test("/manual y /help devuelven el manual operativo estructurado", async () => {
+  const { engine, root } = codingStack();
+  const res1 = await engine.handleChat({ chat_id: "60", text: "/manual" });
+  assert.match(res1.reply, /MANUAL OPERATIVO DE MURRAY/);
+  assert.match(res1.reply, /Diagnóstico.*Control del Stack/);
+  assert.match(res1.reply, /Control de Cerebros/);
+  assert.match(res1.reply, /Espacio de Trabajo.*Git/);
+  assert.match(res1.reply, /Misiones de Código para Garfio/);
+
+  const res2 = await engine.handleChat({ chat_id: "60", text: "/help" });
+  assert.match(res2.reply, /MANUAL OPERATIVO DE MURRAY/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("texto natural 'manual' o 'ayuda' devuelve el manual sin pasar por LLM", async () => {
+  let llmCalled = false;
+  const { engine, root } = codingStack({
+    llm: {
+      complete: async () => {
+        llmCalled = true;
+        return { content: "llm called", tool_calls: [] };
+      },
+    },
+  });
+  const res = await engine.handleChat({ chat_id: "61", text: "ayuda con los comandos" });
+  assert.equal(llmCalled, false);
+  assert.match(res.reply, /MANUAL OPERATIVO DE MURRAY/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("/garfio model y /cerebro consultan y trasplantan el cerebro de Garfio", async () => {
+  const { engine, session, root } = codingStack();
+  // 1. Consultar sin modelo
+  const q1 = await engine.handleChat({ chat_id: "70", text: "/garfio model" });
+  assert.match(q1.reply, /Cerebro actual de Garfio/);
+  assert.match(q1.reply, /garfio-worker/);
+
+  // 2. Modelo inválido
+  const inv = await engine.handleChat({ chat_id: "70", text: "/garfio model skynet-9000" });
+  assert.match(inv.reply, /Ese lóbulo no entra en el cráneo/);
+
+  // 3. Cambiar a deepseek-chat
+  const set1 = await engine.handleChat({ chat_id: "70", text: "/garfio model deepseek-chat" });
+  assert.match(set1.reply, /IT'S ALIVE/);
+  assert.match(set1.reply, /deepseek-chat/);
+  assert.equal(session.get("70").garfio_model, "deepseek-chat");
+
+  // 4. Cambiar vía /cerebro gemini-3.8-flash
+  const set2 = await engine.handleChat({ chat_id: "70", text: "/cerebro gemini-3.8-flash" });
+  assert.match(set2.reply, /IT'S ALIVE/);
+  assert.match(set2.reply, /gemini-3.8-flash/);
+  assert.equal(session.get("70").garfio_model, "gemini-3.8-flash");
+
+  // 5. Cambiar vía lenguaje natural
+  const set3 = await engine.handleChat({ chat_id: "70", text: "cambiale el cerebro a garfio por deepseek-reasoner" });
+  assert.match(set3.reply, /IT'S ALIVE/);
+  assert.match(set3.reply, /deepseek-reasoner/);
+  assert.equal(session.get("70").garfio_model, "deepseek-reasoner");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("misión de código pasa llmModel de Garfio a openhands.startConversation", async () => {
+  let capturedModel = null;
+  const { engine, session, worker, notes, root } = codingStack({
+    openhands: {
+      startConversation: async ({ llmModel }) => {
+        capturedModel = llmModel;
+        return { id: "task-123", app_conversation_id: "app-123" };
+      },
+      detectStuck: () => null,
+      isSandboxPaused: () => false,
+      isAgentDone: () => false,
+      summarizeEvents: () => ({ error: "", lastMessage: "", lastAction: "", fileChanges: [] }),
+    },
+  });
+  fs.mkdirSync(path.join(root, "test-repo"), { recursive: true });
+  session.patch("75", {
+    slug: "test-repo",
+    url: "https://github.com/octocat/test-repo.git",
+    garfio_model: "gemini-3.8-flash",
+  });
+  const proposed = await engine.dispatchTool(
+    "propose_code_mission",
+    { instruction: "agregar endpoint", test_command: "npm test" },
+    { chatId: "75" }
+  );
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "75",
+    callback_data: proposed.hitl.approve_data,
+  });
+  await worker.kick(hitl.job_id);
+  assert.equal(capturedModel, "gemini-3.8-flash");
+  assert.equal(notes.some((n) => n.text.includes("[cerebro: gemini-3.8-flash]")), true);
+  fs.rmSync(root, { recursive: true, force: true });
+});

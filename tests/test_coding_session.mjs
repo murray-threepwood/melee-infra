@@ -94,6 +94,22 @@ test("classify: estado de jobs no va al LLM de código", () => {
   assert.equal(classifyUserText("bff74f890aed3d41").action, "diagnose_job");
 });
 
+test("classify: manual y cerebro de garfio", () => {
+  assert.equal(classifyUserText("/manual").action, "manual");
+  assert.equal(classifyUserText("/help").action, "manual");
+  assert.equal(classifyUserText("manual").action, "manual");
+  assert.equal(classifyUserText("ayuda").action, "manual");
+  assert.equal(classifyUserText("mostrame los comandos").action, "manual");
+
+  assert.equal(classifyUserText("qué cerebro tiene garfio").action, "garfio_brain");
+  assert.equal(classifyUserText("qué cerebro tiene garfio").model, "");
+  assert.equal(classifyUserText("cambiale el cerebro a garfio por deepseek-chat").action, "garfio_brain");
+  assert.equal(classifyUserText("cambiale el cerebro a garfio por deepseek-chat").model, "deepseek-chat");
+  assert.equal(classifyUserText("cerebro garfio gemini-3.8-flash").action, "garfio_brain");
+  assert.equal(classifyUserText("cerebro garfio gemini-3.8-flash").model, "gemini-3.8-flash");
+});
+
+
 test("classify: seguí / retomá re-arma HITL, no es chat", () => {
   assert.equal(isResumeMission("seguí con L01"), true);
   assert.equal(isResumeMission("retomá"), true);
