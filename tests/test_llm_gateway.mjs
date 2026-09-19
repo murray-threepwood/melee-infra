@@ -59,18 +59,25 @@ test("/model válido escribe active_model; inválido no toca la DB", async () =>
   });
   const set = await engine.handleChat({
     chat_id: "7",
+    text: "/model gemini-3.8-flash",
+  });
+  assert.match(set.reply, /gemini-3.8-flash/);
+  assert.equal(session.get("7").active_model, "gemini-3.8-flash");
+  assert.equal(session.get("7").slug, "repo-a");
+
+  const retired = await engine.handleChat({
+    chat_id: "7",
     text: "/model gemini-2.5-flash",
   });
-  assert.match(set.reply, /gemini-2.5-flash/);
-  assert.equal(session.get("7").active_model, "gemini-2.5-flash");
-  assert.equal(session.get("7").slug, "repo-a");
+  assert.match(retired.reply, /inválido/);
+  assert.equal(session.get("7").active_model, "gemini-3.8-flash");
 
   const bad = await engine.handleChat({
     chat_id: "7",
     text: "/model gpt-4o",
   });
   assert.match(bad.reply, /inválido/);
-  assert.equal(session.get("7").active_model, "gemini-2.5-flash");
+  assert.equal(session.get("7").active_model, "gemini-3.8-flash");
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
@@ -104,6 +111,30 @@ test("complete() usa el modelo del store y pega al gateway mock", async () => {
   assert.equal(seen[1].body.model, DEFAULT_CHAT_MODEL);
   assert.equal(resolveChatModel(""), DEFAULT_CHAT_MODEL);
   assert.equal(resolveChatModel("nope"), null);
+  assert.equal(resolveChatModel("gemini-2.5-flash"), null);
+  assert.equal(resolveChatModel("gemini-3.8-flash"), "gemini-3.8-flash");
+  assert.equal(resolveChatModel("gemini-2.5-flash-lite"), "gemini-2.5-flash-lite");
   db.close();
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("carta LiteLLM: 3.8 + lite, sin 2.5-flash, fallback en cadena", () => {
+  const yaml = fs.readFileSync(
+    new URL("../config/litellm/config.yaml", import.meta.url),
+    "utf8"
+  );
+  assert.match(yaml, /gemini\/gemini-3\.8-flash/);
+  assert.match(yaml, /gemini\/gemini-2\.5-flash-lite/);
+  assert.doesNotMatch(yaml, /gemini\/gemini-2\.5-flash[^-]/);
+  assert.match(
+    yaml,
+    /murray-chat: \[gemini-3\.8-flash, gemini-2\.5-flash-lite\]/
+  );
+  assert.match(
+    yaml,
+    /murray-worker: \[gemini-3\.8-flash, gemini-2\.5-flash-lite\]/
+  );
+  assert.ok(ALLOWED_MODELS.includes("gemini-3.8-flash"));
+  assert.ok(ALLOWED_MODELS.includes("gemini-2.5-flash-lite"));
+  assert.ok(!ALLOWED_MODELS.includes("gemini-2.5-flash"));
 });

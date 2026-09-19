@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.15 — Carta Gemini: 3.8 Flash y 2.5 Flash-Lite
+
+- `/model` admite `gemini-3.8-flash` y `gemini-2.5-flash-lite`. Sale `gemini-2.5-flash`.
+- Fallback LiteLLM: DeepSeek → 3.8 Flash (gratis/superior) → 2.5 Flash-Lite (barato). Cero Pro en default.
+
 ## 0.1.14 — Exportación de blueprint y especificación determinista para IA
 
 - Opción 14 agregada a `el_corazon_de_Murray.sh` con submenú interactivo (visualización en pager, guardado en `MURRAY_SYSTEM_BLUEPRINT_FOR_AI.md`, copia al clipboard de macOS con `pbcopy` y volcado directo).

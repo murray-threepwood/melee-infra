@@ -230,8 +230,8 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
 ### 3.3. Proveedor LLM y Orquestación de Agentes
 
 - **Gateway**: `litellm` en `agent-net` (`http://litellm:4000`). Único origen para Murray y OpenHands. Cero `api.deepseek.com` en esos dos servicios.
-- **Alias**: `murray-worker` (OpenHands, fijo) y `murray-chat` (Murray si `active_model` vacío). Primario `deepseek/deepseek-chat`, fallback `gemini/gemini-2.5-flash`.
-- **Modelos `/model`**: `deepseek-chat`, `deepseek-reasoner`, `gemini-2.5-flash`. Se guardan en `session_context.active_model` por chat. OpenHands no lee `active_model`.
+- **Alias**: `murray-worker` (OpenHands, fijo) y `murray-chat` (Murray si `active_model` vacío). Primario `deepseek/deepseek-chat`. Fallback: `gemini/gemini-3.8-flash` → `gemini/gemini-2.5-flash-lite`.
+- **Modelos `/model`**: `deepseek-chat`, `deepseek-reasoner`, `gemini-3.8-flash`, `gemini-2.5-flash-lite`. Se guardan en `session_context.active_model` por chat. OpenHands no lee `active_model`. Cero Pro en default/fallback.
 - **`GEMINI_API_KEY`**: Google AI Studio. No reusar `GOOGLE_REFRESH_TOKEN` / `GOOGLE_CLIENT_SECRET`. H13 (humano) pega las keys.
 - Tests de LLM: no llamar APIs vivas por default (mocks / fixtures). `/status` live no usa LLM.
 
