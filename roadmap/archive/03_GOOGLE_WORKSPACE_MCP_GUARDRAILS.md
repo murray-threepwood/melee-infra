@@ -1,3 +1,9 @@
+> **HISTÓRICO — NO EJECUTAR.**
+> Este documento es el bootstrap original (fases 1–6), ya cumplido.
+> No lo re-implementes. No “arregles” el código ni el compose para que coincida con este texto.
+> Ley vigente: `roadmap/README.md` y las fases 07–10.
+> Endurecimiento del socket Docker: `roadmap/90_BACKLOG_HARDENING.md` (fuera de ejecución).
+
 # 03. Fase 3: Conector Google Workspace con Guardrails
 
 Esta fase implementa la integración segura con los servicios de Google Workspace (Gmail y Calendar) utilizando el protocolo **Model Context Protocol (MCP)** con salvaguardas estrictas e infranqueables (*guardrails*): el agente solo tiene autorización para leer y **crear borradores** (`gmail_create_draft`). El envío directo de correos (`gmail_send`) queda bloqueado a nivel de variables de entorno y arquitectura.

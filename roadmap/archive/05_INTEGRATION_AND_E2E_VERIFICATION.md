@@ -1,3 +1,9 @@
+> **HISTÓRICO — NO EJECUTAR.**
+> Este documento es el bootstrap original (fases 1–6), ya cumplido.
+> No lo re-implementes. No “arregles” el código ni el compose para que coincida con este texto.
+> Ley vigente: `roadmap/README.md` y las fases 07–10.
+> Endurecimiento del socket Docker: `roadmap/90_BACKLOG_HARDENING.md` (fuera de ejecución).
+
 # 05. Fase 5: Verificación Integral del Stack, Límites de Recursos y Runbook Operativo
 
 Esta fase final integra todos los servicios del stack en una ejecución coordinada, valida que el consumo acumulado de memoria RAM respete el umbral estricto (< 4.5 GB), ejecuta una suite de pruebas End-to-End (`test_e2e_stack.sh`) y proporciona el runbook operativo para resolución de incidentes y mantenimiento.

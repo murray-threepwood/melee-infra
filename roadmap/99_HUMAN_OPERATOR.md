@@ -45,6 +45,8 @@ Hasta que completes H3, `cloudflared` corre pero loguea `Failed to get tunnel`. 
 - [x] **H10.** Reiniciar el stack y crear el usuario dueño de n8n
 - [x] **H11.** Importar workflows y credencial de Telegram en n8n
 - [x] **H12.** Probar el bot (mensaje → botones HITL)
+- [x] **H13.** `GEMINI_API_KEY` (AI Studio, cuenta Murray) + `LITELLM_MASTER_KEY` — después de la fase 9
+- [x] **H14.** Reimportar `email_triage_draft` — después de la fase 8
 
 ---
 
@@ -477,11 +479,60 @@ OpenHands (botón **Aprobar**) solo tiene sentido con H7 completo y el servicio 
 
 ---
 
+## H13. Gemini + master key de LiteLLM (después de la fase 9)
+
+Hace falta cuando el agente terminó `roadmap/09_LITELLM_GATEWAY.md`. Sin esto el contenedor `litellm` levanta pero el fallback a Gemini no autentica. DeepSeek sigue siendo el primario (H7).
+
+**No** uses el `GOOGLE_REFRESH_TOKEN` ni el Client secret de Gmail. Son otro producto.
+
+1. Entrá a [https://aistudio.google.com/](https://aistudio.google.com/) con la **cuenta Google de Murray** (la misma familia que H8, no hace falta el cliente OAuth Web).
+2. **Get API key** / **API keys** → **Create API key**.
+3. Copiá la key. Se muestra una sola vez.
+4. En Terminal, generá la master key del gateway:
+
+```bash
+openssl rand -hex 32
+```
+
+5. Pegá en `.env` (sin comillas, sin pegarlo al chat):
+
+```bash
+GEMINI_API_KEY=pegá-la-key-de-AI-Studio
+LITELLM_MASTER_KEY=pegá-la-salida-de-openssl
+```
+
+6. Recreate (restart no recarga `.env`):
+
+```bash
+cd /Users/hbauzan/treepwood/MURRAY/murray-infra
+docker compose up -d --force-recreate litellm murray-agent openhands
+```
+
+**Verificación**: `.env` tiene `GEMINI_API_KEY=` no vacío y `LITELLM_MASTER_KEY=` de ≥32 hex. `docker compose ps` muestra `litellm` running. No imprimas las keys.
+
+---
+
+## H14. Reimportar triage de mail (después de la fase 8)
+
+Hace falta cuando el agente terminó `roadmap/08_EMAIL_MEMORY_SEEN.md`. El JSON en disco no cambia el flujo **publicado**. Si no hacés H14, n8n sigue el Code de `staticData.seen` y puede duplicar drafts o ignorar a Murray.
+
+1. En n8n: **Workflows** → abrí `email_triage_draft` (id `Z8f9K2mP1qRt5vWx`).
+2. **⋯** → **Import from File** → `workflows/email_triage_draft.json` (pisá el existente; el `"id"` raíz tiene que seguir siendo `Z8f9K2mP1qRt5vWx`).
+3. Publicá / **Active** = ON.
+4. Confirmá que **ya no** está el nodo `Deduplicar Ya Vistos` y que hay HTTP a `http://murray-agent:8080/triage/filter` y `/triage/mark-seen`.
+5. Credencial Telegram del nodo de alerta: la misma `Telegram account`.
+
+**Verificación**: el workflow publicado no tiene `getWorkflowStaticData`. El próximo cron de 15 min pega a Murray. El primer ciclo puede re-draftar unread que ya estaban en el static data viejo: es esperado, no es un bug.
+
+Si Docker Desktop sirve `/opt/workflows` vacío: `docker compose cp workflows/email_triage_draft.json n8n:/tmp/email_triage_draft.json` e importá desde `/tmp`.
+
+---
+
 ## Orden si volvés otro día
 
-Hacé solo el próximo checkbox vacío del **Checklist maestro**. No saltees H1 (si Postgres ya levantó con password placeholder, o cambiás la clave y rompés el volumen, o dejás el placeholder y listo).
+Hacé solo el próximo checkbox vacío del **Checklist maestro**. H13 espera la fase 9. H14 espera la fase 8. No saltees H1 (si Postgres ya levantó con password placeholder, o cambiás la clave y rompés el volumen, o dejás el placeholder y listo).
 
-Cuando H1–H12 estén tildados:
+Cuando H1–H12 estén tildados (H13/H14 son post-fase):
 
 ```bash
 bash tests/test_e2e_stack.sh
@@ -498,3 +549,4 @@ Esperado: `E2E_VERIFICACION_COMPLETA_OK`.
 - No commitees `.env`, `.gauth.json` ni tokens. **Tampoco los pegues en chat ni en un handoff.**
 - No cambies `N8N_ENCRYPTION_KEY` una vez que n8n ya guardó credenciales.
 - `docker compose restart` no recarga `.env`. Para secretos: `docker compose up -d --force-recreate <servicio>`.
+- No pegues `GEMINI_API_KEY` como si fuera el refresh de Gmail. No actives proxies Docker ni `userns-remap` (eso es backlog `90`, no H13/H14).

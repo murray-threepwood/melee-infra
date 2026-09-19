@@ -81,14 +81,16 @@ La inteligencia de este repositorio está dividida con precisión quirúrgica:
 1. **[architecture_spec.md](./architecture_spec.md) — Contratos vivos**: red, HTTP de `workspace-mcp` / `murray-agent`, HITL Telegram, guardrails y presupuesto RAM. Se actualiza cuando cambia un contrato.
 2. **[HANDOFF.md](./HANDOFF.md) — Arranque para la próxima IA**: invariantes, trampas pagadas, dónde tocar. Cero secretos.
 3. **[roadmap/](./roadmap/) — Hoja de ruta de implementación**:
-   - [roadmap/README.md](./roadmap/README.md): Índice maestro y prompt de arranque para agentes de IA.
-   - [roadmap/00_AGENT_PROTOCOL.md](./roadmap/00_AGENT_PROTOCOL.md): Reglas inquebrantables de determinismo, manejo de secretos y control de fallas (`BLOCKER.md`).
-   - [roadmap/01_ENVIRONMENT_AND_NETWORKING.md](./roadmap/01_ENVIRONMENT_AND_NETWORKING.md): Fase 1 (Carpetas, `.env`, Postgres y Cloudflared).
-   - [roadmap/02_N8N_AND_TELEGRAM_HITL.md](./roadmap/02_N8N_AND_TELEGRAM_HITL.md): Fase 2 (n8n, Telegram Router y validación de esquemas).
-   - [roadmap/03_GOOGLE_WORKSPACE_MCP_GUARDRAILS.md](./roadmap/03_GOOGLE_WORKSPACE_MCP_GUARDRAILS.md): Fase 3 (MCP Google Workspace y workflow de triage).
-   - [roadmap/04_OPENHANDS_RUNTIME_SANDBOX.md](./roadmap/04_OPENHANDS_RUNTIME_SANDBOX.md): Fase 4 (OpenHands Sandbox, DeepSeek LiteLLM y detección de bucles infinitos).
-   - [roadmap/06_TELEGRAM_CODING_SESSIONS.md](./roadmap/06_TELEGRAM_CODING_SESSIONS.md): Fase 6 (clone/Q&A/misiones código por Telegram).
-   - [roadmap/99_HUMAN_OPERATOR.md](./roadmap/99_HUMAN_OPERATOR.md): **Lo que tenés que hacer vos** (tokens, túnel, bot, OAuth). Click a click, sin decidir arquitectura.
+   - [roadmap/README.md](./roadmap/README.md): Índice maestro. Las fases vivas empiezan en 07.
+   - [roadmap/KICKOFF_07_10.md](./roadmap/KICKOFF_07_10.md): Prompt para implementar 07–10 de punta a punta.
+   - [roadmap/00_AGENT_PROTOCOL.md](./roadmap/00_AGENT_PROTOCOL.md): Reglas, secretos, `BLOCKER.md`. Fases 1–6 archivadas. Socket Docker no se endurece acá.
+   - [roadmap/07_MURRAY_SQLITE_WAL.md](./roadmap/07_MURRAY_SQLITE_WAL.md): Fase 7 — `murray.db` WAL.
+   - [roadmap/08_EMAIL_MEMORY_SEEN.md](./roadmap/08_EMAIL_MEMORY_SEEN.md): Fase 8 — mails vistos en Murray; MCP stateless.
+   - [roadmap/09_LITELLM_GATEWAY.md](./roadmap/09_LITELLM_GATEWAY.md): Fase 9 — LiteLLM (DeepSeek + Gemini).
+   - [roadmap/10_SANDBOX_LIFECYCLE_TTL.md](./roadmap/10_SANDBOX_LIFECYCLE_TTL.md): Fase 10 — TTL 30 min de sandboxes (socket como está).
+   - [roadmap/90_BACKLOG_HARDENING.md](./roadmap/90_BACKLOG_HARDENING.md): Backlog de socket Docker. **No ejecutar.**
+   - [roadmap/99_HUMAN_OPERATOR.md](./roadmap/99_HUMAN_OPERATOR.md): Clicks humanos (H1–H14).
+   - [roadmap/archive/](./roadmap/archive/): Fases 1–6 históricas. **No re-ejecutar.**
 
 4. **[.agents/](./.agents/) — Reglas y Habilidades Supremas**:
    - [.agents/rules/murray.md](./.agents/rules/murray.md): Directiva fundacional del Demonic Sysadmin Supreme.

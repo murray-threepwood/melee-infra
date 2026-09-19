@@ -1,3 +1,9 @@
+> **HISTÓRICO — NO EJECUTAR.**
+> Este documento es el bootstrap original (fases 1–6), ya cumplido.
+> No lo re-implementes. No “arregles” el código ni el compose para que coincida con este texto.
+> Ley vigente: `roadmap/README.md` y las fases 07–10.
+> Endurecimiento del socket Docker: `roadmap/90_BACKLOG_HARDENING.md` (fuera de ejecución).
+
 # 02. Fase 2: Orquestador n8n y Canal HITL (Telegram)
 
 Esta fase integra el motor de orquestación de flujos de trabajo **n8n** respaldado por PostgreSQL y despliega el canal de comunicación bidireccional y control humano (*Human-In-The-Loop*) mediante un bot de Telegram con filtrado estricto de identidad.

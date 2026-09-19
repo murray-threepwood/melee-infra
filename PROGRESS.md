@@ -73,8 +73,8 @@ Fuente: `roadmap/archive/`. Banner HISTÓRICO en cada archivo.
 ## Acciones humanas pendientes
 
 - H1–H12: cerrados. H12 (2026-09-16 ~20:34 UY): Rechazar → `✅ Orden procesada: REJECT_TASK:16`.
-- H13 (fase 9): `GEMINI_API_KEY` + `LITELLM_MASTER_KEY`. Ver `roadmap/99_HUMAN_OPERATOR.md`.
-- H14 (fase 8): reimport + publish + Active de `email_triage_draft` (`Z8f9K2mP1qRt5vWx`).
+- H13 (fase 9): HECHO 2026-09-18. `GEMINI_API_KEY` y `LITELLM_MASTER_KEY` distintas en `.env`. Recreate `--build` de `litellm` / `murray-agent` / `openhands`.
+- H14 (fase 8): HECHO 2026-09-18. Import CLI + publish + Active de `email_triage_draft` (`Z8f9K2mP1qRt5vWx`). Sin staticData. HTTP a `/triage/filter` y `/triage/mark-seen`. n8n restart para cargar la versión publicada.
 - Gmail OAuth **live**. Workflows n8n **activos**: HITL `20uYWal9fr2bWwVV`, triage `Z8f9K2mP1qRt5vWx`.
 - Postgres 16: alerta de n8n 2.38 ignorada a propósito (no upgrade de major).
 - **Operador (no bloquea código de 07–10)**:
