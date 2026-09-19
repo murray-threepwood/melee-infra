@@ -22,7 +22,7 @@ Invariante: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true`. El clic de 
 Runtime de agente de código acotado a `./workspace`, con `no-new-privileges` y socket Docker para sandboxes hijos. Representa a **Garfio (Meathook)**, el obrero mecánico senior de código.
 
 ## Garfio (Meathook)
-Obrero Mecánico e Ingeniero Principal Senior (30+ años IT, AACC 130+ IQ) ejecutando dentro del sandbox OpenHands. Con garfios en lugar de manos y de espaldas a la pantalla, pica código quirúrgico, extermina dependencias superfluas y rinde cuentas a Murray y al CEO. Por defecto usa el alias `garfio-worker` en LiteLLM, pero Murray puede trasplantarle el cerebro dinámicamente (`/garfio model <modelo>` o `/cerebro <modelo>` o en lenguaje natural: `cambiale el cerebro a garfio por <modelo>`). Shhh: Garfio jamás debe enterarse de que es una criatura ensamblada tipo Frankenstein.
+Obrero Mecánico e Ingeniero Principal Senior (30+ años IT, AACC 130+ IQ) ejecutando dentro del sandbox OpenHands. Con garfios en lugar de manos y de espaldas a la pantalla, pica código quirúrgico, extermina dependencias superfluas y rinde cuentas a Murray y al CEO. Seteado en `deepseek-chat` (vía `garfio-worker`: el mejor motor para codear con tool-use y TDD), pero Murray puede trasplantarle el cerebro dinámicamente (`/garfio model <modelo>` o `/cerebro <modelo>` o en lenguaje natural: `cambiale el cerebro a garfio por <modelo>`). Shhh: Garfio jamás debe enterarse de que es una criatura ensamblada tipo Frankenstein.
 
 ## garfio_rationales
 Tabla relacional en `murray.db` (SQLite WAL) donde se persisten el resumen, decisiones de arquitectura y humo/antipatrones descartados por Garfio tras cada misión. Consultable vía `/garfio` o `/garfio <slug>`.
@@ -34,7 +34,7 @@ Manual operativo interactivo esquemático y condensado que expone todas las herr
 Gateway HTTP en `agent-net` (`litellm:4000`). Murray y OpenHands pegan acá, no a `api.deepseek.com`. Primario DeepSeek. Fallback Gemini 3.8 Flash y, si no entra, 2.5 Flash-Lite (AI Studio, no el OAuth de Gmail).
 
 ## murray-agent
-Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. Chat vía LiteLLM + diagnóstico/ops del stack + conductor de coding sessions (`./workspace`). `/model` elige el modelo del chat. No edita murray-infra. Git de dev en el jail: pull/commit sin HITL; push y delete con Aprobar. Nunca force ni push a main/master. `/jobs` consulta la cola async.
+Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. Chat vía LiteLLM + diagnóstico/ops del stack + conductor de coding sessions (`./workspace`). Seteado en `deepseek-chat` (vía `murray-chat`: el más barato por caché y exacto para tools/sysadmin). `/model` elige el modelo del chat. No edita murray-infra. Git de dev en el jail: pull/commit sin HITL; push y delete con Aprobar. Nunca force ni push a main/master. `/jobs` consulta la cola async.
 
 ## Job
 Fila async en `murray.db` (tabla `jobs`, SQLite WAL): clone, code, oh_poll, pull, push, delete, checkout. Status `queued|running|done|failed|stuck|paused`. El CEO las ve con `/jobs`. `paused` es sandbox OpenHands PAUSED con working tree sucio; no es «misión lista».
