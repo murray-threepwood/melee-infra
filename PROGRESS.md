@@ -1,6 +1,6 @@
 # Estado de Avance del Proyecto
 
-Última actualización: 2026-09-18 21:40 (UTC-3)
+Última actualización: 2026-09-18 21:55 (UTC-3)
 Agente ejecutor: Cursor
 
 ## Fases históricas (no re-ejecutar)
@@ -54,12 +54,12 @@ Fuente: `roadmap/archive/`. Banner HISTÓRICO en cada archivo.
   - [x] Tarea 8.3: Workflow email_triage_draft.json
   - [x] Tarea 8.4: Tests
   - [x] Tarea 8.5: Sync de docs
-- [ ] Fase 9: Gateway LiteLLM
-  - [ ] Tarea 9.1: Servicio litellm + config
-  - [ ] Tarea 9.2: Reencaminar murray-agent y openhands
-  - [ ] Tarea 9.3: /model + active_model
-  - [ ] Tarea 9.4: Tests y .env.example
-  - [ ] Tarea 9.5: Sync de docs
+- [x] Fase 9: Gateway LiteLLM
+  - [x] Tarea 9.1: Servicio litellm + config
+  - [x] Tarea 9.2: Reencaminar murray-agent y openhands
+  - [x] Tarea 9.3: /model + active_model
+  - [x] Tarea 9.4: Tests y .env.example
+  - [x] Tarea 9.5: Sync de docs
 - [ ] Fase 10: Lifecycle + TTL 30 min
   - [ ] Tarea 10.1: Helper purge + regex
   - [ ] Tarea 10.2: Hook al inicio del job

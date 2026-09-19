@@ -24,6 +24,7 @@ flowchart TD
         Postgres["postgres_db (:5432)"]
         MCP["workspace-mcp (:8000)"]
         MurrayAgent["murray-agent (:8080)"]
+        LiteLLM["litellm (:4000)"]
         OpenHands["openhands (:3000)"]
     end
 
@@ -34,6 +35,8 @@ flowchart TD
     N8N <==>|HTTP :8000| MCP
     N8N <==>|HTTP :8080 chat/ops| MurrayAgent
     N8N <==>|HTTP :3000| OpenHands
+    MurrayAgent -->|HTTP :4000| LiteLLM
+    OpenHands -->|HTTP :4000 murray-worker| LiteLLM
     MurrayAgent -->|compose allowlist + HITL| Stack[docker.sock]
     MCP <==>|HTTPS OAuth 2.0 (Draft-Only)| GmailCloud
 ```
@@ -46,8 +49,9 @@ flowchart TD
 | `n8n` | `n8n` | `5678/tcp` | `127.0.0.1:${N8N_PORT:-5678}` | Loopback host para UI local; tráfico entrante público sólo vía `cloudflared`. Hostname público: `ceo.threepwood.uy` → `http://n8n:5678` (nunca `localhost` desde el túnel). |
 | `postgres_db` | `postgres_db` | `5432/tcp` | Ninguno | Aislado en `agent-net`. Accesible únicamente por `n8n`. Imagen `postgres:16-alpine`. **No** subir a 17 sin OK humano (rompe el volumen). |
 | `workspace-mcp`| `workspace-mcp` | `8000/tcp` | Ninguno | Aislado en `agent-net`. Accesible por `n8n`. HTTP Gmail API draft-only (`config/workspace-mcp/server.mjs`). |
-| `murray-agent` | `murray-agent` | `8080/tcp` | Ninguno | Aislado en `agent-net`. Chat DeepSeek + ops allowlist. `working_dir=/tmp`. |
-| `openhands` | `openhands` | `3000/tcp` | `127.0.0.1:${OPENHANDS_PORT:-3000}` | Loopback host para UI local; invocado vía API interna. |
+| `murray-agent` | `murray-agent` | `8080/tcp` | Ninguno | Aislado en `agent-net`. Chat vía LiteLLM + ops allowlist. `working_dir=/tmp`. |
+| `litellm` | `litellm` | `4000/tcp` | Ninguno | Gateway. Imagen `ghcr.io/berriai/litellm:v1.99.1`. Health `GET /health/liveliness`. Cero keys en `config/litellm/config.yaml`. |
+| `openhands` | `openhands` | `3000/tcp` | `127.0.0.1:${OPENHANDS_PORT:-3000}` | Loopback host para UI local. `LLM_BASE_URL=http://litellm:4000` model `murray-worker`. |
 
 ---
 
@@ -176,7 +180,7 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
 - **`GET /healthz`**: `200` `{"status":"ok","service":"murray-agent","model":"deepseek-chat"}`
 - **`POST /chat`**: `{ chat_id, text, message_id? }`
   - `200`: `{ reply, replies, parse_mode:"HTML", needs_hitl, hitl?, needs_job?, job_id? }`
-  - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`, `/workspace`, `/jobs`, `/jobs <id>`, `/triage`
+  - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`, `/workspace`, `/jobs`, `/jobs <id>`, `/triage`, `/model`
   - `/jobs`: últimos 20 jobs del chat (id, type, status, start HH:MM America/Montevideo, duración desde `createdAt`, slug, error). `/jobs <id>` acepta id Murray (16 hex) o UUID OpenHands (32 hex): detalle + snapshot live (`sandbox`/`exec`). Edad **no** usa `updatedAt`. Solo lectura, sin HITL. "estado de los jobs" lista. UUID pegado o «en qué quedó task <hex>» diagnostica ese job.
   - `/triage` / «qué pasa» / «qué pasa con el obrero» / «diagnosticá»: informe del obrero (jobs + `oh-agent-server-*` + git + RAM). Cero JSON de eventos. Hallazgos saneables → HITL `kind=ops` `action=heal_openhands`. `propose_ops` del LLM **no** incluye ese action.
   - Clone sin URL, mutate sin repo activo, o delete sin path: pregunta, no HITL, no LLM
@@ -223,8 +227,10 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
 
 ### 3.3. Proveedor LLM y Orquestación de Agentes
 
-- **Proveedor chat Telegram**: DeepSeek `deepseek-chat` (`https://api.deepseek.com/v1`) en `murray-agent`.
-- **Proveedor sandbox OpenHands**: DeepSeek vía LiteLLM (`deepseek/deepseek-chat`).
+- **Gateway**: `litellm` en `agent-net` (`http://litellm:4000`). Único origen para Murray y OpenHands. Cero `api.deepseek.com` en esos dos servicios.
+- **Alias**: `murray-worker` (OpenHands, fijo) y `murray-chat` (Murray si `active_model` vacío). Primario `deepseek/deepseek-chat`, fallback `gemini/gemini-2.5-flash`.
+- **Modelos `/model`**: `deepseek-chat`, `deepseek-reasoner`, `gemini-2.5-flash`. Se guardan en `session_context.active_model` por chat. OpenHands no lee `active_model`.
+- **`GEMINI_API_KEY`**: Google AI Studio. No reusar `GOOGLE_REFRESH_TOKEN` / `GOOGLE_CLIENT_SECRET`. H13 (humano) pega las keys.
 - Tests de LLM: no llamar APIs vivas por default (mocks / fixtures). `/status` live no usa LLM.
 
 ---
@@ -239,6 +245,7 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
 | `./config/workspace-mcp` (Bind Mount, RO) | `/opt/mcp:ro` | `server.mjs` + `gmail-client.mjs`. **`working_dir` del contenedor es `/tmp`**, no `/opt/mcp`: un cwd sobre bind `:ro` hace que Docker Desktop mate healthcheck/`compose exec` (`exit=-1`) aunque el proceso HTTP siga vivo. |
 | `./config/mcp-auth` (Bind Mount) | `/app/auth` | `.gauth.json` OAuth (gitignore). |
 | `./config/murray-agent` (Bind Mount, RO) | `/opt/agent:ro` | Chat/ops/coding HTTP. **`working_dir=/tmp`**. |
+| `./config/litellm/config.yaml` (Bind Mount, RO) | `/app/config.yaml:ro` | Modelos y fallbacks. Cero API keys en el YAML. |
 | `./workspace` (Bind Mount) | murray-agent `/opt/workspace`; openhands `/opt/workspace_base` | Repos clonados (un slug por repo). Writable. No es murray-infra. |
 | `murray_agent_data` | `/var/lib/murray-agent` | `murray.db` SQLite WAL (`MURRAY_DB_PATH`). Tablas: `jobs`, `hitl_tokens`, `session_context`, `seen_emails`. JSON `jobs.json` / `memory.json` / `session.json` se migran one-shot si la tabla está vacía y se renombran a `*.migrated`. Postgres sigue siendo solo de n8n. |
 
@@ -246,6 +253,6 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
 
 ## 5. Presupuesto de Recursos y Capacidad
 
-- **Memoria RAM Total del Stack**: **< 4.5 GB** para los 6 contenedores. `docker stats` MemUsage es `12.5MiB / 3.8GiB`: parsear **solo el uso** (primer token). Medir con `docker compose stats`.
+- **Memoria RAM Total del Stack**: **< 4.5 GB** para los 7 contenedores (incluye `litellm`). `docker stats` MemUsage es `12.5MiB / 3.8GiB`: parsear **solo el uso** (primer token). Medir con `docker compose stats`.
 - **Monitoreo**: [tests/check_memory_budget.sh](./tests/check_memory_budget.sh).
 - **Ejecuciones n8n**: `EXECUTIONS_DATA_PRUNE=true`, `EXECUTIONS_DATA_MAX_AGE=168`.

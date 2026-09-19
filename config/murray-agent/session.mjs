@@ -8,6 +8,7 @@ const EMPTY = {
   lastMission: "",
   lastJobId: "",
   awaiting_instruction: false,
+  active_model: "",
 };
 
 function rowToSession(row) {
@@ -22,6 +23,7 @@ function rowToSession(row) {
     lastMission: row.last_mission || "",
     lastJobId: row.last_job_id || "",
     awaiting_instruction: Boolean(row.awaiting_instruction),
+    active_model: row.active_model || "",
   };
 }
 
@@ -41,14 +43,14 @@ export function createSessionStore({
 
   const select = database.prepare(
     `SELECT slug, url, conversation_id, last_test_command, last_mission,
-            last_job_id, awaiting_instruction
+            last_job_id, awaiting_instruction, active_model
        FROM session_context WHERE chat_id = ?`
   );
   const upsert = database.prepare(
     `INSERT INTO session_context (
       chat_id, slug, url, conversation_id, last_test_command, last_mission,
-      last_job_id, awaiting_instruction
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      last_job_id, awaiting_instruction, active_model
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(chat_id) DO UPDATE SET
       slug = excluded.slug,
       url = excluded.url,
@@ -56,7 +58,8 @@ export function createSessionStore({
       last_test_command = excluded.last_test_command,
       last_mission = excluded.last_mission,
       last_job_id = excluded.last_job_id,
-      awaiting_instruction = excluded.awaiting_instruction`
+      awaiting_instruction = excluded.awaiting_instruction,
+      active_model = excluded.active_model`
   );
 
   return {
@@ -73,7 +76,8 @@ export function createSessionStore({
         String(next.lastTestCommand || ""),
         String(next.lastMission || ""),
         String(next.lastJobId || ""),
-        next.awaiting_instruction ? 1 : 0
+        next.awaiting_instruction ? 1 : 0,
+        String(next.active_model || "")
       );
       return next;
     },

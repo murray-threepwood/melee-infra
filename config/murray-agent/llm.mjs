@@ -263,20 +263,39 @@ export const TOOL_DEFS = [
   },
 ];
 
+export const DEFAULT_CHAT_MODEL = "murray-chat";
+export const ALLOWED_MODELS = Object.freeze([
+  "deepseek-chat",
+  "deepseek-reasoner",
+  "gemini-2.5-flash",
+]);
+
+export function resolveChatModel(activeModel = "") {
+  const name = String(activeModel || "").trim();
+  if (!name) {
+    return DEFAULT_CHAT_MODEL;
+  }
+  if (ALLOWED_MODELS.includes(name) || name === DEFAULT_CHAT_MODEL) {
+    return name;
+  }
+  return null;
+}
+
 export function createLlm({
   fetchImpl = fetch,
-  apiKey = process.env.DEEPSEEK_API_KEY || "",
-  baseUrl = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1",
-  model = process.env.DEEPSEEK_MODEL || "deepseek-chat",
+  apiKey = process.env.LITELLM_MASTER_KEY || process.env.DEEPSEEK_API_KEY || "",
+  baseUrl = process.env.LITELLM_BASE_URL || "http://litellm:4000",
+  model = process.env.DEEPSEEK_MODEL || DEFAULT_CHAT_MODEL,
   timeoutMs = 45000,
 } = {}) {
-  async function complete({ messages, tools = TOOL_DEFS }) {
-    if (!apiKey || /CAMBIAR_POR|REEMPLAZAR|sk-deepseek-api-key-aqui/i.test(apiKey)) {
-      const err = new Error("DEEPSEEK_API_KEY ausente o placeholder");
+  async function complete({ messages, tools = TOOL_DEFS, model: requestModel } = {}) {
+    if (!apiKey || /CAMBIAR_POR|REEMPLAZAR|sk-deepseek-api-key-aqui|clave_aleatoria_litellm/i.test(apiKey)) {
+      const err = new Error("LITELLM_MASTER_KEY ausente o placeholder");
       err.code = "llm_unconfigured";
       err.status = 503;
       throw err;
     }
+    const chosen = requestModel || model || DEFAULT_CHAT_MODEL;
     const res = await fetchImpl(`${String(baseUrl).replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
@@ -284,7 +303,7 @@ export function createLlm({
         authorization: `Bearer ${apiKey}`,
       },
       body: JSON.stringify({
-        model,
+        model: chosen,
         messages,
         tools,
         tool_choice: "auto",

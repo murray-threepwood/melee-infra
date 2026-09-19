@@ -10,10 +10,11 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 
 *(Registrá aquí contratos cerrados, convenciones de interfaz y decisiones de diseño que no deben reabrirse ni revertirse sin consulta explícita).*
 
-- **Roadmap 07–10 cerrado, no reabrir**: las fases vivas están en `roadmap/07_*.md` … `roadmap/10_*.md`. No re-ejecutes `roadmap/archive/` (bootstrap 1–6). DoD 07–08 cumplidos: estado de Murray es `murray.db` WAL; el triage deduplica con `/triage/filter` + `/triage/mark-seen`. Sigue pendiente: URL `api.deepseek.com` en Murray/OpenHands → contenedor `litellm` (fase 09). Hasta ese DoD, DeepSeek directo sigue siendo la verdad de runtime.
+- **Roadmap 07–10 cerrado, no reabrir**: las fases vivas están en `roadmap/07_*.md` … `roadmap/10_*.md`. No re-ejecutes `roadmap/archive/` (bootstrap 1–6). DoD 07–09 cumplidos: `murray.db` WAL; triage `/triage/filter` + `/triage/mark-seen`; Murray y OpenHands pegan a `litellm`, no a `api.deepseek.com`. Sigue pendiente el TTL de sandboxes (fase 10).
 - **Socket Docker vigente: bind directo**. `murray-agent` y `openhands` montan `/var/run/docker.sock`. El seam sigue siendo `ops.mjs`. **No** implementes `tecnativa/docker-socket-proxy`, `DOCKER_HOST` a un proxy, ni `userns-remap`. Eso está en `roadmap/90_BACKLOG_HARDENING.md` y solo se abre con orden humana. El TTL de sandboxes (fase 10) usa el socket actual; no es hardenizado.
 - **Estado de Murray ≠ Postgres**: n8n usa PostgreSQL 16. El estado de `murray-agent` es SQLite WAL (`murray.db` en `murray_agent_data`). Tablas: `jobs`, `hitl_tokens`, `session_context`, `seen_emails`. Motor `node:sqlite` (Node 22), no `better-sqlite3`. No lo pases a Postgres.
-- **Gemini ≠ OAuth Gmail**: `GEMINI_API_KEY` es AI Studio. No reuses `GOOGLE_REFRESH_TOKEN` / `GOOGLE_CLIENT_SECRET` como key de Gemini.
+- **Gemini ≠ OAuth Gmail**: `GEMINI_API_KEY` es AI Studio. No reuses `GOOGLE_REFRESH_TOKEN` / `GOOGLE_CLIENT_SECRET` como key de Gemini. H13 (humano) pega `GEMINI_API_KEY` + `LITELLM_MASTER_KEY`.
+- **Gateway LiteLLM**: Murray usa `LITELLM_BASE_URL` + `LITELLM_MASTER_KEY`. OpenHands usa `LLM_BASE_URL=http://litellm:4000` y model `murray-worker`. Imagen pin `ghcr.io/berriai/litellm:v1.99.1`. Health `GET /health/liveliness`. Cero keys en `config/litellm/config.yaml`.
 
 - **Contratos de Interfaz**: Las interfaces públicas son el límite de prueba (seam). Si una prueba requiere inspeccionar el estado interno de un módulo, la abstracción es incorrecta.
 - **Manejo de Secretos**: Ningún token, contraseña ni clave privada se escribe en código, git, logs, handoffs ni chat. Credenciales solo en `.env` y `config/mcp-auth/.gauth.json` (gitignore). Un handoff que pegue `GOOGLE_CLIENT_SECRET` / refresh token **es un incidente**: rotar el secret en Google Cloud Console, actualizar esos dos archivos, `docker compose up -d --force-recreate workspace-mcp`. No reimprimir el valor.
@@ -73,7 +74,7 @@ Este archivo registra las lecciones aprendidas, invariantes técnicas y patrones
 - **Presupuesto de Memoria**: Validar que la huella de memoria acumulada de los servicios no exceda el límite operativo del entorno anfitrión.
 - **Persistencia Aislada**: Los volúmenes y rutas de almacenamiento persistente deben declararse explícitamente sin montar directorios raíz del anfitrión.
 - **docker stats MemUsage**: el formato es `12.5MiB / 3.8GiB`. Si el parser busca `GiB` en toda la línea, toma el **límite** y infla el total a cientos de GB. Parsear solo el primer token (uso). Medir con `docker compose stats`, no `docker stats` global.
-- **Huella idle observada**: ~838–850 MiB (5 servicios, 2026-09-16); ~1140–1230 MiB con `murray-agent` + coding volumes (2026-09-17). Techo `< 4.5 GB`. Un runtime hijo de OpenHands suma aparte; si se pasa el techo, recrear `openhands`.
+- **Huella idle observada**: ~838–850 MiB (5 servicios, 2026-09-16); ~1140–1230 MiB con `murray-agent` + coding volumes (2026-09-17). Desde fase 09 el stack tiene 7 servicios (`litellm` entra en el presupuesto). Techo `< 4.5 GB`. Un runtime hijo de OpenHands suma aparte; si se pasa el techo, recrear `openhands`.
 
 ---
 

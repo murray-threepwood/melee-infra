@@ -97,6 +97,35 @@ services:
     networks:
       - agent-net
 
+  litellm:
+    # Pin publicado 2026-09-02. Health de este tag: GET /health/liveliness (no /health).
+    image: ghcr.io/berriai/litellm:v1.99.1
+    container_name: murray-litellm
+    restart: unless-stopped
+    security_opt:
+      - "no-new-privileges:true"
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    environment:
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-}
+    volumes:
+      - ./config/litellm/config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:4000/health/liveliness', timeout=3)",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    networks:
+      - agent-net
+
   murray-agent:
     build: ./config/murray-agent
     image: murray-agent:local
@@ -107,8 +136,8 @@ services:
     security_opt:
       - "no-new-privileges:true"
     environment:
-      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
-      - DEEPSEEK_BASE_URL=https://api.deepseek.com/v1
+      - LITELLM_BASE_URL=http://litellm:4000
+      - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-}
       - DEEPSEEK_MODEL=deepseek-chat
       - MURRAY_AGENT_PORT=8080
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-murray-infra}
@@ -165,9 +194,9 @@ services:
     environment:
       - SANDBOX_RUNTIME_CONTAINER_IMAGE=ghcr.io/openhands/runtime:latest
       - WORKSPACE_MOUNT_PATH=./workspace
-      - LLM_MODEL=deepseek/deepseek-chat
-      - LLM_BASE_URL=https://api.deepseek.com/v1
-      - LLM_API_KEY=${DEEPSEEK_API_KEY}
+      - LLM_MODEL=murray-worker
+      - LLM_BASE_URL=http://litellm:4000
+      - LLM_API_KEY=${LITELLM_MASTER_KEY:-}
       - LOG_LEVEL=INFO
       - MAX_ITERATIONS=30
     volumes:

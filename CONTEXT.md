@@ -21,8 +21,11 @@ Invariante: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true`. El clic de 
 ## OpenHands
 Runtime de agente de código acotado a `./workspace`, con `no-new-privileges` y socket Docker para sandboxes hijos.
 
+## LiteLLM
+Gateway HTTP en `agent-net` (`litellm:4000`). Murray y OpenHands pegan acá, no a `api.deepseek.com`. Primario DeepSeek, fallback Gemini 2.5 Flash (AI Studio, no el OAuth de Gmail).
+
 ## murray-agent
-Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. DeepSeek Chat + diagnóstico/ops del stack + conductor de coding sessions (`./workspace`). No edita murray-infra. Git de dev en el jail: pull/commit sin HITL; push y delete con Aprobar. Nunca force ni push a main/master. `/jobs` consulta la cola async.
+Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. Chat vía LiteLLM + diagnóstico/ops del stack + conductor de coding sessions (`./workspace`). `/model` elige el modelo del chat. No edita murray-infra. Git de dev en el jail: pull/commit sin HITL; push y delete con Aprobar. Nunca force ni push a main/master. `/jobs` consulta la cola async.
 
 ## Job
 Fila async en `murray.db` (tabla `jobs`, SQLite WAL): clone, code, oh_poll, pull, push, delete, checkout. Status `queued|running|done|failed|stuck|paused`. El CEO las ve con `/jobs`. `paused` es sandbox OpenHands PAUSED con working tree sucio; no es «misión lista».

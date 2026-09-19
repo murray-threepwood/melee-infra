@@ -1,0 +1,31 @@
+model_list:
+  - model_name: deepseek-chat
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+  - model_name: deepseek-reasoner
+    litellm_params:
+      model: deepseek/deepseek-reasoner
+      api_key: os.environ/DEEPSEEK_API_KEY
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+  - model_name: murray-worker
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+  - model_name: murray-chat
+    litellm_params:
+      model: deepseek/deepseek-chat
+      api_key: os.environ/DEEPSEEK_API_KEY
+
+router_settings:
+  fallbacks:
+    - murray-worker: [gemini-2.5-flash]
+    - murray-chat: [gemini-2.5-flash]
+    - deepseek-chat: [gemini-2.5-flash]
+    - deepseek-reasoner: [gemini-2.5-flash]
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
