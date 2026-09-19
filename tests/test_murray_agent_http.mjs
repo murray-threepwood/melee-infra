@@ -338,9 +338,11 @@ function codingStack(overrides = {}) {
                     ? "status"
                     : args.includes("diff")
                       ? "diff"
-                      : args.includes("log")
-                        ? "log"
-                        : args.includes("fetch")
+                : args.includes("log")
+                  ? "log"
+                  : args.includes("rev-list")
+                    ? "rev-list"
+                    : args.includes("fetch")
                           ? "fetch"
                           : args.includes("add")
                             ? "add"
@@ -373,6 +375,9 @@ function codingStack(overrides = {}) {
             ? overrides.statusStdout
             : `## ${overrides.branch || "feat/disk"}\n M README.md\n`;
         return { code: 0, stdout: porcelain, stderr: "" };
+      }
+      if (verb === "rev-list") {
+        return { code: 0, stdout: `${overrides.commitsAhead ?? 0}\n`, stderr: "" };
       }
       if (verb === "push" && !opts.allowPush) {
         throw Object.assign(new Error("git push exige HITL"), { code: "git_forbidden" });
@@ -421,6 +426,7 @@ function codingStack(overrides = {}) {
     telegram,
     ops: overrides.ops,
     pollDelayMs: overrides.pollDelayMs ?? 1,
+    hitlBypass: overrides.hitlBypass ?? new Set(),
     worker: {
       kick(id) {
         return workerRef.current.kick(id);
@@ -1211,6 +1217,39 @@ test("finished con git vacío es empty_finish, no misión lista", async () => {
   const poll = jobs.list({ chatId: "50" }).find((job) => job.type === "oh_poll");
   assert.equal(poll.status, "stuck");
   assert.equal(poll.error, "empty_finish");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("finished con commits ahead es misión lista aunque el árbol esté limpio", async () => {
+  const { engine, session, worker, notes, jobs, root } = codingStack({
+    statusStdout: "## feat/disk\n",
+    commitsAhead: 5,
+    openhands: {
+      gitChanges: async () => ({ items: [] }),
+    },
+  });
+  fs.mkdirSync(path.join(root, "octocat-Hello-World"), { recursive: true });
+  session.patch("51", {
+    slug: "octocat-Hello-World",
+    url: "https://github.com/octocat/Hello-World.git",
+  });
+  const proposed = await engine.dispatchTool(
+    "propose_code_mission",
+    { instruction: "dejá los commits listos", test_command: "pytest" },
+    { chatId: "51" }
+  );
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "51",
+    callback_data: proposed.hitl.approve_data,
+  });
+  await worker.kick(hitl.job_id);
+  await worker.drain();
+  await worker.drain();
+  assert.equal(notes.some((row) => /empty_finish/.test(row.text)), false);
+  assert.equal(notes.some((row) => /Misión lista/.test(row.text)), true);
+  assert.equal(notes.some((row) => /NO están pusheados/.test(row.text)), true);
+  const poll = jobs.list({ chatId: "51" }).find((job) => job.type === "oh_poll");
+  assert.equal(poll.status, "done");
   fs.rmSync(root, { recursive: true, force: true });
 });
 

@@ -64,6 +64,7 @@ El socket Docker de `murray-agent` y `openhands` **sigue montado como hoy**. No 
 | [09_LITELLM_GATEWAY.md](./09_LITELLM_GATEWAY.md) | **Fase 9 (viva)** | Contenedor LiteLLM. DeepSeek primario, Gemini fallback. | `config/litellm/`, servicio `litellm` |
 | [10_SANDBOX_LIFECYCLE_TTL.md](./10_SANDBOX_LIFECYCLE_TTL.md) | **Fase 10 (viva)** | Hook al kick + watcher 30 min. Socket sin cambios. | `ops.mjs` allowlist `rm`, tests de reloj |
 | [90_BACKLOG_HARDENING.md](./90_BACKLOG_HARDENING.md) | **Backlog** | Paquete socket Docker (doble proxy + `VOLUMES=0` + `userns-remap`). **No ejecutar.** | — |
+| [91_PERMISSIVE_WINDOW.md](./91_PERMISSIVE_WINDOW.md) | **Inventario** | Relajos 2026-09-19 para que Garfio labure. **No es fase viva.** Un agente de cyber los revierte. | LiteLLM loopback, HITL bypass code/clone, telegram quiet |
 | [99_HUMAN_OPERATOR.md](./99_HUMAN_OPERATOR.md) | **Humano** | Clicks y keys. H13 Gemini + LiteLLM. H14 reimport triage. | `.env` |
 | [archive/](./archive/) | **Histórico** | Fases 1–6 y el dictamen del arquitecto. **No ejecutar.** | — |
 

@@ -704,6 +704,23 @@ export function createWorkspace({
     return { slug, text: redact(result.stdout || "").slice(0, 3000) };
   }
 
+  async function commitsAhead(slug, { base = "main" } = {}) {
+    const dest = requireRepo(slug);
+    const branch = sanitizeBranchName(String(base || "main"));
+    const refs = [`origin/${branch}`, branch];
+    for (const ref of refs) {
+      const result = await gitRun(
+        ["-C", dest, "rev-list", "--count", `${ref}..HEAD`],
+        { timeoutMs: 15000 }
+      );
+      if (result.code === 0) {
+        const n = Number(String(result.stdout || "").trim());
+        return Number.isFinite(n) ? n : 0;
+      }
+    }
+    return 0;
+  }
+
   async function pull(slug) {
     const dest = requireRepo(slug);
     const env = await envForRepo(dest);
@@ -854,6 +871,7 @@ export function createWorkspace({
     status,
     diff,
     log,
+    commitsAhead,
     pull,
     checkout,
     commit,

@@ -5,6 +5,7 @@ import {
   detectStuck,
   isAgentDone,
   isSandboxPaused,
+  missionHasDeliverable,
   openHandsLlmModel,
   summarizeEvents,
 } from "../config/murray-agent/openhands.mjs";
@@ -296,4 +297,39 @@ test("detectStuck: execution_status, timeout y loop de comandos", () => {
     false
   );
   assert.match(summarizeEvents([{ kind: "MessageEvent", payload: "ok" }]), /MessageEvent/);
+});
+
+test("detectStuck no corta por reloj si el sandbox sigue RUNNING", () => {
+  const live = detectStuck({
+    executionStatus: "running",
+    sandboxStatus: "RUNNING",
+    startedAt: 0,
+    now: 13 * 60 * 1000,
+    maxMs: 12 * 60 * 1000,
+  });
+  assert.equal(live.stuck, false);
+  const dead = detectStuck({
+    executionStatus: null,
+    sandboxStatus: "MISSING",
+    startedAt: 0,
+    now: 13 * 60 * 1000,
+    maxMs: 12 * 60 * 1000,
+  });
+  assert.equal(dead.reason, "timeout");
+  const hard = detectStuck({
+    executionStatus: "running",
+    sandboxStatus: "RUNNING",
+    startedAt: 0,
+    now: 5 * 60 * 60 * 1000,
+    maxMs: 12 * 60 * 1000,
+    hardMaxMs: 4 * 60 * 60 * 1000,
+  });
+  assert.equal(hard.reason, "timeout");
+});
+
+test("missionHasDeliverable acepta commits ahead con árbol limpio", () => {
+  assert.equal(missionHasDeliverable({ changes: { items: [] }, files: [], commitsAhead: 0 }), false);
+  assert.equal(missionHasDeliverable({ changes: { items: [] }, files: [], commitsAhead: 5 }), true);
+  assert.equal(missionHasDeliverable({ changes: { items: ["a"] }, files: [], commitsAhead: 0 }), true);
+  assert.equal(missionHasDeliverable({ files: ["README.md"], commitsAhead: 0 }), true);
 });

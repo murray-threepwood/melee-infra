@@ -1,14 +1,19 @@
+import { isTelegramQuiet } from "./hitl-policy.mjs";
 import { chunkTelegram, redact } from "./redact.mjs";
 
 export function createTelegramNotifier({
   token = process.env.TELEGRAM_BOT_TOKEN || "",
   chatId = process.env.TELEGRAM_CHAT_ID || "",
+  quiet = isTelegramQuiet(),
   fetchImpl = fetch,
   apiBase = "https://api.telegram.org",
 } = {}) {
   const allowed = String(chatId || "");
 
-  async function send({ text, buttons, chat_id } = {}) {
+  async function send({ text, buttons, chat_id, terminal } = {}) {
+    if (quiet && !terminal) {
+      return { skipped: true, reason: "telegram_quiet" };
+    }
     const dest = String(chat_id || allowed);
     if (!token || /CAMBIAR_POR|REEMPLAZAR|ABCdefGHI/i.test(token)) {
       return { skipped: true, reason: "telegram_unconfigured" };

@@ -64,6 +64,13 @@ function recordingGit({
     if (verb === "log") {
       return { code: 0, stdout: "abc123 hello\n", stderr: "" };
     }
+    if (verb === "rev-list") {
+      const spec = args.find((item) => String(item).includes("..HEAD")) || "";
+      if (spec.startsWith("origin/main") || spec.startsWith("main")) {
+        return { code: 0, stdout: "5\n", stderr: "" };
+      }
+      return { code: 128, stdout: "", stderr: "unknown revision" };
+    }
     if (verb === "checkout" && args.includes("-b")) {
       branch = args.at(-1);
       return { code: 0, stdout: `Switched to a new branch '${branch}'\n`, stderr: "" };
@@ -303,6 +310,19 @@ test("checkout -b local no hace fetch; rama tóxica denegada", async () => {
   await assert.rejects(
     () => workspace.checkout("octocat-Hello-World", { branch: "../escape" }),
     { code: "git_branch_invalid" }
+  );
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("commitsAhead cuenta origin/main..HEAD", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "murray-ws-"));
+  const { gitRun, calls } = recordingGit({ branch: "feat/ola-q" });
+  const workspace = createWorkspace({ root, gitRun });
+  await workspace.clone({ url: "https://github.com/octocat/Hello-World" });
+  assert.equal(await workspace.commitsAhead("octocat-Hello-World"), 5);
+  assert.equal(
+    calls.some((args) => args.includes("rev-list") && args.some((item) => String(item).includes("origin/main..HEAD"))),
+    true
   );
   fs.rmSync(root, { recursive: true, force: true });
 });

@@ -36,7 +36,7 @@ flowchart TD
     N8N <==>|HTTP :8080 chat/ops| MurrayAgent
     N8N <==>|HTTP :3000| OpenHands
     MurrayAgent -->|HTTP :4000| LiteLLM
-    OpenHands -->|HTTP :4000 openai/garfio-worker| LiteLLM
+    OpenHands -->|HTTP host.docker.internal:4000 openai/garfio-worker| LiteLLM
     MurrayAgent -->|compose allowlist + HITL| Stack[docker.sock]
     MCP <==>|HTTPS OAuth 2.0 (Draft-Only)| GmailCloud
 ```
@@ -50,8 +50,8 @@ flowchart TD
 | `postgres_db` | `postgres_db` | `5432/tcp` | Ninguno | Aislado en `agent-net`. Accesible únicamente por `n8n`. Imagen `postgres:16-alpine`. **No** subir a 17 sin OK humano (rompe el volumen). |
 | `workspace-mcp`| `workspace-mcp` | `8000/tcp` | Ninguno | Aislado en `agent-net`. Accesible por `n8n`. HTTP Gmail API draft-only (`config/workspace-mcp/server.mjs`). |
 | `murray-agent` | `murray-agent` | `8080/tcp` | Ninguno | Aislado en `agent-net`. Chat vía LiteLLM + ops allowlist. `working_dir=/tmp`. |
-| `litellm` | `litellm` | `4000/tcp` | Ninguno | Gateway. Imagen `ghcr.io/berriai/litellm:v1.99.1`. Health `GET /health/liveliness`. Cero keys en `config/litellm/config.yaml`. |
-| `openhands` | `openhands` | `3000/tcp` | `127.0.0.1:${OPENHANDS_PORT:-3000}` | Loopback host para UI local. `LLM_BASE_URL=http://litellm:4000`. `LLM_MODEL=openai/garfio-worker` (prefijo `openai/` obligatorio para el SDK). |
+| `litellm` | `litellm` | `4000/tcp` | `127.0.0.1:${LITELLM_PORT:-4000}` | Gateway. Imagen `ghcr.io/berriai/litellm:v1.99.1`. Health `GET /health/liveliness`. Loopback **permisivo** (P1, `roadmap/91_PERMISSIVE_WINDOW.md`): el sandbox no resuelve DNS `litellm`. Cero keys en el YAML. |
+| `openhands` | `openhands` | `3000/tcp` | `127.0.0.1:${OPENHANDS_PORT:-3000}` | Loopback host para UI local. `LLM_BASE_URL=http://host.docker.internal:4000`. `OPENAI_API_KEY` = master LiteLLM. `LLM_MODEL=openai/garfio-worker`. `WORKSPACE_MOUNT_PATH` **absoluto** (`COMPOSE_PROJECT_DIR/workspace`). |
 
 ---
 
@@ -190,7 +190,7 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
   - Copy que pide Aprobar / `propose_code_mission` / botón Aprobar **sin** `needs_hitl=true` + `hitl.approve_data` es inválida. `/chat` recupera HITL si el texto del LLM trae comando de test; si no, receta Murray (nunca «Tocá Aprobar» en prosa).
   - `\bpush\b` suelto en status («push permitido») no es `propose_push`. `pusheá` / `hacé push` / `git push` al inicio sí.
   - `needs_hitl=true` + `hitl.approval_id` (16 hex) + `hitl.kind` (`ops`|`clone`|`code`|`delete`|`push`) + `hitl.approve_data`/`reject_data`
-  - Jobs `oh_poll`: Telegram al pausar, trancar o terminar. `sandbox_status=PAUSED` + `execution_status` vacío **no** es done. Working tree sucio → status `paused` + aviso de commit; limpio → stuck HITL `sandbox_paused`. `finished` + git vacío + árbol limpio → stuck `empty_finish`. Tres fallos HTTP de poll → stuck `poll_error:…`. `kick` en vuelo se reusa (no segundo `startConversation`). ≥2 `oh-agent-server` running → code job `sandbox_busy`.
+  - Jobs `oh_poll`: Telegram al pausar, trancar o terminar (aunque `MURRAY_TELEGRAM_QUIET=1`; el quiet solo tapa progreso). `sandbox_status=PAUSED` + `execution_status` vacío **no** es done. Working tree sucio → status `paused` + aviso de commit; limpio → stuck HITL `sandbox_paused`. `finished` + git vacío + árbol limpio **y cero commits ahead de main** → stuck `empty_finish`. `finished` + commits locales sin pushear → misión lista, aviso explícito de que GitHub no los tiene. Reloj de 12 min no corta si sandbox `RUNNING` (tope 4 h). Tres fallos HTTP de poll → stuck `poll_error:…`. `kick` en vuelo se reusa (no segundo `startConversation`). ≥2 `oh-agent-server` running → code job `sandbox_busy`.
 - **`POST /ops/execute`** y **`POST /ops/reject`**: `{ approval_id }` solo `kind=ops`
   - `action=restart|recreate` exige `service` allowlist
   - `action=heal_openhands`: lista `docker ps -a --filter name=oh-agent-server`, `rm -f` solo IDs cuyo **nombre** es `oh-agent-server-*`, después `compose restart openhands`. Emitido por `/triage`, nunca por `propose_ops`
@@ -229,9 +229,12 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
 
 ### 3.3. Proveedor LLM y Orquestación de Agentes
 
-- **Gateway**: `litellm` en `agent-net` (`http://litellm:4000`). Único origen para Murray y OpenHands. Cero `api.deepseek.com` en esos dos servicios.
-- **Alias**: `garfio-worker` (OpenHands default) y `murray-chat` (Murray si `active_model` vacío). `murray-worker` sigue existiendo en el YAML. Primario `deepseek/deepseek-chat`. Fallback: `gemini/gemini-3.8-flash` → `gemini/gemini-2.5-flash-lite`.
+- **Gateway**: `litellm` en `agent-net` (`http://litellm:4000`) para Murray. OpenHands sandbox **no** está en esa red: usa `http://host.docker.internal:4000` (loopback publicado). Cero `api.deepseek.com` en Murray/OpenHands.
+- **Alias**: `garfio-worker` (OpenHands default) y `murray-chat` (Murray si `active_model` vacío). `murray-worker` sigue existiendo en el YAML. También `openai/garfio-worker` y `openai/deepseek-chat`. Primario `deepseek/deepseek-chat`. Fallback: `gemini/gemini-3.8-flash` → `gemini/gemini-2.5-flash-lite`.
 - **Prefijo OpenHands**: el SDK llama a LiteLLM *como cliente*, no como proxy. Hay que mandar `openai/<alias>` (`LLM_MODEL` y `llm_model` de `POST /api/v1/app-conversations`). Murray lo normaliza en `openHandsLlmModel()`. Un alias pelado (`deepseek-chat`) → `BadRequest` / job `stuck` `error`. Trasplantar cerebro (`/garfio model`) guarda el alias sin prefijo; el cliente lo agrega al disparar.
+- **Sandbox ≠ agent-net**: `oh-agent-server-*` nace en Docker `bridge`. No resuelve `litellm`. `LLM_BASE_URL` tiene que ser `http://host.docker.internal:4000` **y** LiteLLM tiene que estar publicado en loopback. `./workspace` relativo en `WORKSPACE_MOUNT_PATH` deja el sandbox sin bind (solo un `.git` dummy). Contrato: `assertSandboxReachableLlmBaseUrl()`.
+- **OPENAI_API_KEY**: con modelo `openai/…` el SDK del sandbox ignora `LLM_API_KEY` y exige `OPENAI_API_KEY`. Murray manda **solo** `secrets.OPENAI_API_KEY` en el POST de alta (`conversationSecrets()`). Un secreto `LLM_*` explota: `Secret name 'LLM_API_KEY' starts with reserved prefix 'LLM_' and cannot be used` → job `start_error`.
+- **HITL bypass permisivo**: `MURRAY_HITL_BYPASS=code,clone` (default compose de la ventana 91). Push/delete/ops siguen con teclado. `MURRAY_TELEGRAM_QUIET=1` silencia progreso de jobs; pausa/tranca/fin sí pegan a Telegram.
 - **Modelos `/model`**: `deepseek-chat`, `deepseek-reasoner`, `gemini-3.8-flash`, `gemini-2.5-flash-lite`. Se guardan en `session_context.active_model` por chat. OpenHands no lee `active_model`; usa `session_context.garfio_model` (default `garfio-worker`). Cero Pro en default/fallback.
 - **`GEMINI_API_KEY`**: Google AI Studio. No reusar `GOOGLE_REFRESH_TOKEN` / `GOOGLE_CLIENT_SECRET`. H13 (humano) pega las keys.
 - Tests de LLM: no llamar APIs vivas por default (mocks / fixtures). `/status` live no usa LLM.
