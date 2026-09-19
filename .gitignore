@@ -21,6 +21,10 @@ config/mcp-auth/.accounts.json
 workspace/*
 !workspace/.gitkeep
 
+# Inbox humano de inspect (commitear README; dumps los revisás vos)
+operator-inbox/*
+!operator-inbox/README.md
+
 # Dependencias y caches
 node_modules/
 __pycache__/

@@ -63,6 +63,18 @@ CREATE TABLE IF NOT EXISTS garfio_rationales (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_garfio_slug ON garfio_rationales(slug);
+
+CREATE TABLE IF NOT EXISTS operator_notes (
+  id TEXT PRIMARY KEY,
+  chat_id TEXT NOT NULL DEFAULT '',
+  job_id TEXT NOT NULL DEFAULT '',
+  title TEXT NOT NULL DEFAULT '',
+  why TEXT NOT NULL DEFAULT '',
+  path TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_operator_notes_chat ON operator_notes(chat_id);
 `;
 
 const MEMORY_CAP = 20;

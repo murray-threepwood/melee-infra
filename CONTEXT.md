@@ -37,13 +37,19 @@ Gateway HTTP en `agent-net` (`litellm:4000`). Murray y OpenHands pegan acá, no 
 Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. Chat vía LiteLLM + diagnóstico/ops del stack + conductor de coding sessions (`./workspace`). Seteado en `deepseek-chat` (vía `murray-chat`: el más barato por caché y exacto para tools/sysadmin). `/model` elige el modelo del chat. No edita murray-infra. Git de dev en el jail: pull/commit sin HITL; push y delete con Aprobar. Nunca force ni push a main/master. `/jobs` consulta la cola async.
 
 ## Job
-Fila async en `murray.db` (tabla `jobs`, SQLite WAL): clone, code, oh_poll, pull, push, delete, checkout. Status `queued|running|done|failed|stuck|paused`. El CEO las ve con `/jobs`. `paused` es sandbox OpenHands PAUSED con working tree sucio; no es «misión lista».
+Fila async en `murray.db` (tabla `jobs`, SQLite WAL): clone, code, oh_poll, pull, push, delete, checkout, inspect. Status `queued|running|done|failed|stuck|paused`. El CEO las ve con `/jobs`. `paused` es sandbox OpenHands PAUSED con working tree sucio; no es «misión lista». `inspect` es el diagnóstico profundo (dump + LLM + auto-ops).
 
 ## Coding session
 Loop HITL por Telegram: clonar un repo público/privado (token en `.env`) a `./workspace/<slug>`, preguntar, editar/testear con OpenHands, y (con Aprobar) pushear una rama feature o borrar paths bajo `./workspace`. Stuck → opciones (retry/cambiar/parar/log).
 
+## inspect
+Job async de diagnóstico profundo. «qué pasó» / `/triage` / «en qué andas murray» encolan `inspect` (n8n 45s). Snapshot redacted → JSON del modelo del chat → auto-fix allowlist (retry/heal/restart/recreate, nunca postgres) o nota humana. `/jobs` sigue siendo la cola cruda.
+
+## operator-inbox
+Directorio bind `./operator-inbox` + tabla `operator_notes`. Murray append-only, redactado, **no** commitea. Cursor/el CEO revisan y, si quieren, commitean.
+
 ## Triage
-Diagnóstico del obrero OpenHands sin LLM. Frase canónica `/triage`; hablado: «qué pasa», «qué pasa con el obrero», «diagnosticá». Resume jobs, sandboxes `oh-agent-server-*`, git del slug y RAM Docker. No vuelca eventos JSON. Sanar (purgar sandboxes + restart openhands) pide HITL `heal_openhands`.
+Alias de inspect para el obrero. Frase canónica `/triage`; hablado: «qué pasa», «qué pasó», «qué pasa con el obrero», «diagnosticá», «en qué andas murray». Ya no es el informe determinista HITL de heal. Sanar sandboxes en este flujo lo hace el ejecutor de inspect (P12). `POST /triage/filter` es **otro** contrato (Gmail).
 
 ## seen_emails
 Tabla de `murray.db` con IDs de Gmail ya procesados (`message_id`, `thread_id`, `processed_at`). Sin asuntos ni cuerpos. El cron pregunta `POST /triage/filter` y marca `POST /triage/mark-seen` solo si el draft respondió 2xx. `workspace-mcp` no guarda vistos.

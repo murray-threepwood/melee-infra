@@ -146,6 +146,7 @@ test("isTriageIntent: qué pasa, no el UUID suelto", () => {
   assert.equal(isTriageIntent("Murray, qué pasa?"), true);
   assert.equal(isTriageIntent("qué pasa con el obrero"), true);
   assert.equal(isTriageIntent("qué pasó"), true);
+  assert.equal(isTriageIntent("en qué andas murray"), true);
   assert.equal(isTriageIntent("diagnosticá"), true);
   assert.equal(isTriageIntent("triage"), true);
   assert.equal(isTriageIntent("/triage"), true);

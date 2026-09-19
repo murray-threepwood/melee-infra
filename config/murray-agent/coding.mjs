@@ -3,7 +3,7 @@ import { classifyUserText, extractTestCommand, isAffirmative, isHitlStuck, isRes
 import { formatJobDetail, formatJobsSummary, jobsHint } from "./jobs.mjs";
 import { detectStuck, extractGarfioRationale, isAgentDone, isSandboxPaused, missionHasDeliverable, summarizeEvents } from "./openhands.mjs";
 import { packHitl, packHitlHelp, packReply } from "./reply.mjs";
-import { analyzeSnapshot, formatTriage } from "./triage.mjs";
+import { runInspectJob } from "./inspect.mjs";
 import { stuckKeyboard } from "./telegram.mjs";
 import { parseHttpsGitUrl } from "./workspace.mjs";
 import { formatGarfioLog } from "./garfio-store.mjs";
@@ -66,6 +66,9 @@ export function createCodingSession({
   telegram,
   ops,
   garfioStore,
+  llm,
+  readDoc,
+  operatorInbox,
   hitlBypass = parseHitlBypass(process.env.MURRAY_HITL_BYPASS),
   now = () => Date.now(),
   pollDelayMs = 4000,
@@ -370,8 +373,8 @@ export function createCodingSession({
         create: Boolean(verdict.create),
       });
     }
-    if (verdict.action === "triage") {
-      return runTriage({ chatId });
+    if (verdict.action === "inspect" || verdict.action === "triage") {
+      return startInspectJob({ chatId, jobRef: verdict.jobId || "" });
     }
     if (verdict.action === "garfio_log") {
       if (!garfioStore || typeof garfioStore.list !== "function") {
@@ -551,6 +554,74 @@ export function createCodingSession({
     );
   }
 
+  function startInspectJob({ chatId, jobRef = "" } = {}) {
+    return enqueueJob(
+      "inspect",
+      chatId,
+      { jobRef: String(jobRef || "") },
+      "Junto dump y le pego al modelo. Job inspect {id}."
+    );
+  }
+
+  async function retryStuckFromSnapshot(chatId, snapshot) {
+    const candidates = [
+      snapshot?.resolvedJob,
+      ...(Array.isArray(snapshot?.jobs) ? snapshot.jobs : []),
+    ].filter(
+      (row) =>
+        row &&
+        (row.type === "code" || row.type === "oh_poll") &&
+        (row.status === "stuck" || row.status === "paused" || row.status === "failed")
+    );
+    const target = candidates[0];
+    if (!target) {
+      return { error: "no_stuck" };
+    }
+    const full = (jobs.get && jobs.get(target.id)) || {};
+    const payload = full.payload || {};
+    const sess = session.get(chatId);
+    const isError = /error|sandbox_error|sandbox_busy|start_error/.test(String(full.error || ""));
+    const conversationId = payload.conversationId || "";
+    const followUp = Boolean(conversationId) && !isError;
+    return startCodeJob(
+      {
+        chatId,
+        slug: payload.slug || sess.slug,
+        instruction: payload.instruction || sess.lastMission,
+        testCommand: payload.testCommand || sess.lastTestCommand,
+        filesPlan: payload.filesPlan || "",
+        conversationId: followUp ? conversationId : "",
+      },
+      { followUp }
+    );
+  }
+
+  async function handleInspectJob(job) {
+    try {
+      await runInspectJob(job, {
+        jobs,
+        session,
+        openhands,
+        workspace,
+        ops,
+        readDoc,
+        llm,
+        operatorInbox,
+        now,
+        notifyJob,
+        retryStuck: (snapshot) => retryStuckFromSnapshot(job.chatId, snapshot),
+      });
+    } catch (err) {
+      jobs.update(job.id, { status: "failed", error: err.code || err.message });
+      await notifyJob(
+        job,
+        `Inspect falló (${err.code || "inspect_failed"}): ${String(err.message || "").slice(0, 400)}`,
+        undefined,
+        { terminal: true }
+      );
+    }
+  }
+
   async function handleCloneJob(job) {
     const { url, slug } = job.payload || {};
     try {
@@ -609,65 +680,6 @@ export function createCodingSession({
     } catch {
       return [];
     }
-  }
-
-  async function runTriage({ chatId }) {
-    const listed = typeof jobs.list === "function" ? jobs.list({ chatId, limit: 20 }) : [];
-    const sess = session.get(chatId) || {};
-    let git = { files: [] };
-    try {
-      if (sess.slug && workspace && typeof workspace.status === "function") {
-        git = await workspace.status(sess.slug);
-      }
-    } catch {
-      git = { files: [] };
-    }
-    const sandboxes = await listOhSandboxes();
-    let mem = {};
-    if (ops && typeof ops.memorySnapshot === "function") {
-      try {
-        mem = await ops.memorySnapshot();
-      } catch {
-        mem = {};
-      }
-    }
-    let live = {};
-    const poll = listed.find((row) => row.type === "oh_poll" && row.payload?.conversationId);
-    if (poll?.payload?.conversationId && openhands && typeof openhands.getConversation === "function") {
-      try {
-        const conv = await openhands.getConversation(poll.payload.conversationId);
-        live = {
-          sandbox: conv?.sandbox_status,
-          exec: conv?.execution_status,
-        };
-      } catch {
-        live = {};
-      }
-    }
-    const report = analyzeSnapshot({ jobs: listed, sandboxes, git, mem, live });
-    const extra = live.sandbox
-      ? `\nlive: sandbox=${live.sandbox} exec=${live.exec ?? "null"}`
-      : "";
-    const text = `${formatTriage(report)}${extra}`;
-    if (report.heal?.action === "heal_openhands" && approvals && typeof approvals.issue === "function") {
-      const approvalId = approvals.issue({
-        kind: "ops",
-        action: "heal_openhands",
-        service: "openhands",
-      });
-      return packHitl(
-        `${text}\nTocá Aprobar. Rechazar no toca Docker.`,
-        {
-          kind: "ops",
-          approval_id: approvalId,
-          action: "heal_openhands",
-          service: "openhands",
-          approve_data: `APPROVE_OPS:${approvalId}`,
-          reject_data: `REJECT_OPS:${approvalId}`,
-        }
-      );
-    }
-    return packReply(text);
   }
 
   async function handleCodeJob(job) {
@@ -1153,6 +1165,7 @@ export function createCodingSession({
     pull: handlePullJob,
     push: handlePushJob,
     checkout: handleCheckoutJob,
+    inspect: handleInspectJob,
   };
 
   return {
@@ -1164,9 +1177,10 @@ export function createCodingSession({
     proposePush,
     startPull,
     startCheckout,
+    startInspectJob,
     describeWorkspace,
     describeJobs,
-    triage: runTriage,
+    triage: startInspectJob,
     handleHitl,
     handlers,
     parseWorkspaceCallback,

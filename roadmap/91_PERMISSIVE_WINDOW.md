@@ -33,6 +33,7 @@ Síntomas reproducidos:
 | P8 | `MAX_ITERATIONS=80` | `openhands` env | Volver a 30 si el presupuesto de tokens duele. |
 | P10 | `OH_AGENT_SERVER_ENV` inyecta `OPENAI_API_KEY` / `LITELLM_PROXY_API_KEY` en el sandbox | `openhands` env | OpenHands 1.36 solo auto-forward `LLM_*`. Sin esto el SDK pide `OPENAI_API_KEY` y muere. |
 | P11 | Relajo de nombres de secreto: `OPENAI_API_KEY` en body + env del sandbox | `openhands.mjs` + compose | El SDK `openai/` ignora `LLM_API_KEY`. `secrets.LLM_*` está **vedado** (reserved prefix). Hardening: meter sandbox en `agent-net` y dejar de pasar la master por `secrets`. |
+| P12 | Inspect auto-ops **sin HITL**: `retry_stuck`, `heal_openhands`, `restart`/`recreate` (allowlist, **nunca** `postgres_db`) cuando el JSON de inspect trae finding | `inspect.mjs` / `coding.mjs` | Volver a teclado HITL para heal/restart/recreate. El chat `propose_ops` **sigue** pidiendo Aprobar. Push a main y force siguen vedados. |
 
 ## Qué NO se tocó (sigue en backlog 90)
 

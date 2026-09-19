@@ -20,6 +20,7 @@ import { createTelegramNotifier } from "./telegram.mjs";
 import { createSandboxJanitor } from "./sandbox-ttl.mjs";
 import { createWorkspace } from "./workspace.mjs";
 import { createGarfioStore } from "./garfio-store.mjs";
+import { createOperatorInbox } from "./operator-inbox.mjs";
 
 function sendJson(res, status, body) {
   const payload = JSON.stringify(body);
@@ -174,6 +175,7 @@ export function createEngineFromEnv() {
   const telegram = createTelegramNotifier();
   const janitor = createSandboxJanitor({ ops, store: jobs });
   const garfio = createGarfioStore({ db });
+  const operatorInbox = createOperatorInbox({ db });
   const workerRef = { current: null };
   const coding = createCodingSession({
     workspace,
@@ -184,6 +186,9 @@ export function createEngineFromEnv() {
     telegram,
     ops,
     garfioStore: garfio,
+    llm,
+    readDoc,
+    operatorInbox,
     worker: {
       kick(id) {
         return workerRef.current ? workerRef.current.kick(id) : Promise.resolve(null);

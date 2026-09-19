@@ -68,7 +68,7 @@ export function isTriageIntent(text) {
   if (!t || t.length > 140) {
     return false;
   }
-  return /^(?:triage(?: garfio)?|qu[eé] (?:pasa|pas[oó]|hace|anda haciendo|est[áa] haciendo)(?: con)?(?: (?:el )?(?:obrero|openhands|sandbox|la misi[oó]n|garfio|el manco|meathook))?|c[oó]mo (?:est[áa]|anda|va|viene)(?: (?:el )?(?:obrero|garfio|el manco|meathook))?|diagnostic[áa](?:me|lo)?(?: (?:el )?(?:obrero|garfio))?|fijate (?:en )?(?:garfio|el manco)|qu[eé] carajo hace (?:garfio|el manco)|revis[áa](?:me)? (?:a )?(?:garfio|el manco)|status garfio|garfio status)$/i.test(
+  return /^(?:triage(?: garfio)?|en qu[eé] and[aá]s(?: murray)?|qu[eé] (?:pasa|pas[oó]|hace|anda haciendo|est[áa] haciendo)(?: con)?(?: (?:el )?(?:obrero|openhands|sandbox|la misi[oó]n|garfio|el manco|meathook|murray))?|c[oó]mo (?:est[áa]|anda|va|viene)(?: (?:el )?(?:obrero|garfio|el manco|meathook|murray))?|diagnostic[áa](?:me|lo)?(?: (?:el )?(?:obrero|garfio))?|fijate (?:en )?(?:garfio|el manco)|qu[eé] carajo hace (?:garfio|el manco)|revis[áa](?:me)? (?:a )?(?:garfio|el manco)|status garfio|garfio status)$/i.test(
     t
   );
 }
@@ -258,13 +258,13 @@ export function classifyUserText(text, { hasSession = false } = {}) {
     return { action: "garfio_log", slug: match?.[1] || "" };
   }
   if (isTriageIntent(trimmed) && !refs.ref) {
-    return { action: "triage" };
+    return { action: "inspect", jobId: "" };
   }
   if (
     DIAGNOSE_INTENT.test(trimmed) ||
     (refs.ref && trimmed.length <= 80 && !MUTATE_INTENT.test(trimmed))
   ) {
-    return { action: "diagnose_job", jobId: refs.ref };
+    return { action: "inspect", jobId: refs.ref };
   }
   if (isAffirmative(trimmed)) {
     return { action: hasSession ? "confirm_code" : "chat" };

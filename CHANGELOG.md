@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.20 — Inspect profundo + operator-inbox
+
+- «qué pasó» / `/triage` / «en qué andas murray» encolan un job `inspect` (n8n 45s): snapshot redacted → JSON del modelo → auto-fix allowlist (retry, heal, restart/recreate **sin** postgres) **sin teclado**.
+- `/jobs` crudo no cambia. Tareas humanas en `operator-inbox/` + tabla `operator_notes`. Murray no commitea el inbox ni edita murray-infra.
+- Relajo P12 en `roadmap/91_PERMISSIVE_WINDOW.md`. Fase viva: `roadmap/11_SELF_INSPECT.md`.
+
 ## 0.1.19 — Conductor de Garfio no abandona una misión viva
 
 - Timeout de 12 min **no** aplica si el sandbox sigue `RUNNING` (tope duro 4 h).

@@ -115,7 +115,7 @@ export function formatManual() {
     "• /status: Estado de los contenedores Docker.",
     "• /health: Healthchecks HTTP de los servicios internos.",
     "• /logs <servicio>: Logs de n8n, openhands, litellm, etc.",
-    "• /triage (o «¿qué hace Garfio?»): Diagnóstico de sandboxes del obrero.",
+    "• /triage (o «qué pasó» / «en qué andas murray»): inspect async (dump + modelo + auto-fix allowlist).",
     "",
     "2. Control de Cerebros (LLMs)",
     "• /model [modelo]: Ver o cambiar el motor de Murray (chat). Óptimo: deepseek-chat (más barato y exacto).",
