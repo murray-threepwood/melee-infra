@@ -118,6 +118,15 @@ test("complete() usa el modelo del store y pega al gateway mock", async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test("OpenHands pega al proxy como openai/garfio-worker", () => {
+  const compose = fs.readFileSync(
+    new URL("../docker-compose.yml", import.meta.url),
+    "utf8"
+  );
+  assert.match(compose, /LLM_MODEL=openai\/garfio-worker/);
+  assert.doesNotMatch(compose, /LLM_MODEL=(?!openai\/)garfio-worker/);
+});
+
 test("carta LiteLLM: 3.8 + lite, sin 2.5-flash, fallback en cadena", () => {
   const yaml = fs.readFileSync(
     new URL("../config/litellm/config.yaml", import.meta.url),

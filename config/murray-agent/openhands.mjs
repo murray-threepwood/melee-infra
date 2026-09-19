@@ -21,6 +21,14 @@ function deny(code, message, status = 502) {
   throw err;
 }
 
+export function openHandsLlmModel(llmModel) {
+  const clean = String(llmModel || "").trim();
+  if (!clean) {
+    return "";
+  }
+  return clean.startsWith("openai/") ? clean : `openai/${clean}`;
+}
+
 export function gitChangeCount(changes) {
   if (!changes) {
     return 0;
@@ -256,9 +264,9 @@ export function createOpenHandsClient({
       },
       system_message_suffix: garfioPersonaText,
     };
-    if (llmModel && typeof llmModel === "string" && llmModel.trim()) {
-      const clean = llmModel.trim();
-      body.llm_model = clean.startsWith("openai/") ? clean : `openai/${clean}`;
+    const prefixed = openHandsLlmModel(llmModel);
+    if (prefixed) {
+      body.llm_model = prefixed;
     }
     return request("POST", "/api/v1/app-conversations", { body });
   }

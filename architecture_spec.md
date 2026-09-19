@@ -36,7 +36,7 @@ flowchart TD
     N8N <==>|HTTP :8080 chat/ops| MurrayAgent
     N8N <==>|HTTP :3000| OpenHands
     MurrayAgent -->|HTTP :4000| LiteLLM
-    OpenHands -->|HTTP :4000 murray-worker| LiteLLM
+    OpenHands -->|HTTP :4000 openai/garfio-worker| LiteLLM
     MurrayAgent -->|compose allowlist + HITL| Stack[docker.sock]
     MCP <==>|HTTPS OAuth 2.0 (Draft-Only)| GmailCloud
 ```
@@ -51,7 +51,7 @@ flowchart TD
 | `workspace-mcp`| `workspace-mcp` | `8000/tcp` | Ninguno | Aislado en `agent-net`. Accesible por `n8n`. HTTP Gmail API draft-only (`config/workspace-mcp/server.mjs`). |
 | `murray-agent` | `murray-agent` | `8080/tcp` | Ninguno | Aislado en `agent-net`. Chat vía LiteLLM + ops allowlist. `working_dir=/tmp`. |
 | `litellm` | `litellm` | `4000/tcp` | Ninguno | Gateway. Imagen `ghcr.io/berriai/litellm:v1.99.1`. Health `GET /health/liveliness`. Cero keys en `config/litellm/config.yaml`. |
-| `openhands` | `openhands` | `3000/tcp` | `127.0.0.1:${OPENHANDS_PORT:-3000}` | Loopback host para UI local. `LLM_BASE_URL=http://litellm:4000` model `murray-worker`. |
+| `openhands` | `openhands` | `3000/tcp` | `127.0.0.1:${OPENHANDS_PORT:-3000}` | Loopback host para UI local. `LLM_BASE_URL=http://litellm:4000`. `LLM_MODEL=openai/garfio-worker` (prefijo `openai/` obligatorio para el SDK). |
 
 ---
 
@@ -230,8 +230,9 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
 ### 3.3. Proveedor LLM y Orquestación de Agentes
 
 - **Gateway**: `litellm` en `agent-net` (`http://litellm:4000`). Único origen para Murray y OpenHands. Cero `api.deepseek.com` en esos dos servicios.
-- **Alias**: `murray-worker` (OpenHands, fijo) y `murray-chat` (Murray si `active_model` vacío). Primario `deepseek/deepseek-chat`. Fallback: `gemini/gemini-3.8-flash` → `gemini/gemini-2.5-flash-lite`.
-- **Modelos `/model`**: `deepseek-chat`, `deepseek-reasoner`, `gemini-3.8-flash`, `gemini-2.5-flash-lite`. Se guardan en `session_context.active_model` por chat. OpenHands no lee `active_model`. Cero Pro en default/fallback.
+- **Alias**: `garfio-worker` (OpenHands default) y `murray-chat` (Murray si `active_model` vacío). `murray-worker` sigue existiendo en el YAML. Primario `deepseek/deepseek-chat`. Fallback: `gemini/gemini-3.8-flash` → `gemini/gemini-2.5-flash-lite`.
+- **Prefijo OpenHands**: el SDK llama a LiteLLM *como cliente*, no como proxy. Hay que mandar `openai/<alias>` (`LLM_MODEL` y `llm_model` de `POST /api/v1/app-conversations`). Murray lo normaliza en `openHandsLlmModel()`. Un alias pelado (`deepseek-chat`) → `BadRequest` / job `stuck` `error`. Trasplantar cerebro (`/garfio model`) guarda el alias sin prefijo; el cliente lo agrega al disparar.
+- **Modelos `/model`**: `deepseek-chat`, `deepseek-reasoner`, `gemini-3.8-flash`, `gemini-2.5-flash-lite`. Se guardan en `session_context.active_model` por chat. OpenHands no lee `active_model`; usa `session_context.garfio_model` (default `garfio-worker`). Cero Pro en default/fallback.
 - **`GEMINI_API_KEY`**: Google AI Studio. No reusar `GOOGLE_REFRESH_TOKEN` / `GOOGLE_CLIENT_SECRET`. H13 (humano) pega las keys.
 - Tests de LLM: no llamar APIs vivas por default (mocks / fixtures). `/status` live no usa LLM.
 
