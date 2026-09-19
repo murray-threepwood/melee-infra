@@ -1,3 +1,9 @@
+> **HISTÓRICO — NO EJECUTAR.**
+> Este documento es el bootstrap original (fases 1–6), ya cumplido.
+> No lo re-implementes. No “arregles” el código ni el compose para que coincida con este texto.
+> Ley vigente: `roadmap/README.md` y las fases 07–10.
+> Endurecimiento del socket Docker: `roadmap/90_BACKLOG_HARDENING.md` (fuera de ejecución).
+
 # 01. Fase 1: Inicialización de Entorno y Red Segura
 
 Esta fase establece los cimientos de infraestructura, seguridad de red y persistencia de datos. Al finalizar esta fase, el repositorio tendrá la estructura de carpetas estandarizada, las plantillas de configuración de secretos y los servicios base (`postgres_db` y `cloudflared`) operativos en una red privada aislada.

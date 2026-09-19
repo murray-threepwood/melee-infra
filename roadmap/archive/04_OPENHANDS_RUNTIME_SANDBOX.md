@@ -1,3 +1,9 @@
+> **HISTÓRICO — NO EJECUTAR.**
+> Este documento es el bootstrap original (fases 1–6), ya cumplido.
+> No lo re-implementes. No “arregles” el código ni el compose para que coincida con este texto.
+> Ley vigente: `roadmap/README.md` y las fases 07–10.
+> Endurecimiento del socket Docker: `roadmap/90_BACKLOG_HARDENING.md` (fuera de ejecución).
+
 # 04. Fase 4: Runtime Sandbox de OpenHands y Telemetría
 
 Esta fase despliega el entorno de ejecución autónoma **OpenHands**, acotando de forma estricta sus privilegios y accesos al sistema de archivos del host, integrando el motor de inferencia **DeepSeek** mediante LiteLLM por eficiencia de costos, y configurando la telemetría para la detección y mitigación de bucles infinitos (*stuck loops*).

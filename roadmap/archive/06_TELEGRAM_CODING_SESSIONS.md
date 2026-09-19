@@ -1,3 +1,9 @@
+> **HISTÓRICO — NO EJECUTAR.**
+> Este documento es el bootstrap original (fases 1–6), ya cumplido.
+> No lo re-implementes. No “arregles” el código ni el compose para que coincida con este texto.
+> Ley vigente: `roadmap/README.md` y las fases 07–10.
+> Endurecimiento del socket Docker: `roadmap/90_BACKLOG_HARDENING.md` (fuera de ejecución).
+
 # 06. Coding sessions por Telegram (Murray conductor + OpenHands obrero)
 
 Fase posterior al stack 1-Person CEO. El CEO le habla a **Murray** para clonar un repo, preguntar, editar/testear, pushear una feature y borrar `./workspace`. OpenHands es el worker. Un bot, un webhook. Push nunca a `main`/`master`. Cero edición de `murray-infra`.

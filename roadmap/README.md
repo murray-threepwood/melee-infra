@@ -2,11 +2,13 @@
 
 Este repositorio contiene la especificación de infraestructura, servicios y flujos de automatización para desplegar un entorno de "1-Person CEO" seguro, autónomo y con control humano (*Human-In-The-Loop* - HITL).
 
-La documentación dentro de esta carpeta (`roadmap/`) está diseñada específicamente para que **agentes de IA autónomos** (como Gemini CLI, Claude Code, Cursor Composer u OpenHands) puedan implementar, validar y desplegar el sistema completo de forma determinista, paso a paso, sin ambigüedades.
+La documentación dentro de esta carpeta (`roadmap/`) está diseñada para que **agentes de IA autónomos** implementen **una fase viva a la vez**, sin rehacer el bootstrap ni tocar el endurecimiento del socket Docker.
+
+Las fases 1–6 **ya están cumplidas**. Viven en [`archive/`](./archive/). No las ejecutes.
 
 ---
 
-## 1. Arquitectura del Sistema
+## 1. Arquitectura del Sistema (estado + destino 07–10)
 
 ```mermaid
 flowchart TD
@@ -14,80 +16,85 @@ flowchart TD
         CEO["Telegram: Administrador CEO"]
         GmailExt["Google Workspace / Gmail API"]
         CFTunnelEdge["Cloudflare Edge"]
+        DeepSeek["DeepSeek API"]
+        Gemini["Gemini API"]
     end
 
     subgraph Host [Host Docker: murray-infra]
         subgraph Net [Red Interna: agent-net]
-            CFDaemon["cloudflared (Túnel Zero Trust)"]
-            N8N["n8n (Orquestador de Automatizaciones)"]
-            Postgres[("postgres_db (PostgreSQL 16)")]
-            MCP["workspace-mcp (Google Workspace MCP)"]
-            OH["openhands (Sandbox de Ejecución IA)"]
+            CFDaemon["cloudflared"]
+            N8N["n8n"]
+            Postgres[("postgres_db n8n only")]
+            MCP["workspace-mcp stateless"]
+            Murray["murray-agent"]
+            LiteLLM["litellm gateway fase 09"]
+            OH["openhands"]
         end
-
-        subgraph Storage [Volúmenes Persistentes Host]
-            VolPG["./postgres_data"]
-            VolN8N["./config/n8n"]
-            VolMCP["./config/mcp-auth"]
-            VolWork["./workspace (Sandbox seguro)"]
-        end
+        MurrayDb[("murray.db WAL")]
+        VolWork["./workspace"]
     end
 
-    CFTunnelEdge <==>|Túnel cifrado sin puertos abiertos| CFDaemon
-    CFDaemon -->|Reenvío HTTP interno| N8N
-    CEO <==>|Comandos y Botones HITL| N8N
-    N8N <==>|Persistencia de estado y ejecuciones| Postgres
-    N8N <==>|Disparo de tareas pesadas| OH
-    N8N <==>|Triage y Creación de Borradores| MCP
-    MCP <==>|"OAuth 2.0 con Guardrail (Draft Only)"| GmailExt
-    OH -.->|Acceso restringido a código| VolWork
-
-    classDef secure fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
-    classDef warning fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
-    classDef storage fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px;
-    class MCP,N8N,OH secure;
-    class VolWork,VolMCP,VolPG,VolN8N storage;
+    CFTunnelEdge <==>|Tunel cifrado| CFDaemon
+    CFDaemon --> N8N
+    CEO <==>|HITL| N8N
+    N8N --> Postgres
+    N8N --> Murray
+    N8N --> MCP
+    N8N --> OH
+    MCP <==>|Draft-only| GmailExt
+    Murray --> MurrayDb
+    Murray --> LiteLLM
+    OH --> LiteLLM
+    LiteLLM --> DeepSeek
+    LiteLLM --> Gemini
+    OH --> VolWork
 ```
 
+El socket Docker de `murray-agent` y `openhands` **sigue montado como hoy**. No agregues proxies.
+
 ---
 
-## 2. Estructura y Mapa de Dependencias de Fases
+## 2. Mapa de fases
 
-Cada fase depende estrictamente de que la anterior haya cumplido al 100% su *Definition of Done* (DoD).
-
-| Archivo | Fase | Descripción Clave | Artefactos Principales |
+| Archivo | Fase | Qué es | Artefactos |
 | :--- | :--- | :--- | :--- |
-| [00_AGENT_PROTOCOL.md](./00_AGENT_PROTOCOL.md) | **Protocolo** | Reglas de ejecución determinista, gestión de secretos, protocolo de fallas y estado. | `PROGRESS.md`, `BLOCKER.md` |
-| [01_ENVIRONMENT_AND_NETWORKING.md](./01_ENVIRONMENT_AND_NETWORKING.md) | **Fase 1** | Inicialización de carpetas, `.env.example`, Postgres 16 y Cloudflared base. | `.env.example`, `docker-compose.yml`, `tests/test_postgres.sh` |
-| [02_N8N_AND_TELEGRAM_HITL.md](./02_N8N_AND_TELEGRAM_HITL.md) | **Fase 2** | n8n conectado a Postgres, Bot de Telegram con filtrado estricto por `CHAT_ID` e Inline Keyboard. | `workflows/telegram_hitl_router.json`, servicio n8n |
-| [03_GOOGLE_WORKSPACE_MCP_GUARDRAILS.md](./03_GOOGLE_WORKSPACE_MCP_GUARDRAILS.md) | **Fase 3** | Servidor MCP Google Workspace con guardrail *Draft-Only* y flujo de triage de correos. | `workspace-mcp`, `tests/test_mcp_draft_only.py`, `workflows/email_triage_draft.json` |
-| [04_OPENHANDS_RUNTIME_SANDBOX.md](./04_OPENHANDS_RUNTIME_SANDBOX.md) | **Fase 4** | OpenHands sandbox acotado a `./workspace`, socket Docker, DeepSeek LLM y detección de loops. | `openhands`, `tests/test_openhands_api.sh` |
-| [05_INTEGRATION_AND_E2E_VERIFICATION.md](./05_INTEGRATION_AND_E2E_VERIFICATION.md) | **Fase 5** | Verificación integral del stack, límite de RAM (<4.5GB), smoke tests y runbook de fallas. | `tests/test_e2e_stack.sh`, `RUNBOOK.md` |
-| [06_TELEGRAM_CODING_SESSIONS.md](./06_TELEGRAM_CODING_SESSIONS.md) | **Fase 6** | Murray clona/pregunta; OpenHands edita/testea con HITL. | `config/murray-agent/workspace.mjs`, `/workspace/hitl` |
-| [99_HUMAN_OPERATOR.md](./99_HUMAN_OPERATOR.md) | **Operador humano** | Clicks, tokens y cuentas externas. El agente no puede completar esto. | `.env` real, túnel, Telegram, DeepSeek, OAuth |
+| [00_AGENT_PROTOCOL.md](./00_AGENT_PROTOCOL.md) | **Protocolo** | Reglas, secretos, fallas, `PROGRESS.md`. | `PROGRESS.md`, `BLOCKER.md` |
+| [07_MURRAY_SQLITE_WAL.md](./07_MURRAY_SQLITE_WAL.md) | **Fase 7 (viva)** | `murray.db` WAL. Reemplaza JSON de jobs/memoria/sesión/HITL. | `config/murray-agent/db.mjs`, volumen `murray_agent_data` |
+| [08_EMAIL_MEMORY_SEEN.md](./08_EMAIL_MEMORY_SEEN.md) | **Fase 8 (viva)** | Dedup de mails en `seen_emails`. MCP stateless. | `/triage/filter`, `/triage/mark-seen`, `email_triage_draft.json` |
+| [09_LITELLM_GATEWAY.md](./09_LITELLM_GATEWAY.md) | **Fase 9 (viva)** | Contenedor LiteLLM. DeepSeek primario, Gemini fallback. | `config/litellm/`, servicio `litellm` |
+| [10_SANDBOX_LIFECYCLE_TTL.md](./10_SANDBOX_LIFECYCLE_TTL.md) | **Fase 10 (viva)** | Hook al kick + watcher 30 min. Socket sin cambios. | `ops.mjs` allowlist `rm`, tests de reloj |
+| [90_BACKLOG_HARDENING.md](./90_BACKLOG_HARDENING.md) | **Backlog** | Paquete socket Docker (doble proxy + `VOLUMES=0` + `userns-remap`). **No ejecutar.** | — |
+| [99_HUMAN_OPERATOR.md](./99_HUMAN_OPERATOR.md) | **Humano** | Clicks y keys. H13 Gemini + LiteLLM. H14 reimport triage. | `.env` |
+| [archive/](./archive/) | **Histórico** | Fases 1–6 y el dictamen del arquitecto. **No ejecutar.** | — |
+
+Dependencias: 08 y 09 y 10 requieren 07. 10 no requiere proxies.
 
 ---
 
-## 3. Instrucción Maestra para el Agente (Prompt de Arranque)
+## 3. Prompt de arranque (fases vivas)
 
-Copia y pega este prompt exacto en el asistente de IA (Cursor, Claude Code, Gemini o similar) para iniciar la implementación:
+Para que un agente haga **07–10 de punta a punta**, copiá el bloque de [`KICKOFF_07_10.md`](./KICKOFF_07_10.md).
+
+Mini-prompt si solo vas a una fase:
 
 ```text
-Sos un agente autónomo de ingeniería de software y DevOps trabajando en el proyecto murray-infra.
+Sos un agente autónomo de ingeniería de software y DevOps en murray-infra.
 
-Tu objetivo es implementar toda la infraestructura, configuraciones, flujos n8n y scripts de test definidos en la carpeta "roadmap/".
+Leé primero roadmap/00_AGENT_PROTOCOL.md y actualizá PROGRESS.md.
 
-Seguí este protocolo obligatorio:
-1. Leé primero "roadmap/00_AGENT_PROTOCOL.md" y creá el archivo de seguimiento "PROGRESS.md" si aún no existe.
-2. Ejecutá en orden estricto las fases:
-   - roadmap/01_ENVIRONMENT_AND_NETWORKING.md
-   - roadmap/02_N8N_AND_TELEGRAM_HITL.md
-   - roadmap/03_GOOGLE_WORKSPACE_MCP_GUARDRAILS.md
-   - roadmap/04_OPENHANDS_RUNTIME_SANDBOX.md
-   - roadmap/05_INTEGRATION_AND_E2E_VERIFICATION.md
-3. Procesá UNA SOLA TAREA a la vez. Al finalizar cada tarea:
-   - Corré el comando de verificación especificado.
-   - Si la verificación pasa (DoD cumplido), marcá la tarea como completada en PROGRESS.md y avanzá a la siguiente.
-   - Si la verificación falla, intentá corregir hasta 2 veces. Si continúa fallando, generá BLOCKER.md y detené la ejecución según el protocolo.
-4. NUNCA escribas secretos reales en repositorios o logs. Usá siempre .env y respetá los nombres de variables declarados.
+Implementá UNA sola fase viva, en este orden, y solo si la anterior está 100% DoD:
+- roadmap/07_MURRAY_SQLITE_WAL.md
+- roadmap/08_EMAIL_MEMORY_SEEN.md
+- roadmap/09_LITELLM_GATEWAY.md
+- roadmap/10_SANDBOX_LIFECYCLE_TTL.md
+
+Prohibido:
+- Re-ejecutar roadmap/archive/ (fases 1–6).
+- Implementar roadmap/90_BACKLOG_HARDENING.md (socket proxy, userns-remap).
+- Montar o desmontar /var/run/docker.sock. El socket sigue como está.
+- Mover el estado de murray-agent a Postgres.
+- Guardar mails vistos en workspace-mcp o en static data de n8n.
+
+Una tarea a la vez. Verificación + DoD antes de avanzar. Si falla dos veces: BLOCKER.md y paro.
+Secretos solo en .env. Actualizá .env.example con placeholders.
 ```

@@ -27,6 +27,7 @@ Leé esto **antes** de tocar código. Fuente de invariantes: [`.agents/skills/de
 3. Commits locales OK. **Push y merge a `main` solo con OK explícito del humano.**
 4. Si cambia un contrato HTTP, webhook, guardrail o presupuesto: actualizar `architecture_spec.md` en el mismo cambio.
 5. Al terminar: tests verdes, lección nueva en `lessons-learned.md`, handoff al humano. No push.
+6. Roadmap vivo: [`roadmap/README.md`](./roadmap/README.md) fases 07–10. Kickoff de punta a punta: [`roadmap/KICKOFF_07_10.md`](./roadmap/KICKOFF_07_10.md). No re-ejecutes [`roadmap/archive/`](./roadmap/archive/). No implementes [`roadmap/90_BACKLOG_HARDENING.md`](./roadmap/90_BACKLOG_HARDENING.md) (socket Docker).
 
 ---
 

@@ -1,18 +1,23 @@
 # 00. Protocolo y Reglas de Operación del Agente
 
-Este documento establece las directrices operativas, restricciones de seguridad y el protocolo de resolución de problemas que **todo agente autónomo (Cursor, Claude Code, Gemini, OpenHands)** debe acatar obligatoriamente al trabajar en este repositorio.
+Este documento establece las directrices operativas, restricciones de seguridad y el protocolo de resolución de problemas que **todo agente autónomo (Cursor, Claude Code, Gemini, OpenHands)** debe acatar al trabajar en este repositorio.
+
+Las fases 1–6 están **cerradas** en [`archive/`](./archive/). El trabajo vivo es 07–10. El endurecimiento del socket Docker está en [`90_BACKLOG_HARDENING.md`](./90_BACKLOG_HARDENING.md) y **no se ejecuta** salvo orden humana explícita.
 
 ---
 
 ## 1. Rol y Principios de Trabajo
 
 - **Rol**: Ingeniero Senior de Software y DevOps especializado en Infraestructura de Automatización y Agentes Autónomos.
-- **Objetivo**: Configurar, desplegar y validar los servicios de infraestructura, flujos n8n y conectores seguros para el sistema "1-Person CEO".
+- **Objetivo**: Implementar **una** fase viva (07–10) con verificación y DoD. No rehacer el bootstrap.
 - **Criterio de Costo y Robustez**:
   - Maximizar el uso de software de código abierto y auto-hospedado (costo de licencia $0).
-  - Emplear servicios de costo operativo mínimo (ej. Cloudflare Zero Trust Free Tier, DeepSeek como proveedor LLM económico para LiteLLM).
-  - Cuando la solución más robusta no represente costo monetario adicional (ej. base de datos PostgreSQL dedicada vs SQLite, red Docker interna aislada, healthchecks nativos), **usar siempre la solución más robusta**.
-  - Si en algún caso se implementa una solución de conveniencia con menor robustez (ej. script de inicialización local simplificado), **debe quedar documentada explícitamente la limitación técnica y su recomendación para producción**.
+  - Emplear servicios de costo operativo mínimo (Cloudflare Zero Trust Free Tier, DeepSeek como primario, Gemini como fallback vía LiteLLM).
+  - Red Docker interna aislada y healthchecks nativos: sí.
+  - **Postgres vs SQLite (excepción cerrada)**:
+    - PostgreSQL 16 es la persistencia de **n8n** (ejecuciones y credenciales). No la reemplaces por SQLite. No upgradées a Postgres 17.
+    - El estado de **murray-agent** es SQLite WAL (`murray.db` en `murray_agent_data`) por decisión de arquitectura (fase 07). **No** lo “mejorés” moviéndolo a Postgres.
+  - Si implementás una conveniencia de menor robustez, documentá la limitación.
 
 ---
 
@@ -20,32 +25,46 @@ Este documento establece las directrices operativas, restricciones de seguridad 
 
 1. **Determinismo Secuencial**:
    - Ejecutá **una sola tarea** a la vez.
-   - NUNCA agrupes múltiples tareas de diferentes fases en una sola acción.
-   - NUNCA avances a la tarea siguiente sin haber ejecutado el comando de verificación y comprobado que cumple su *Definition of Done* (DoD).
+   - **Una sola fase viva** por sesión.
+   - NUNCA agrupes tareas de distintas fases.
+   - NUNCA avances sin el comando de verificación y el DoD en verde.
 
-2. **Verificación Obligatoria y Evidencia**:
+2. **Qué está prohibido abrir**:
+   - `roadmap/archive/` — histórico. No re-implementes esas tareas. No “arregles” el código para que coincida con ese texto.
+   - `roadmap/90_BACKLOG_HARDENING.md` — backlog. No implementes doble proxy, `DOCKER_HOST` a un proxy, `VOLUMES=0` como capa de seguridad, ni `userns-remap`.
+   - No saques ni agregues el bind `/var/run/docker.sock` en `murray-agent` u `openhands`. El socket **sigue como está**.
+   - No implementes el paquete de socket Docker “de yapa” aunque el arquitecto lo haya elegido.
+   - No guardes IDs de mail vistos en `workspace-mcp` ni en `$getWorkflowStaticData` de n8n (fase 08).
+   - Después de la fase 09: no dejes `LLM_BASE_URL` de Murray u OpenHands apuntando en directo a `api.deepseek.com` ni a Gemini. El gateway es `litellm`.
+
+3. **Verificación Obligatoria y Evidencia**:
    - Cada tarea define un comando bash de verificación.
-   - El agente debe ejecutar el comando en el entorno real (CLI) y verificar el código de salida (exit code 0) y el stdout esperado.
+   - Ejecutalo en el entorno real. Exit 0 + stdout esperado.
 
-3. **Prohibición de Alucinación de Rutas y Servicios**:
-   - Usá exclusivamente las rutas de carpetas y nombres de archivo estipulados en esta documentación.
+4. **Prohibición de Alucinación de Rutas y Servicios**:
+   - Usá solo las rutas y nombres de este roadmap vivo.
    - No inventes carpetas temporales fuera del árbol del proyecto.
-   - El espacio de trabajo del sandbox de código es estrictamente `./workspace` montado en el contenedor OpenHands.
+   - El sandbox de código es `./workspace`.
 
-4. **Manejo Estricto de Secretos**:
-   - Leé todas las credenciales desde variables de entorno provistas en `.env`.
-   - NUNCA hardcodees tokens, contraseñas ni API Keys en archivos `docker-compose.yml`, scripts de test o flujos `.json`.
-   - Mantené siempre actualizado el archivo `.env.example` con valores de ejemplo (placeholders) que documenten cada nueva clave requerida.
+5. **Manejo Estricto de Secretos**:
+   - Credenciales solo desde `.env`.
+   - NUNCA hardcodees tokens en `docker-compose.yml`, tests o workflows.
+   - Actualizá `.env.example` con placeholders por cada clave nueva.
+   - `GEMINI_API_KEY` no es el `GOOGLE_REFRESH_TOKEN` de Gmail.
 
-5. **Principio de Menor Privilegio**:
-   - Todo servicio expuesto a la red pública debe pasar a través del túnel cifrado `cloudflared`.
-   - Los contenedores auxiliares (`postgres_db`, `workspace-mcp`, `openhands`) solo deben comunicarse en la red interna `agent-net` de Docker sin mapear puertos innecesarios al host, salvo que un test requiera acceso localhost específico.
+6. **Principio de Menor Privilegio**:
+   - Tráfico público solo por `cloudflared`.
+   - Auxiliares en `agent-net` sin puertos públicos, salvo loopback que ya exista o que una fase viva pida.
+
+7. **Sync de docs al cumplir DoD**:
+   - Cada fase lista qué líneas de `architecture_spec.md`, `CONTEXT.md` y `lessons-learned.md` actualiza el implementador **en el mismo cambio**.
+   - No reescribas `architecture_spec.md` antes de que el código exista.
 
 ---
 
 ## 3. Seguimiento de Estado (`PROGRESS.md`)
 
-Para garantizar la continuidad entre diferentes sesiones de agentes o posibles reinicios de contexto, el agente debe mantener un archivo `PROGRESS.md` en la raíz del repositorio con el siguiente formato:
+Mantené `PROGRESS.md` en la raíz. Las fases 1–6 quedan tildadas (históricas). El trabajo nuevo usa este bloque:
 
 ```markdown
 # Estado de Avance del Proyecto
@@ -53,38 +72,43 @@ Para garantizar la continuidad entre diferentes sesiones de agentes o posibles r
 Última actualización: YYYY-MM-DD HH:MM (UTC)
 Agente ejecutor: [Cursor | Claude Code | Gemini | OpenHands]
 
-## Fases y Tareas
-- [ ] Fase 1: Inicialización de Entorno y Red Segura
-  - [ ] Tarea 1.1: Inicialización de Directorios
-  - [ ] Tarea 1.2: Generación de .env.example y .env
-  - [ ] Tarea 1.3: Servicio postgres_db
-  - [ ] Tarea 1.4: Servicio cloudflared
-  - [ ] Tarea 1.5: Script tests/test_postgres.sh
-- [ ] Fase 2: Orquestador n8n y Canal HITL (Telegram)
-  - [ ] Tarea 2.1: Despliegue de n8n conectado a Postgres
-  - [ ] Tarea 2.2: Workflow workflows/telegram_hitl_router.json
-  - [ ] Tarea 2.3: Validación del Webhook y Filtro de Seguridad
-- [ ] Fase 3: Conector Google Workspace con Guardrails
-  - [ ] Tarea 3.1: Despliegue del servicio workspace-mcp
-  - [ ] Tarea 3.2: Configuración de Guardrail Draft-Only
-  - [ ] Tarea 3.3: Script tests/test_mcp_draft_only.py
-  - [ ] Tarea 3.4: Workflow workflows/email_triage_draft.json
-- [ ] Fase 4: Runtime Sandbox de OpenHands y Telemetría
-  - [ ] Tarea 4.1: Contenedor OpenHands con socket Docker
-  - [ ] Tarea 4.2: Integración LiteLLM con DeepSeek
-  - [ ] Tarea 4.3: Script tests/test_openhands_api.sh
-- [ ] Fase 5: Verificación Integral del Stack
-  - [ ] Tarea 5.1: Despliegue coordinado completo
-  - [ ] Tarea 5.2: Validación de consumo de RAM (< 4.5 GB)
-  - [ ] Tarea 5.3: Script tests/test_e2e_stack.sh
-  - [ ] Tarea 5.4: Runbook operativo y de fallas
+## Fases históricas (no re-ejecutar)
+- [x] Fases 1–6: bootstrap, n8n, MCP, OpenHands, E2E, coding sessions
+  - Fuente: `roadmap/archive/`
+
+## Fases vivas
+- [ ] Fase 7: murray.db SQLite WAL
+  - [ ] Tarea 7.1: Módulo db + schema + WAL
+  - [ ] Tarea 7.2: Migración JSON y reemplazo de stores
+  - [ ] Tarea 7.3: Imagen Node 22
+  - [ ] Tarea 7.4: Tests y sync de docs
+- [ ] Fase 8: Memoria de correos en murray.db
+  - [ ] Tarea 8.1: POST /triage/filter y /triage/mark-seen
+  - [ ] Tarea 8.2: Tool list_seen_emails
+  - [ ] Tarea 8.3: Workflow email_triage_draft.json
+  - [ ] Tarea 8.4: Tests
+  - [ ] Tarea 8.5: Sync de docs
+- [ ] Fase 9: Gateway LiteLLM
+  - [ ] Tarea 9.1: Servicio litellm + config
+  - [ ] Tarea 9.2: Reencaminar murray-agent y openhands
+  - [ ] Tarea 9.3: /model + active_model
+  - [ ] Tarea 9.4: Tests y .env.example
+  - [ ] Tarea 9.5: Sync de docs
+- [ ] Fase 10: Lifecycle + TTL 30 min
+  - [ ] Tarea 10.1: Helper purge + regex
+  - [ ] Tarea 10.2: Hook al inicio del job
+  - [ ] Tarea 10.3: Watcher 30 min
+  - [ ] Tarea 10.4: Tests y sync de docs
+
+## Backlog (no ejecutar)
+- [ ] 90: Endurecimiento socket Docker (doble proxy + userns-remap)
 ```
 
 ---
 
 ## 4. Protocolo de Diagnóstico y Manejo de Fallas
 
-Si un comando de verificación arroja error o un contenedor no levanta:
+Si un comando de verificación falla o un contenedor no levanta:
 
 ### Paso 1: Diagnóstico No Destructivo
 1. Inspeccioná los últimos 50 logs del contenedor involucrado:
@@ -95,20 +119,20 @@ Si un comando de verificación arroja error o un contenedor no levanta:
    ```bash
    docker compose ps -a
    ```
-3. Verificá permisos de archivos montados y sintaxis de configuraciones (YAML, JSON, Bash).
+3. Verificá permisos de archivos montados y sintaxis (YAML, JSON, Bash).
 
 ### Paso 2: Autocorrección (Máximo 2 Intentos)
-- **Intento 1**: Ajustar configuración, sintaxis o variables según el error exacto y reintentar la verificación.
-- **Intento 2**: Si falló por timing/race condition o red, reiniciar el servicio (`docker compose restart <servicio>`) y verificar.
+- **Intento 1**: Ajustar configuración, sintaxis o variables según el error exacto y reintentar.
+- **Intento 2**: Si falló por timing o red, `docker compose restart <servicio>` y verificar.
 
 ### Paso 3: Detención y Creación de `BLOCKER.md`
-Si tras dos intentos de autocorrección la verificación continúa fallando, **detené la ejecución inmediatamente** y creá el archivo `BLOCKER.md` en la raíz del repositorio con la siguiente estructura:
+Si tras dos intentos la verificación sigue fallando, **detené** y creá `BLOCKER.md` en la raíz:
 
 ```markdown
 # Reporte de Bloqueo Técnico
 
 - **Fecha/Hora**: YYYY-MM-DD HH:MM
-- **Fase y Tarea**: [Ej. Fase 2 - Tarea 2.1]
+- **Fase y Tarea**: [Ej. Fase 7 - Tarea 7.1]
 - **Comando Ejecutado**:
   ```bash
   [Comando que falló]
@@ -121,10 +145,10 @@ Si tras dos intentos de autocorrección la verificación continúa fallando, **d
   ```text
   [Logs de docker compose logs --tail=50]
   ```
-- **Hipótesis del Problema**: [Explicación técnica del motivo de la falla]
+- **Hipótesis del Problema**: [Motivo técnico]
 - **Alternativas de Solución Propuestas**:
-  1. Alternativa A: [Descripción y comando sugerido]
-  2. Alternativa B: [Descripción y comando sugerido]
+  1. Alternativa A: [Descripción]
+  2. Alternativa B: [Descripción]
 ```
 
-Luego de generar `BLOCKER.md`, solicitá la intervención del usuario humano antes de realizar cualquier otra acción destructiva.
+Luego pedí intervención humana. No montes el socket Docker a un proxy para “salir del blocker”.
