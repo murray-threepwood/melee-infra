@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.16 — OpenHands habla OpenAI-compat al proxy
+
+- `LLM_MODEL=openai/garfio-worker`. El SDK de OpenHands exige el prefijo `openai/` o muere con `LLM Provider NOT provided`.
+- `openHandsLlmModel()` prefixea el cerebro de Garfio al crear la conversación. Reintentar un `stuck`/`error` arranca misión limpia, sin follow-up a la conversación muerta.
+
 ## 0.1.15 — Carta Gemini: 3.8 Flash y 2.5 Flash-Lite
 
 - `/model` admite `gemini-3.8-flash` y `gemini-2.5-flash-lite`. Sale `gemini-2.5-flash`.

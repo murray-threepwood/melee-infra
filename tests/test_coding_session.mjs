@@ -1,6 +1,13 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { detectStuck, isAgentDone, isSandboxPaused, summarizeEvents } from "../config/murray-agent/openhands.mjs";
+import {
+  createOpenHandsClient,
+  detectStuck,
+  isAgentDone,
+  isSandboxPaused,
+  openHandsLlmModel,
+  summarizeEvents,
+} from "../config/murray-agent/openhands.mjs";
 import {
   classifyUserText,
   extractDeletePath,
@@ -188,6 +195,43 @@ test("callback workspace cabe en 64 bytes y parsea", () => {
   assert.equal(`APPROVE_PUSH:${id}`.length <= 64, true);
   assert.equal(parseWorkspaceCallback(`STUCK_RETRY:${id}`).verb, "RETRY");
   assert.equal(parseWorkspaceCallback("APPROVE_OPS:x"), null);
+});
+
+test("openHandsLlmModel prefixea openai/ y no duplica", () => {
+  assert.equal(openHandsLlmModel(""), "");
+  assert.equal(openHandsLlmModel("deepseek-chat"), "openai/deepseek-chat");
+  assert.equal(openHandsLlmModel("garfio-worker"), "openai/garfio-worker");
+  assert.equal(openHandsLlmModel("openai/garfio-worker"), "openai/garfio-worker");
+  assert.equal(openHandsLlmModel("  gemini-3.8-flash  "), "openai/gemini-3.8-flash");
+});
+
+test("startConversation manda llm_model con prefijo openai/ al proxy", async () => {
+  const seen = [];
+  const client = createOpenHandsClient({
+    baseUrl: "http://openhands:3000",
+    fetchImpl: async (url, opts) => {
+      seen.push({ url, body: JSON.parse(opts.body) });
+      return {
+        ok: true,
+        headers: { get: () => "application/json" },
+        json: async () => ({ id: "task-1" }),
+        text: async () => "",
+      };
+    },
+  });
+  await client.startConversation({
+    title: "garfio-ddi",
+    text: "Q01",
+    llmModel: "deepseek-chat",
+  });
+  assert.match(seen[0].url, /\/api\/v1\/app-conversations$/);
+  assert.equal(seen[0].body.llm_model, "openai/deepseek-chat");
+  await client.startConversation({
+    title: "garfio-ddi",
+    text: "Q01",
+    llmModel: "openai/garfio-worker",
+  });
+  assert.equal(seen[1].body.llm_model, "openai/garfio-worker");
 });
 
 test("detectStuck: execution_status, timeout y loop de comandos", () => {
