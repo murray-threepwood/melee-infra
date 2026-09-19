@@ -179,6 +179,13 @@ export function createJobStore({
     `SELECT * FROM jobs WHERE status IN ('queued', 'running') AND run_after <= ?`
   );
 
+  let lastStamp = 0;
+  function stamp() {
+    const now = Date.now();
+    lastStamp = now > lastStamp ? now : lastStamp + 1;
+    return lastStamp;
+  }
+
   function writeJob(job) {
     insert.run(
       job.id,
@@ -196,7 +203,7 @@ export function createJobStore({
   }
 
   function enqueue(job) {
-    const now = Date.now();
+    const now = stamp();
     const row = {
       id: job.id || crypto.randomBytes(8).toString("hex"),
       type: job.type,
@@ -221,11 +228,10 @@ export function createJobStore({
     if (!prev) {
       return null;
     }
-    const now = Date.now();
     const next = {
       ...prev,
       ...patch,
-      updatedAt: now <= Number(prev.updatedAt) ? Number(prev.updatedAt) + 1 : now,
+      updatedAt: stamp(),
     };
     let log = Array.isArray(patch.log)
       ? patch.log.map(String)
@@ -253,11 +259,10 @@ export function createJobStore({
     if (!chunks.length) {
       return prev;
     }
-    const now = Date.now();
     return writeJob({
       ...prev,
       log: [...(prev.log || []), ...chunks].slice(-LOG_CAP),
-      updatedAt: now <= Number(prev.updatedAt) ? Number(prev.updatedAt) + 1 : now,
+      updatedAt: stamp(),
     });
   }
 
