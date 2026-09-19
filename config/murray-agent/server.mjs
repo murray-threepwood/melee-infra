@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createApprovalStore } from "./approvals.mjs";
 import { createChatEngine } from "./chat.mjs";
 import { createCodingSession } from "./coding.mjs";
+import { openMurrayDb } from "./db.mjs";
 import { readDoc } from "./docs.mjs";
 import { fetchGmailMeta } from "./gmail-meta.mjs";
 import { createJobStore, createJobWorker } from "./jobs.mjs";
@@ -13,8 +14,10 @@ import { createLlm } from "./llm.mjs";
 import { createMemory } from "./memory.mjs";
 import { createOpenHandsClient } from "./openhands.mjs";
 import { createOps } from "./ops.mjs";
+import { createSeenEmailStore } from "./seen-emails.mjs";
 import { createSessionStore } from "./session.mjs";
 import { createTelegramNotifier } from "./telegram.mjs";
+import { createSandboxJanitor } from "./sandbox-ttl.mjs";
 import { createWorkspace } from "./workspace.mjs";
 
 function sendJson(res, status, body) {
@@ -45,6 +48,7 @@ async function parseJsonBody(req) {
 
 export function createMurrayAgentServer({
   engine,
+  seen,
   model = process.env.DEEPSEEK_MODEL || "deepseek-chat",
 } = {}) {
   if (!engine || typeof engine.handleChat !== "function") {
@@ -93,6 +97,39 @@ export function createMurrayAgentServer({
         return;
       }
 
+      if (req.method === "POST" && pathname === "/triage/filter") {
+        if (!seen || typeof seen.filterNew !== "function") {
+          sendJson(res, 503, { error: "seen_store_unconfigured" });
+          return;
+        }
+        const body = await parseJsonBody(req);
+        if (!Array.isArray(body.ids)) {
+          sendJson(res, 400, { error: "ids_required" });
+          return;
+        }
+        sendJson(res, 200, { new_ids: seen.filterNew(body.ids) });
+        return;
+      }
+
+      if (req.method === "POST" && pathname === "/triage/mark-seen") {
+        if (!seen || typeof seen.markSeen !== "function") {
+          sendJson(res, 503, { error: "seen_store_unconfigured" });
+          return;
+        }
+        const body = await parseJsonBody(req);
+        const messageId = String(body.message_id || "").trim();
+        if (!messageId) {
+          sendJson(res, 400, { error: "message_id_required" });
+          return;
+        }
+        seen.markSeen({
+          messageId,
+          threadId: String(body.thread_id || ""),
+        });
+        sendJson(res, 200, { status: "ok" });
+        return;
+      }
+
       if (req.method === "POST" && pathname === "/workspace/hitl") {
         if (typeof engine.handleWorkspaceHitl !== "function") {
           sendJson(res, 503, { error: "coding_session_unconfigured" });
@@ -123,15 +160,18 @@ export function createEngineFromEnv() {
     process.env.MURRAY_PERSONA_PATH ||
     path.join(path.dirname(fileURLToPath(import.meta.url)), "persona.md");
   const personaText = fs.readFileSync(personaPath, "utf8");
+  const db = openMurrayDb();
   const ops = createOps();
   const llm = createLlm();
-  const memory = createMemory();
-  const approvals = createApprovalStore();
-  const session = createSessionStore();
+  const memory = createMemory({ db });
+  const approvals = createApprovalStore({ db });
+  const session = createSessionStore({ db });
+  const seen = createSeenEmailStore({ db });
   const workspace = createWorkspace();
-  const jobs = createJobStore();
+  const jobs = createJobStore({ db });
   const openhands = createOpenHandsClient();
   const telegram = createTelegramNotifier();
+  const janitor = createSandboxJanitor({ ops, store: jobs });
   const workerRef = { current: null };
   const coding = createCodingSession({
     workspace,
@@ -151,6 +191,7 @@ export function createEngineFromEnv() {
     store: jobs,
     handlers: coding.handlers,
     intervalMs: Number(process.env.MURRAY_JOB_INTERVAL_MS || 2000),
+    onBeforeCodeKick: (job) => janitor.purgeOrphans({ exceptJobId: job.id }),
   });
   const engine = createChatEngine({
     ops,
@@ -158,13 +199,14 @@ export function createEngineFromEnv() {
     memory,
     approvals,
     gmailMeta: () => fetchGmailMeta(),
+    seen,
     readDoc,
     personaText,
     coding,
     workspace,
     session,
   });
-  return { engine, jobs, worker: workerRef.current };
+  return { engine, jobs, worker: workerRef.current, seen, janitor };
 }
 
 const isDirectRun =
@@ -173,10 +215,11 @@ const isDirectRun =
 
 if (isDirectRun) {
   const port = Number.parseInt(process.env.MURRAY_AGENT_PORT || "8080", 10);
-  const { engine, worker } = createEngineFromEnv();
-  const server = createMurrayAgentServer({ engine });
+  const { engine, worker, seen, janitor } = createEngineFromEnv();
+  const server = createMurrayAgentServer({ engine, seen });
   server.listen(port, "0.0.0.0", () => {
     console.log(`murray-agent listening on :${port}`);
     worker.start();
+    janitor.start();
   });
 }

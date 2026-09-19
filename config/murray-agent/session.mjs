@@ -1,5 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
+import { openMurrayDb } from "./db.mjs";
 
 const EMPTY = {
   slug: "",
@@ -9,39 +8,78 @@ const EMPTY = {
   lastMission: "",
   lastJobId: "",
   awaiting_instruction: false,
+  active_model: "",
 };
+
+function rowToSession(row) {
+  if (!row) {
+    return { ...EMPTY };
+  }
+  return {
+    slug: row.slug || "",
+    url: row.url || "",
+    conversationId: row.conversation_id || "",
+    lastTestCommand: row.last_test_command || "",
+    lastMission: row.last_mission || "",
+    lastJobId: row.last_job_id || "",
+    awaiting_instruction: Boolean(row.awaiting_instruction),
+    active_model: row.active_model || "",
+  };
+}
 
 export function createSessionStore({
   filePath = process.env.MURRAY_SESSION_PATH ||
     "/var/lib/murray-agent/session.json",
+  dbPath,
+  db,
 } = {}) {
-  function load() {
-    try {
-      const raw = fs.readFileSync(filePath, "utf8");
-      const data = JSON.parse(raw);
-      return data && typeof data === "object" ? data : {};
-    } catch {
-      return {};
-    }
-  }
+  const database =
+    db ||
+    openMurrayDb({
+      filePath,
+      dbPath,
+      sessionPath: filePath && String(filePath).endsWith(".json") ? filePath : undefined,
+    });
 
-  function save(data) {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(data), "utf8");
-  }
+  const select = database.prepare(
+    `SELECT slug, url, conversation_id, last_test_command, last_mission,
+            last_job_id, awaiting_instruction, active_model
+       FROM session_context WHERE chat_id = ?`
+  );
+  const upsert = database.prepare(
+    `INSERT INTO session_context (
+      chat_id, slug, url, conversation_id, last_test_command, last_mission,
+      last_job_id, awaiting_instruction, active_model
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(chat_id) DO UPDATE SET
+      slug = excluded.slug,
+      url = excluded.url,
+      conversation_id = excluded.conversation_id,
+      last_test_command = excluded.last_test_command,
+      last_mission = excluded.last_mission,
+      last_job_id = excluded.last_job_id,
+      awaiting_instruction = excluded.awaiting_instruction,
+      active_model = excluded.active_model`
+  );
 
   return {
     get(chatId) {
-      const all = load();
-      const row = all[String(chatId)] || {};
-      return { ...EMPTY, ...row };
+      return rowToSession(select.get(String(chatId)));
     },
     patch(chatId, fields) {
-      const all = load();
-      const key = String(chatId);
-      all[key] = { ...EMPTY, ...(all[key] || {}), ...fields };
-      save(all);
-      return all[key];
+      const next = { ...EMPTY, ...rowToSession(select.get(String(chatId))), ...fields };
+      upsert.run(
+        String(chatId),
+        String(next.slug || ""),
+        String(next.url || ""),
+        String(next.conversationId || ""),
+        String(next.lastTestCommand || ""),
+        String(next.lastMission || ""),
+        String(next.lastJobId || ""),
+        next.awaiting_instruction ? 1 : 0,
+        String(next.active_model || "")
+      );
+      return next;
     },
   };
 }

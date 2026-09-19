@@ -21,17 +21,26 @@ Invariante: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true`. El clic de 
 ## OpenHands
 Runtime de agente de código acotado a `./workspace`, con `no-new-privileges` y socket Docker para sandboxes hijos.
 
+## LiteLLM
+Gateway HTTP en `agent-net` (`litellm:4000`). Murray y OpenHands pegan acá, no a `api.deepseek.com`. Primario DeepSeek, fallback Gemini 2.5 Flash (AI Studio, no el OAuth de Gmail).
+
 ## murray-agent
-Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. DeepSeek Chat + diagnóstico/ops del stack + conductor de coding sessions (`./workspace`). No edita murray-infra. Git de dev en el jail: pull/commit sin HITL; push y delete con Aprobar. Nunca force ni push a main/master. `/jobs` consulta la cola async.
+Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. Chat vía LiteLLM + diagnóstico/ops del stack + conductor de coding sessions (`./workspace`). `/model` elige el modelo del chat. No edita murray-infra. Git de dev en el jail: pull/commit sin HITL; push y delete con Aprobar. Nunca force ni push a main/master. `/jobs` consulta la cola async.
 
 ## Job
-Fila async en `jobs.json`: clone, code, oh_poll, pull, push, delete, checkout. Status `queued|running|done|failed|stuck|paused`. El CEO las ve con `/jobs`. `paused` es sandbox OpenHands PAUSED con working tree sucio; no es «misión lista».
+Fila async en `murray.db` (tabla `jobs`, SQLite WAL): clone, code, oh_poll, pull, push, delete, checkout. Status `queued|running|done|failed|stuck|paused`. El CEO las ve con `/jobs`. `paused` es sandbox OpenHands PAUSED con working tree sucio; no es «misión lista».
 
 ## Coding session
 Loop HITL por Telegram: clonar un repo público/privado (token en `.env`) a `./workspace/<slug>`, preguntar, editar/testear con OpenHands, y (con Aprobar) pushear una rama feature o borrar paths bajo `./workspace`. Stuck → opciones (retry/cambiar/parar/log).
 
 ## Triage
 Diagnóstico del obrero OpenHands sin LLM. Frase canónica `/triage`; hablado: «qué pasa», «qué pasa con el obrero», «diagnosticá». Resume jobs, sandboxes `oh-agent-server-*`, git del slug y RAM Docker. No vuelca eventos JSON. Sanar (purgar sandboxes + restart openhands) pide HITL `heal_openhands`.
+
+## seen_emails
+Tabla de `murray.db` con IDs de Gmail ya procesados (`message_id`, `thread_id`, `processed_at`). Sin asuntos ni cuerpos. El cron pregunta `POST /triage/filter` y marca `POST /triage/mark-seen` solo si el draft respondió 2xx. `workspace-mcp` no guarda vistos.
+
+## sandbox TTL
+Purga automática de contenedores `oh-agent-server-*` con más de 30 minutos si no hay job `code`/`oh_poll` en vuelo. Watcher cada 5 min. Hook al inicio de un job `code`. No reemplaza el HITL `heal_openhands`.
 
 ## empty_finish
 OpenHands `finished` con `git changes` vacío y working tree limpio. No es misión lista: job `stuck` + teclado. Casi siempre el obrero ni tocó el repo.

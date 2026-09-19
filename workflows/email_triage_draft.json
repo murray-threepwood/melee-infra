@@ -52,23 +52,40 @@
     },
     {
       "parameters": {
-        "fieldToSplitOut": "messages"
+        "method": "POST",
+        "url": "http://murray-agent:8080/triage/filter",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ ids: ($json.messages || []).map((m) => m.id) }) }}",
+        "options": {
+          "timeout": 20000
+        }
       },
-      "id": "split-messages-03b",
-      "name": "Separar Mensajes",
-      "type": "n8n-nodes-base.splitOut",
-      "typeVersion": 1,
+      "id": "triage-filter-03b",
+      "name": "Filtrar IDs en Murray",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
       "position": [860, 240]
     },
     {
       "parameters": {
-        "jsCode": "const staticData = $getWorkflowStaticData('global');\nstaticData.seen = staticData.seen || {};\nconst id = $json.id;\nif (!id || staticData.seen[id]) {\n  return [];\n}\nstaticData.seen[id] = Date.now();\nreturn [$json];\n"
+        "jsCode": "const unread = $('Consultar Correos No Leídos').first().json;\nconst fresh = new Set($json.new_ids || []);\nif (!fresh.size) {\n  return [];\n}\nconst messages = (unread.messages || []).filter((row) => fresh.has(row.id));\nreturn [{ json: { messages } }];\n"
       },
-      "id": "dedup-seen-03c",
-      "name": "Deduplicar Ya Vistos",
+      "id": "keep-new-03c",
+      "name": "Quedarse con Nuevos",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [1080, 240]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "messages"
+      },
+      "id": "split-messages-03d",
+      "name": "Separar Mensajes",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [1300, 240]
     },
     {
       "parameters": {
@@ -85,12 +102,29 @@
       "name": "Crear Borrador MCP (No Send)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [1300, 240]
+      "position": [1520, 240]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://murray-agent:8080/triage/mark-seen",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ message_id: $('Separar Mensajes').item.json.id, thread_id: $('Separar Mensajes').item.json.threadId || '' }) }}",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "triage-mark-seen-06",
+      "name": "Marcar Visto en Murray",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1740, 240]
     },
     {
       "parameters": {
         "chatId": "={{ $env.TELEGRAM_CHAT_ID }}",
-        "text": "=📬 <b>Borrador creado en Gmail (no enviado)</b>\n\n<b>De:</b> {{ $('Separar Mensajes').item.json.senderHtml }}\n<b>Asunto:</b> {{ $('Separar Mensajes').item.json.subjectHtml }}\n<b>Resumen:</b> {{ $('Separar Mensajes').item.json.summaryHtml }}\n<b>Draft:</b> {{ $json.id }}\n\nEditá y enviá desde Gmail. Murray no manda correo.",
+        "text": "=📬 <b>Borrador creado en Gmail (no enviado)</b>\n\n<b>De:</b> {{ $('Separar Mensajes').item.json.senderHtml }}\n<b>Asunto:</b> {{ $('Separar Mensajes').item.json.subjectHtml }}\n<b>Resumen:</b> {{ $('Separar Mensajes').item.json.summaryHtml }}\n<b>Draft:</b> {{ $('Crear Borrador MCP (No Send)').item.json.id }}\n\nEditá y enviá desde Gmail. Murray no manda correo.",
         "additionalFields": {
           "parse_mode": "HTML",
           "appendAttribution": false
@@ -100,7 +134,7 @@
       "name": "Notificar Triage a Telegram",
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1,
-      "position": [1520, 240],
+      "position": [1960, 240],
       "credentials": {
         "telegramApi": {
           "id": "9IhWvhoAHuzho5J5",
@@ -136,6 +170,28 @@
       "main": [
         [
           {
+            "node": "Filtrar IDs en Murray",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar IDs en Murray": {
+      "main": [
+        [
+          {
+            "node": "Quedarse con Nuevos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Quedarse con Nuevos": {
+      "main": [
+        [
+          {
             "node": "Separar Mensajes",
             "type": "main",
             "index": 0
@@ -147,17 +203,6 @@
       "main": [
         [
           {
-            "node": "Deduplicar Ya Vistos",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Deduplicar Ya Vistos": {
-      "main": [
-        [
-          {
             "node": "Crear Borrador MCP (No Send)",
             "type": "main",
             "index": 0
@@ -166,6 +211,17 @@
       ]
     },
     "Crear Borrador MCP (No Send)": {
+      "main": [
+        [
+          {
+            "node": "Marcar Visto en Murray",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar Visto en Murray": {
       "main": [
         [
           {

@@ -3,9 +3,10 @@ import {
   assertAllowedService,
   webhookGapWarning,
 } from "./ops.mjs";
-import { TOOL_DEFS } from "./llm.mjs";
+import { ALLOWED_MODELS, DEFAULT_CHAT_MODEL, resolveChatModel, TOOL_DEFS } from "./llm.mjs";
 import { looksLikeHitlCopy, packHitl, packHitlHelp, packReply } from "./reply.mjs";
 import { redact } from "./redact.mjs";
+import { formatSeenToday, isSeenEmailsIntent } from "./seen-emails.mjs";
 
 const HEALTH_URLS = {
   n8n: process.env.N8N_HEALTH_URL || "http://n8n:5678/healthz",
@@ -43,6 +44,9 @@ export function parseSlash(text) {
   }
   if (name === "triage") {
     return { cmd: "triage" };
+  }
+  if (name === "model") {
+    return { cmd: "model", model: rest.join(" ").trim() };
   }
   return { cmd: name, service: rest[0] || "" };
 }
@@ -101,6 +105,7 @@ export function createChatEngine({
   memory,
   approvals,
   gmailMeta,
+  seen,
   readDoc,
   fetchImpl = fetch,
   personaText,
@@ -178,6 +183,21 @@ export function createChatEngine({
     if (name === "gmail_unread_meta") {
       const meta = await gmailMeta();
       return { payload: meta };
+    }
+    if (name === "list_seen_emails") {
+      if (!seen || typeof seen.listToday !== "function") {
+        return { payload: { error: "seen_store_unconfigured" } };
+      }
+      const rows = seen.listToday();
+      return {
+        payload: {
+          count: rows.length,
+          emails: rows.map((row) => ({
+            message_id: row.message_id,
+            processed_at: row.processed_at,
+          })),
+        },
+      };
     }
     if (name === "read_docs") {
       try {
@@ -385,7 +405,15 @@ export function createChatEngine({
       { role: "user", content: text },
     ];
     for (let round = 0; round < 4; round += 1) {
-      const out = await llm.complete({ messages, tools: TOOL_DEFS });
+      const activeModel =
+        session && typeof session.get === "function"
+          ? session.get(chatId).active_model
+          : "";
+      const out = await llm.complete({
+        messages,
+        tools: TOOL_DEFS,
+        model: resolveChatModel(activeModel) || DEFAULT_CHAT_MODEL,
+      });
       if (out.tool_calls && out.tool_calls.length) {
         messages.push({
           role: "assistant",
@@ -515,9 +543,33 @@ export function createChatEngine({
         }
         return coding.triage({ chatId });
       }
+      if (slash.cmd === "model") {
+        if (!session || typeof session.get !== "function") {
+          return packReply("Sesión no está configurada.");
+        }
+        if (!slash.model) {
+          const current = session.get(chatId).active_model || DEFAULT_CHAT_MODEL;
+          return packReply(
+            `Modelo activo: ${current}\nPermitidos: ${ALLOWED_MODELS.join(", ")}`
+          );
+        }
+        if (!ALLOWED_MODELS.includes(slash.model)) {
+          return packReply(
+            `Modelo inválido: ${slash.model}. Usá: ${ALLOWED_MODELS.join(", ")}`
+          );
+        }
+        session.patch(chatId, { active_model: slash.model });
+        return packReply(`Modelo de este chat: ${slash.model}`);
+      }
       return packReply(
         `Comando /${slash.cmd} no existe. /status /health /logs <servicio> /repo /workspace /jobs /triage`
       );
+    }
+    if (isSeenEmailsIntent(trimmed)) {
+      if (!seen || typeof seen.listToday !== "function") {
+        return packReply("Memoria de mails no está configurada.");
+      }
+      return packReply(formatSeenToday(seen.listToday()));
     }
     if (coding && typeof coding.interceptChat === "function") {
       const intercepted = await coding.interceptChat({

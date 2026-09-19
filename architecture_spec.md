@@ -24,6 +24,7 @@ flowchart TD
         Postgres["postgres_db (:5432)"]
         MCP["workspace-mcp (:8000)"]
         MurrayAgent["murray-agent (:8080)"]
+        LiteLLM["litellm (:4000)"]
         OpenHands["openhands (:3000)"]
     end
 
@@ -34,6 +35,8 @@ flowchart TD
     N8N <==>|HTTP :8000| MCP
     N8N <==>|HTTP :8080 chat/ops| MurrayAgent
     N8N <==>|HTTP :3000| OpenHands
+    MurrayAgent -->|HTTP :4000| LiteLLM
+    OpenHands -->|HTTP :4000 murray-worker| LiteLLM
     MurrayAgent -->|compose allowlist + HITL| Stack[docker.sock]
     MCP <==>|HTTPS OAuth 2.0 (Draft-Only)| GmailCloud
 ```
@@ -46,8 +49,9 @@ flowchart TD
 | `n8n` | `n8n` | `5678/tcp` | `127.0.0.1:${N8N_PORT:-5678}` | Loopback host para UI local; tráfico entrante público sólo vía `cloudflared`. Hostname público: `ceo.threepwood.uy` → `http://n8n:5678` (nunca `localhost` desde el túnel). |
 | `postgres_db` | `postgres_db` | `5432/tcp` | Ninguno | Aislado en `agent-net`. Accesible únicamente por `n8n`. Imagen `postgres:16-alpine`. **No** subir a 17 sin OK humano (rompe el volumen). |
 | `workspace-mcp`| `workspace-mcp` | `8000/tcp` | Ninguno | Aislado en `agent-net`. Accesible por `n8n`. HTTP Gmail API draft-only (`config/workspace-mcp/server.mjs`). |
-| `murray-agent` | `murray-agent` | `8080/tcp` | Ninguno | Aislado en `agent-net`. Chat DeepSeek + ops allowlist. `working_dir=/tmp`. |
-| `openhands` | `openhands` | `3000/tcp` | `127.0.0.1:${OPENHANDS_PORT:-3000}` | Loopback host para UI local; invocado vía API interna. |
+| `murray-agent` | `murray-agent` | `8080/tcp` | Ninguno | Aislado en `agent-net`. Chat vía LiteLLM + ops allowlist. `working_dir=/tmp`. |
+| `litellm` | `litellm` | `4000/tcp` | Ninguno | Gateway. Imagen `ghcr.io/berriai/litellm:v1.99.1`. Health `GET /health/liveliness`. Cero keys en `config/litellm/config.yaml`. |
+| `openhands` | `openhands` | `3000/tcp` | `127.0.0.1:${OPENHANDS_PORT:-3000}` | Loopback host para UI local. `LLM_BASE_URL=http://litellm:4000` model `murray-worker`. |
 
 ---
 
@@ -79,9 +83,10 @@ flowchart TD
    - OAuth Gmail: habilitar **Gmail API** (nunca “Gmail MCP API”). Cliente **Web** + Playground redirect `https://developers.google.com/oauthplayground`. Un `refresh_token` con `gmail.readonly` + `gmail.compose`.
 
 5. **`murray-agent` (Telegram chat + conductor de coding sessions)**:
-   - DeepSeek `deepseek-chat`. No edita `murray-infra`. OpenHands es el obrero en `./workspace/<slug>`. Murray corre git en ese jail: status/diff/log/pull/checkout/commit **sin HITL**; **push y delete con HITL**. Push nunca a `main`/`master`, nunca `--force`.
+   - Chat vía LiteLLM (`/model` por chat). No edita `murray-infra`. OpenHands es el obrero en `./workspace/<slug>`. Murray corre git en ese jail: status/diff/log/pull/checkout/commit **sin HITL**; **push y delete con HITL**. Push nunca a `main`/`master`, nunca `--force`.
    - `POST /ops/execute` exige `approval_id` de un solo uso emitido por `propose_ops` / `/chat` con `needs_hitl=true` y `hitl.kind=ops`. Sin eso → `403 ops_approval_denied`.
    - Compose allowlist: `ps`, `logs --tail<=80`, `restart`, `up -d --force-recreate --no-deps` de un servicio. `heal_openhands` (solo desde `/triage`, HITL): `docker rm -f` de contenedores cuyo nombre matchea `^oh-agent-server-` + `restart openhands`. Prohibido `down -v`, `exec`, `kill`, `rm` genérico.
+   - Sandbox TTL (operativo, no HITL): al kick de un job `code` sin otro `code`/`oh_poll` `running`, purga huérfanos `oh-agent-server-*`. Watcher cada 5 min borra los de más de 30 min si no hay vuelo. No reinicia `openhands`. No reemplaza `heal_openhands`.
    - `callback_data` Telegram ≤64 bytes: `APPROVE_OPS:<16 hex>`, `APPROVE_CLONE:<16 hex>`, `APPROVE_CODE:<16 hex>`, `APPROVE_DELETE:<16 hex>`, `APPROVE_PUSH:<16 hex>`, `STUCK_RETRY:<16 hex>`.
    - Clone: solo `https://github.com` / `https://gitlab.com`, shallow `--depth 1 --single-branch`, jail bajo `./workspace`. Pull/push/otra rama: `fetch --unshallow` + fetch. Token privado en `GITHUB_TOKEN` / `GITLAB_TOKEN` (`.env`), nunca en la URL ni el chat. Author de commit: default `Murray <murray-threepwood@users.noreply.github.com>` (override `MURRAY_GIT_*`).
    - Delete: cualquier path relativo a `./workspace` (archivo, `node_modules`, un slug, o wipe). HITL. No sale del jail.
@@ -102,7 +107,10 @@ sequenceDiagram
     N8N->>MCP: GET /gmail/unread
     MCP-->>N8N: status=ok
     opt unread_count > 0
+        N8N->>Agent: POST /triage/filter
+        Agent-->>N8N: new_ids
         N8N->>MCP: POST /gmail/drafts
+        N8N->>Agent: POST /triage/mark-seen
         N8N->>CEO: alerta HTML
     end
 
@@ -173,7 +181,7 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
 - **`GET /healthz`**: `200` `{"status":"ok","service":"murray-agent","model":"deepseek-chat"}`
 - **`POST /chat`**: `{ chat_id, text, message_id? }`
   - `200`: `{ reply, replies, parse_mode:"HTML", needs_hitl, hitl?, needs_job?, job_id? }`
-  - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`, `/workspace`, `/jobs`, `/jobs <id>`, `/triage`
+  - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`, `/workspace`, `/jobs`, `/jobs <id>`, `/triage`, `/model`
   - `/jobs`: últimos 20 jobs del chat (id, type, status, start HH:MM America/Montevideo, duración desde `createdAt`, slug, error). `/jobs <id>` acepta id Murray (16 hex) o UUID OpenHands (32 hex): detalle + snapshot live (`sandbox`/`exec`). Edad **no** usa `updatedAt`. Solo lectura, sin HITL. "estado de los jobs" lista. UUID pegado o «en qué quedó task <hex>» diagnostica ese job.
   - `/triage` / «qué pasa» / «qué pasa con el obrero» / «diagnosticá»: informe del obrero (jobs + `oh-agent-server-*` + git + RAM). Cero JSON de eventos. Hallazgos saneables → HITL `kind=ops` `action=heal_openhands`. `propose_ops` del LLM **no** incluye ese action.
   - Clone sin URL, mutate sin repo activo, o delete sin path: pregunta, no HITL, no LLM
@@ -186,6 +194,7 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
 - **`POST /ops/execute`** y **`POST /ops/reject`**: `{ approval_id }` solo `kind=ops`
   - `action=restart|recreate` exige `service` allowlist
   - `action=heal_openhands`: lista `docker ps -a --filter name=oh-agent-server`, `rm -f` solo IDs cuyo **nombre** es `oh-agent-server-*`, después `compose restart openhands`. Emitido por `/triage`, nunca por `propose_ops`
+  - TTL de sandboxes: hook al kick `code` + watcher 5 min / 30 min. Mismo regex. El watcher no hace `restart openhands`.
   - `200` con `reply` HTML
   - `403` `ops_approval_denied` si falta, está usado, venció (~15 min) o el kind no es ops
 - **`POST /workspace/hitl`**: `{ callback_data, chat_id }`
@@ -194,7 +203,10 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
   - Reject no clona, no borra, no pushea ni llama OpenHands
   - `STUCK_RETRY|STOP|LOGS|CHG:<hex>`
   - `403` si el token HITL no vale
+- **`POST /triage/filter`**: `{ ids: string[] }` → `{ new_ids }` (orden de entrada, dedup). `ids` no-array → `400` `ids_required`.
+- **`POST /triage/mark-seen`**: `{ message_id, thread_id? }` upsert en `seen_emails`. `message_id` vacío → `400` `message_id_required`.
 - Gmail vía tool: solo `{ http, status, error, unread_count }`. Cero `messages`/`subject`.
+- Tool `list_seen_emails`: `{ count, emails: [{ message_id, processed_at }] }` del día civil America/Montevideo. Cero subject/sender. No pega a `/gmail/unread`.
 - n8n `Consultar Murray` timeout **45s**. Clone/misión largos van por jobs + `sendMessage`.
 
 ### 3.2. `n8n` Workflows & Triggers
@@ -209,15 +221,18 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
   - `_CLONE:` / `_CODE:` / `_DELETE:` / `_PUSH:` / `STUCK_` → `POST http://murray-agent:8080/workspace/hitl`. No OpenHands.
   - Teclado Murray: `callback_data` = `{{ $json.hitl.approve_data }}` / `reject_data`.
 - **Email Triage Draft** (`workflows/email_triage_draft.json`, id publicado `Z8f9K2mP1qRt5vWx`):
-  - Schedule 15 min → `GET http://workspace-mcp:8000/gmail/unread` → IF `unread_count > 0` → split `messages` → dedup por `id` (static data) → `POST /gmail/drafts` → notify Telegram HTML.
+  - Schedule 15 min → `GET http://workspace-mcp:8000/gmail/unread` → IF `unread_count > 0` → `POST http://murray-agent:8080/triage/filter` → solo `new_ids` → split → `POST /gmail/drafts` → (solo 2xx) `POST /triage/mark-seen` → notify Telegram HTML.
+  - `workspace-mcp` es stateless: no guarda vistos. La memoria es `seen_emails` en `murray.db`.
   - **No** lleva `telegramTrigger` (no se puede robar el webhook del HITL).
-  - **No** crea drafts en el schedule sin dedup (si no, cada 15 min duplica).
-  - Misma credencial Telegram. El clic de envío sigue siendo Gmail, no el bot.
+  - **No** crea drafts si `new_ids` está vacío. Mark-seen usa el id del mail, no el del draft.
+  - Misma credencial Telegram. El clic de envío sigue siendo Gmail, no el bot. Import/publish es H14 (humano).
 
 ### 3.3. Proveedor LLM y Orquestación de Agentes
 
-- **Proveedor chat Telegram**: DeepSeek `deepseek-chat` (`https://api.deepseek.com/v1`) en `murray-agent`.
-- **Proveedor sandbox OpenHands**: DeepSeek vía LiteLLM (`deepseek/deepseek-chat`).
+- **Gateway**: `litellm` en `agent-net` (`http://litellm:4000`). Único origen para Murray y OpenHands. Cero `api.deepseek.com` en esos dos servicios.
+- **Alias**: `murray-worker` (OpenHands, fijo) y `murray-chat` (Murray si `active_model` vacío). Primario `deepseek/deepseek-chat`, fallback `gemini/gemini-2.5-flash`.
+- **Modelos `/model`**: `deepseek-chat`, `deepseek-reasoner`, `gemini-2.5-flash`. Se guardan en `session_context.active_model` por chat. OpenHands no lee `active_model`.
+- **`GEMINI_API_KEY`**: Google AI Studio. No reusar `GOOGLE_REFRESH_TOKEN` / `GOOGLE_CLIENT_SECRET`. H13 (humano) pega las keys.
 - Tests de LLM: no llamar APIs vivas por default (mocks / fixtures). `/status` live no usa LLM.
 
 ---
@@ -232,13 +247,14 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
 | `./config/workspace-mcp` (Bind Mount, RO) | `/opt/mcp:ro` | `server.mjs` + `gmail-client.mjs`. **`working_dir` del contenedor es `/tmp`**, no `/opt/mcp`: un cwd sobre bind `:ro` hace que Docker Desktop mate healthcheck/`compose exec` (`exit=-1`) aunque el proceso HTTP siga vivo. |
 | `./config/mcp-auth` (Bind Mount) | `/app/auth` | `.gauth.json` OAuth (gitignore). |
 | `./config/murray-agent` (Bind Mount, RO) | `/opt/agent:ro` | Chat/ops/coding HTTP. **`working_dir=/tmp`**. |
+| `./config/litellm/config.yaml` (Bind Mount, RO) | `/app/config.yaml:ro` | Modelos y fallbacks. Cero API keys en el YAML. |
 | `./workspace` (Bind Mount) | murray-agent `/opt/workspace`; openhands `/opt/workspace_base` | Repos clonados (un slug por repo). Writable. No es murray-infra. |
-| `murray_agent_data` | `/var/lib/murray-agent` | Memoria de chat (20 vueltas), session.json, jobs.json. |
+| `murray_agent_data` | `/var/lib/murray-agent` | `murray.db` SQLite WAL (`MURRAY_DB_PATH`). Tablas: `jobs`, `hitl_tokens`, `session_context`, `seen_emails`. JSON `jobs.json` / `memory.json` / `session.json` se migran one-shot si la tabla está vacía y se renombran a `*.migrated`. Postgres sigue siendo solo de n8n. |
 
 ---
 
 ## 5. Presupuesto de Recursos y Capacidad
 
-- **Memoria RAM Total del Stack**: **< 4.5 GB** para los 6 contenedores. `docker stats` MemUsage es `12.5MiB / 3.8GiB`: parsear **solo el uso** (primer token). Medir con `docker compose stats`.
+- **Memoria RAM Total del Stack**: **< 4.5 GB** para los 7 contenedores (incluye `litellm`). `docker stats` MemUsage es `12.5MiB / 3.8GiB`: parsear **solo el uso** (primer token). Medir con `docker compose stats`.
 - **Monitoreo**: [tests/check_memory_budget.sh](./tests/check_memory_budget.sh).
 - **Ejecuciones n8n**: `EXECUTIONS_DATA_PRUNE=true`, `EXECUTIONS_DATA_MAX_AGE=168`.

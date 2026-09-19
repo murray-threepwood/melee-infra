@@ -64,18 +64,24 @@ def test_draft_not_send():
 
 def test_dedup_before_draft():
     data = load()
+    blob = json.dumps(data)
+    if "staticData" in blob or "getWorkflowStaticData" in blob:
+        raise AssertionError("el triage ya no puede usar static data para vistos")
     names = nodes_by_name(data)
-    if "Deduplicar Ya Vistos" not in names:
-        raise AssertionError(
-            "Falta Deduplicar Ya Vistos (el schedule duplicaría drafts cada 15 min)."
-        )
+    if "Filtrar IDs en Murray" not in names or "Marcar Visto en Murray" not in names:
+        raise AssertionError("Faltan POST /triage/filter o /triage/mark-seen.")
     conns = data["connections"]
+    if_targets = {t["node"] for t in conns["¿Hay Correos Nuevos?"]["main"][0]}
+    if "Filtrar IDs en Murray" not in if_targets:
+        raise AssertionError("El IF de unread tiene que ir a Filtrar IDs en Murray.")
     split_targets = {t["node"] for t in conns["Separar Mensajes"]["main"][0]}
-    if "Deduplicar Ya Vistos" not in split_targets:
-        raise AssertionError("Separar Mensajes debe ir a Deduplicar Ya Vistos.")
-    dedup_targets = {t["node"] for t in conns["Deduplicar Ya Vistos"]["main"][0]}
-    if "Crear Borrador MCP (No Send)" not in dedup_targets:
-        raise AssertionError("Dedup debe ir a Crear Borrador (no notificar sin draft).")
+    if "Crear Borrador MCP (No Send)" not in split_targets:
+        raise AssertionError("Separar Mensajes debe ir a Crear Borrador.")
+    draft_targets = {
+        t["node"] for t in conns["Crear Borrador MCP (No Send)"]["main"][0]
+    }
+    if "Marcar Visto en Murray" not in draft_targets:
+        raise AssertionError("mark-seen solo después del POST /gmail/drafts.")
     notify_sources = [
         src
         for src, branches in conns.items()
@@ -83,8 +89,8 @@ def test_dedup_before_draft():
         for target in branch
         if target["node"] == "Notificar Triage a Telegram"
     ]
-    if "Crear Borrador MCP (No Send)" not in notify_sources:
-        raise AssertionError("Notificar tiene que ir después del POST /gmail/drafts.")
+    if "Marcar Visto en Murray" not in notify_sources:
+        raise AssertionError("Notificar tiene que ir después de mark-seen.")
     if "Notificar Triage a Telegram" in conns:
         raise AssertionError("Notificar no debe encadenar otro POST (loop de drafts).")
 
