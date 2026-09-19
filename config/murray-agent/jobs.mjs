@@ -294,7 +294,23 @@ export function createJobStore({
     return selectDue.all(Number(now)).map(rowToJob);
   }
 
-  return { enqueue, get, update, appendLog, list, find, due };
+  function running({ types } = {}) {
+    const allow = types ? new Set(types) : null;
+    return selectAll
+      .all()
+      .map(rowToJob)
+      .filter((job) => {
+        if (job.status !== "running") {
+          return false;
+        }
+        if (allow && !allow.has(job.type)) {
+          return false;
+        }
+        return true;
+      });
+  }
+
+  return { enqueue, get, update, appendLog, list, find, due, running };
 }
 
 export function createJobWorker({
@@ -302,6 +318,7 @@ export function createJobWorker({
   handlers = {},
   intervalMs = 2000,
   now = () => Date.now(),
+  onBeforeCodeKick,
 } = {}) {
   let timer = null;
   let busy = false;
@@ -339,6 +356,13 @@ export function createJobWorker({
           });
           settle.resolve(store.get(id));
           return;
+        }
+        if (current.type === "code" && typeof onBeforeCodeKick === "function") {
+          try {
+            await onBeforeCodeKick(current);
+          } catch (err) {
+            store.appendLog(id, `sandbox_ttl_purge_failed ${err.code || err.message}`);
+          }
         }
         if (current.status !== "running") {
           store.update(id, { status: "running", error: "" });

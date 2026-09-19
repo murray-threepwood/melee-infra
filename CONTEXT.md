@@ -39,6 +39,9 @@ Diagnóstico del obrero OpenHands sin LLM. Frase canónica `/triage`; hablado: �
 ## seen_emails
 Tabla de `murray.db` con IDs de Gmail ya procesados (`message_id`, `thread_id`, `processed_at`). Sin asuntos ni cuerpos. El cron pregunta `POST /triage/filter` y marca `POST /triage/mark-seen` solo si el draft respondió 2xx. `workspace-mcp` no guarda vistos.
 
+## sandbox TTL
+Purga automática de contenedores `oh-agent-server-*` con más de 30 minutos si no hay job `code`/`oh_poll` en vuelo. Watcher cada 5 min. Hook al inicio de un job `code`. No reemplaza el HITL `heal_openhands`.
+
 ## empty_finish
 OpenHands `finished` con `git changes` vacío y working tree limpio. No es misión lista: job `stuck` + teclado. Casi siempre el obrero ni tocó el repo.
 

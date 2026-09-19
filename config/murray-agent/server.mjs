@@ -17,6 +17,7 @@ import { createOps } from "./ops.mjs";
 import { createSeenEmailStore } from "./seen-emails.mjs";
 import { createSessionStore } from "./session.mjs";
 import { createTelegramNotifier } from "./telegram.mjs";
+import { createSandboxJanitor } from "./sandbox-ttl.mjs";
 import { createWorkspace } from "./workspace.mjs";
 
 function sendJson(res, status, body) {
@@ -170,6 +171,7 @@ export function createEngineFromEnv() {
   const jobs = createJobStore({ db });
   const openhands = createOpenHandsClient();
   const telegram = createTelegramNotifier();
+  const janitor = createSandboxJanitor({ ops, store: jobs });
   const workerRef = { current: null };
   const coding = createCodingSession({
     workspace,
@@ -189,6 +191,7 @@ export function createEngineFromEnv() {
     store: jobs,
     handlers: coding.handlers,
     intervalMs: Number(process.env.MURRAY_JOB_INTERVAL_MS || 2000),
+    onBeforeCodeKick: (job) => janitor.purgeOrphans({ exceptJobId: job.id }),
   });
   const engine = createChatEngine({
     ops,
@@ -203,7 +206,7 @@ export function createEngineFromEnv() {
     workspace,
     session,
   });
-  return { engine, jobs, worker: workerRef.current, seen };
+  return { engine, jobs, worker: workerRef.current, seen, janitor };
 }
 
 const isDirectRun =
@@ -212,10 +215,11 @@ const isDirectRun =
 
 if (isDirectRun) {
   const port = Number.parseInt(process.env.MURRAY_AGENT_PORT || "8080", 10);
-  const { engine, worker, seen } = createEngineFromEnv();
+  const { engine, worker, seen, janitor } = createEngineFromEnv();
   const server = createMurrayAgentServer({ engine, seen });
   server.listen(port, "0.0.0.0", () => {
     console.log(`murray-agent listening on :${port}`);
     worker.start();
+    janitor.start();
   });
 }

@@ -1,6 +1,6 @@
 # Estado de Avance del Proyecto
 
-Última actualización: 2026-09-18 21:55 (UTC-3)
+Última actualización: 2026-09-18 22:10 (UTC-3)
 Agente ejecutor: Cursor
 
 ## Fases históricas (no re-ejecutar)
@@ -60,11 +60,11 @@ Fuente: `roadmap/archive/`. Banner HISTÓRICO en cada archivo.
   - [x] Tarea 9.3: /model + active_model
   - [x] Tarea 9.4: Tests y .env.example
   - [x] Tarea 9.5: Sync de docs
-- [ ] Fase 10: Lifecycle + TTL 30 min
-  - [ ] Tarea 10.1: Helper purge + regex
-  - [ ] Tarea 10.2: Hook al inicio del job
-  - [ ] Tarea 10.3: Watcher 30 min
-  - [ ] Tarea 10.4: Tests y sync de docs
+- [x] Fase 10: Lifecycle + TTL 30 min
+  - [x] Tarea 10.1: Helper purge + regex
+  - [x] Tarea 10.2: Hook al inicio del job
+  - [x] Tarea 10.3: Watcher 30 min
+  - [x] Tarea 10.4: Tests y sync de docs
 
 ## Backlog (no ejecutar)
 

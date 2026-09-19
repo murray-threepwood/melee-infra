@@ -83,9 +83,10 @@ flowchart TD
    - OAuth Gmail: habilitar **Gmail API** (nunca “Gmail MCP API”). Cliente **Web** + Playground redirect `https://developers.google.com/oauthplayground`. Un `refresh_token` con `gmail.readonly` + `gmail.compose`.
 
 5. **`murray-agent` (Telegram chat + conductor de coding sessions)**:
-   - DeepSeek `deepseek-chat`. No edita `murray-infra`. OpenHands es el obrero en `./workspace/<slug>`. Murray corre git en ese jail: status/diff/log/pull/checkout/commit **sin HITL**; **push y delete con HITL**. Push nunca a `main`/`master`, nunca `--force`.
+   - Chat vía LiteLLM (`/model` por chat). No edita `murray-infra`. OpenHands es el obrero en `./workspace/<slug>`. Murray corre git en ese jail: status/diff/log/pull/checkout/commit **sin HITL**; **push y delete con HITL**. Push nunca a `main`/`master`, nunca `--force`.
    - `POST /ops/execute` exige `approval_id` de un solo uso emitido por `propose_ops` / `/chat` con `needs_hitl=true` y `hitl.kind=ops`. Sin eso → `403 ops_approval_denied`.
    - Compose allowlist: `ps`, `logs --tail<=80`, `restart`, `up -d --force-recreate --no-deps` de un servicio. `heal_openhands` (solo desde `/triage`, HITL): `docker rm -f` de contenedores cuyo nombre matchea `^oh-agent-server-` + `restart openhands`. Prohibido `down -v`, `exec`, `kill`, `rm` genérico.
+   - Sandbox TTL (operativo, no HITL): al kick de un job `code` sin otro `code`/`oh_poll` `running`, purga huérfanos `oh-agent-server-*`. Watcher cada 5 min borra los de más de 30 min si no hay vuelo. No reinicia `openhands`. No reemplaza `heal_openhands`.
    - `callback_data` Telegram ≤64 bytes: `APPROVE_OPS:<16 hex>`, `APPROVE_CLONE:<16 hex>`, `APPROVE_CODE:<16 hex>`, `APPROVE_DELETE:<16 hex>`, `APPROVE_PUSH:<16 hex>`, `STUCK_RETRY:<16 hex>`.
    - Clone: solo `https://github.com` / `https://gitlab.com`, shallow `--depth 1 --single-branch`, jail bajo `./workspace`. Pull/push/otra rama: `fetch --unshallow` + fetch. Token privado en `GITHUB_TOKEN` / `GITLAB_TOKEN` (`.env`), nunca en la URL ni el chat. Author de commit: default `Murray <murray-threepwood@users.noreply.github.com>` (override `MURRAY_GIT_*`).
    - Delete: cualquier path relativo a `./workspace` (archivo, `node_modules`, un slug, o wipe). HITL. No sale del jail.
@@ -193,6 +194,7 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
 - **`POST /ops/execute`** y **`POST /ops/reject`**: `{ approval_id }` solo `kind=ops`
   - `action=restart|recreate` exige `service` allowlist
   - `action=heal_openhands`: lista `docker ps -a --filter name=oh-agent-server`, `rm -f` solo IDs cuyo **nombre** es `oh-agent-server-*`, después `compose restart openhands`. Emitido por `/triage`, nunca por `propose_ops`
+  - TTL de sandboxes: hook al kick `code` + watcher 5 min / 30 min. Mismo regex. El watcher no hace `restart openhands`.
   - `200` con `reply` HTML
   - `403` `ops_approval_denied` si falta, está usado, venció (~15 min) o el kind no es ops
 - **`POST /workspace/hitl`**: `{ callback_data, chat_id }`

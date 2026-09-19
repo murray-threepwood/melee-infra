@@ -175,7 +175,7 @@ export function createOps({
         name,
       ]);
     },
-    async listOpenHandsSandboxes() {
+    async listOpenHandsSandboxes({ withCreated = false } = {}) {
       const result = await runCommand([
         "ps",
         "-a",
@@ -184,9 +184,48 @@ export function createOps({
         "--format",
         "{{.ID}} {{.Names}} {{.Status}}",
       ]);
-      return parseSandboxPs(result.stdout || "").filter((row) =>
+      const rows = parseSandboxPs(result.stdout || "").filter((row) =>
         isOpenHandsSandboxName(row.name)
       );
+      if (!withCreated || !rows.length) {
+        return rows;
+      }
+      const inspect = await runCommand([
+        "inspect",
+        "-f",
+        "{{.Id}} {{.Created}}",
+        ...rows.map((row) => row.id),
+      ]);
+      const createdByPrefix = new Map();
+      for (const line of String(inspect.stdout || "").split("\n")) {
+        const [fullId, created] = line.trim().split(/\s+/);
+        if (!fullId || !created) {
+          continue;
+        }
+        createdByPrefix.set(fullId.slice(0, 12), Date.parse(created));
+      }
+      return rows.map((row) => {
+        const createdAt = createdByPrefix.get(row.id) ||
+          createdByPrefix.get(String(row.id).slice(0, 12));
+        return {
+          ...row,
+          createdAt: Number.isFinite(createdAt) ? createdAt : 0,
+        };
+      });
+    },
+    async purgeOpenHandsSandboxes(ids) {
+      const clean = [...new Set((ids || []).map(String).filter(Boolean))];
+      if (!clean.length) {
+        return { removed: [] };
+      }
+      const rmArgs = assertHealRmArgs(["rm", "-f", ...clean], clean);
+      const rm = await runCommand(rmArgs);
+      if (rm.code !== 0) {
+        const err = new Error(rm.stderr || "purge_rm_failed");
+        err.code = "purge_rm_failed";
+        throw err;
+      }
+      return { removed: clean };
     },
     async memorySnapshot() {
       const result = await runCommand([
