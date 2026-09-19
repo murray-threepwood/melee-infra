@@ -163,6 +163,7 @@ services:
       - GITLAB_TOKEN=${GITLAB_TOKEN:-}
       - MURRAY_GIT_NAME=${MURRAY_GIT_NAME:-}
       - MURRAY_GIT_EMAIL=${MURRAY_GIT_EMAIL:-}
+      - MURRAY_OPERATOR_INBOX=/opt/operator-inbox
     volumes:
       - ./config/murray-agent:/opt/agent:ro
       - ./docker-compose.yml:/opt/stack/docker-compose.yml:ro
@@ -171,6 +172,10 @@ services:
       - ./RUNBOOK.md:/opt/docs/RUNBOOK.md:ro
       - ./architecture_spec.md:/opt/docs/architecture_spec.md:ro
       - ./.agents/skills/dev-protocol/lessons-learned.md:/opt/docs/lessons-learned.md:ro
+      - ./CHANGELOG.md:/opt/docs/CHANGELOG.md:ro
+      - ./CONTEXT.md:/opt/docs/CONTEXT.md:ro
+      - ./roadmap/91_PERMISSIVE_WINDOW.md:/opt/docs/permissive.md:ro
+      - ./operator-inbox:/opt/operator-inbox
       - /var/run/docker.sock:/var/run/docker.sock
       - murray_agent_data:/var/lib/murray-agent
     healthcheck:

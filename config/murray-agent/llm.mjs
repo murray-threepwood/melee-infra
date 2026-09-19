@@ -238,7 +238,7 @@ export const TOOL_DEFS = [
     function: {
       name: "list_jobs",
       description:
-        "Lista o diagnostica jobs async (clone/code/pull/push/delete/checkout/oh_poll). job_id acepta el id Murray (16 hex) o el UUID de OpenHands (32 hex). Solo lectura.",
+        "Lista o diagnostica jobs async (clone/code/pull/push/delete/checkout/oh_poll/inspect). job_id acepta el id Murray (16 hex) o el UUID de OpenHands (32 hex). Solo lectura. Diagnóstico profundo es «qué pasó» / /triage, no esta tool.",
       parameters: {
         type: "object",
         properties: { job_id: { type: "string" } },
@@ -289,7 +289,12 @@ export function createLlm({
   model = process.env.DEEPSEEK_MODEL || DEFAULT_CHAT_MODEL,
   timeoutMs = 45000,
 } = {}) {
-  async function complete({ messages, tools = TOOL_DEFS, model: requestModel } = {}) {
+  async function complete({
+    messages,
+    tools = TOOL_DEFS,
+    model: requestModel,
+    temperature,
+  } = {}) {
     if (!apiKey || /CAMBIAR_POR|REEMPLAZAR|sk-deepseek-api-key-aqui|clave_aleatoria_litellm/i.test(apiKey)) {
       const err = new Error("LITELLM_MASTER_KEY ausente o placeholder");
       err.code = "llm_unconfigured";
@@ -297,19 +302,22 @@ export function createLlm({
       throw err;
     }
     const chosen = requestModel || model || DEFAULT_CHAT_MODEL;
+    const payload = {
+      model: chosen,
+      messages,
+      temperature: Number.isFinite(temperature) ? temperature : 0.4,
+    };
+    if (Array.isArray(tools) && tools.length > 0) {
+      payload.tools = tools;
+      payload.tool_choice = "auto";
+    }
     const res = await fetchImpl(`${String(baseUrl).replace(/\/+$/, "")}/chat/completions`, {
       method: "POST",
       headers: {
         "content-type": "application/json",
         authorization: `Bearer ${apiKey}`,
       },
-      body: JSON.stringify({
-        model: chosen,
-        messages,
-        tools,
-        tool_choice: "auto",
-        temperature: 0.4,
-      }),
+      body: JSON.stringify(payload),
       signal: AbortSignal.timeout(timeoutMs),
     });
     const body = await res.json().catch(() => ({}));

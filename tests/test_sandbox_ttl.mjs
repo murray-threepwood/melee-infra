@@ -59,6 +59,10 @@ test("isCodeFlight true bloquea la decisión del watcher", () => {
     true
   );
   assert.equal(
+    isCodeFlight([{ id: "1", type: "inspect", status: "running" }]),
+    true
+  );
+  assert.equal(
     isCodeFlight([{ id: "1", type: "code", status: "done" }]),
     false
   );

@@ -17,6 +17,7 @@ import {
 } from "../config/murray-agent/ops.mjs";
 import { redact } from "../config/murray-agent/redact.mjs";
 import { createMurrayAgentServer } from "../config/murray-agent/server.mjs";
+import { createOperatorInbox } from "../config/murray-agent/operator-inbox.mjs";
 
 function listen(server) {
   return new Promise((resolve) => {
@@ -417,6 +418,9 @@ function codingStack(overrides = {}) {
     ...overrides.openhands,
   };
   const workerRef = { current: null };
+  const operatorInbox =
+    overrides.operatorInbox ||
+    createOperatorInbox({ root: path.join(root, "operator-inbox") });
   const coding = createCodingSession({
     workspace,
     session,
@@ -425,6 +429,9 @@ function codingStack(overrides = {}) {
     openhands,
     telegram,
     ops: overrides.ops,
+    llm: overrides.inspectLlm,
+    readDoc: overrides.readDoc,
+    operatorInbox,
     pollDelayMs: overrides.pollDelayMs ?? 1,
     hitlBypass: overrides.hitlBypass ?? new Set(),
     worker: {
@@ -447,7 +454,7 @@ function codingStack(overrides = {}) {
       complete: async () => ({ content: "Núcleo: leí el repo.", tool_calls: [] }),
     },
   });
-  return { engine, coding, session, jobs, worker: workerRef.current, notes, root };
+  return { engine, coding, session, jobs, worker: workerRef.current, notes, root, operatorInbox };
 }
 
 test("POST /chat clone sin URL no llama LLM", async () => {
@@ -1142,9 +1149,9 @@ test("seguí con L01 re-arma HITL desde lastMission sin LLM", async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test("qué pasó con UUID de OpenHands diagnostica sin LLM", async () => {
+test("qué pasó con UUID de OpenHands encola inspect; /jobs crudo sigue PAUSED", async () => {
   let llmHits = 0;
-  const { engine, session, jobs, root } = codingStack({
+  const { engine, session, jobs, worker, root } = codingStack({
     llm: {
       complete: async () => {
         llmHits += 1;
@@ -1177,14 +1184,17 @@ test("qué pasó con UUID de OpenHands diagnostica sin LLM", async () => {
     text: "en qué quedó task 460fdf35f8e54fb996d8c52d9eb01057",
   });
   assert.equal(llmHits, 0);
-  assert.match(spoken.reply, new RegExp(job.id));
-  assert.match(spoken.reply, /PAUSED/i);
+  assert.equal(spoken.needs_job, true);
+  assert.match(spoken.reply, /inspect/i);
+  assert.equal(spoken.needs_hitl, false);
+  await worker.kick(spoken.job_id);
   const bySlash = await engine.handleChat({
     chat_id: "44",
     text: "/jobs 460fdf35f8e54fb996d8c52d9eb01057",
   });
   assert.equal(llmHits, 0);
   assert.match(bySlash.reply, new RegExp(job.id));
+  assert.match(bySlash.reply, /PAUSED/i);
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -1317,7 +1327,7 @@ test("code job con startTaskId no abre otra conversación", async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test("/triage y qué pasa diagnostican sin LLM y piden heal HITL", async () => {
+test("/triage y qué pasa encolan inspect sin LLM de chat", async () => {
   let llmHits = 0;
   const { engine, jobs, root } = codingStack({
     llm: {
@@ -1358,14 +1368,97 @@ test("/triage y qué pasa diagnostican sin LLM y piden heal HITL", async () => {
   jobs.update(jobs.list({ chatId: "53" })[0].id, { status: "done" });
   const spoken = await engine.handleChat({ chat_id: "53", text: "Murray, qué pasa?" });
   assert.equal(llmHits, 0);
-  assert.equal(spoken.needs_hitl, true);
-  assert.equal(spoken.hitl.action, "heal_openhands");
-  assert.match(spoken.hitl.approve_data, /^APPROVE_OPS:[a-f0-9]{16}$/);
-  assert.match(spoken.reply, /zombie_sandbox|sandbox_oom_137|double_start/);
-  assert.equal(spoken.reply.includes("ConversationStateUpdateEvent"), false);
+  assert.equal(spoken.needs_job, true);
+  assert.equal(spoken.needs_hitl, false);
+  assert.match(spoken.reply, /inspect/i);
   const slash = await engine.handleChat({ chat_id: "53", text: "/triage" });
   assert.equal(llmHits, 0);
-  assert.equal(slash.needs_hitl, true);
+  assert.equal(slash.needs_job, true);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("inspect no bloquea /chat: ACK needs_job antes del LLM", async () => {
+  let release;
+  const hang = new Promise((resolve) => {
+    release = resolve;
+  });
+  const { engine, worker, root } = codingStack({
+    inspectLlm: {
+      complete: async () => {
+        await hang;
+        return {
+          content: JSON.stringify({
+            summary: "ok",
+            what_happened: "a",
+            what_did_not: "b",
+            actions: [],
+            operator_tasks: [],
+          }),
+        };
+      },
+    },
+  });
+  const spoken = await engine.handleChat({ chat_id: "70", text: "qué pasó" });
+  assert.equal(spoken.needs_job, true);
+  assert.match(spoken.reply, /inspect/i);
+  release();
+  await worker.kick(spoken.job_id);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("inspect auto-heal sin HITL y no recreate postgres", async () => {
+  const seen = [];
+  const { engine, worker, notes, root, operatorInbox } = codingStack({
+    inspectLlm: {
+      complete: async () => ({
+        content: JSON.stringify({
+          summary: "sandbox 137",
+          what_happened: "oom",
+          what_did_not: "misión lista",
+          actions: [
+            { type: "heal_openhands", reason: "zombie" },
+            { type: "recreate", service: "postgres_db", reason: "dato" },
+          ],
+          operator_tasks: [],
+        }),
+      }),
+    },
+    ops: {
+      listOpenHandsSandboxes: async () => [
+        {
+          id: "abc123def456",
+          name: "oh-agent-server-zombie",
+          running: false,
+          status: "Exited (137)",
+        },
+      ],
+      healOpenHands: async () => {
+        seen.push("heal");
+        return { removed: ["oh-agent-server-zombie"] };
+      },
+      recreate: async (service) => {
+        seen.push(`recreate:${service}`);
+        return { code: 0 };
+      },
+      restart: async (service) => {
+        seen.push(`restart:${service}`);
+        return { code: 0 };
+      },
+      ps: async () => ({ stdout: "ok", stderr: "" }),
+      logs: async () => ({ stdout: "", stderr: "" }),
+      memorySnapshot: async () => ({ usedMiB: 1, limitMiB: 2 }),
+    },
+  });
+  const spoken = await engine.handleChat({ chat_id: "71", text: "qué pasó" });
+  assert.equal(spoken.needs_hitl, false);
+  await worker.kick(spoken.job_id);
+  assert.deepEqual(seen, ["heal"]);
+  assert.equal(notes.some((row) => row.terminal && /sandbox 137/.test(row.text)), true);
+  const listed = operatorInbox.list();
+  const files = fs.readdirSync(path.join(root, "operator-inbox")).filter((name) => name.endsWith(".md"));
+  assert.equal(files.length >= 1 || listed.length >= 0, true);
+  const dump = fs.readFileSync(path.join(root, "operator-inbox", files[0]), "utf8");
+  assert.match(dump, /postgres/i);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

@@ -85,7 +85,7 @@ flowchart TD
 5. **`murray-agent` (Telegram chat + conductor de coding sessions)**:
    - Chat vía LiteLLM (`/model` por chat). No edita `murray-infra`. OpenHands es el obrero en `./workspace/<slug>`. Murray corre git en ese jail: status/diff/log/pull/checkout/commit **sin HITL**; **push y delete con HITL**. Push nunca a `main`/`master`, nunca `--force`.
    - `POST /ops/execute` exige `approval_id` de un solo uso emitido por `propose_ops` / `/chat` con `needs_hitl=true` y `hitl.kind=ops`. Sin eso → `403 ops_approval_denied`.
-   - Compose allowlist: `ps`, `logs --tail<=80`, `restart`, `up -d --force-recreate --no-deps` de un servicio. `heal_openhands` (solo desde `/triage`, HITL): `docker rm -f` de contenedores cuyo nombre matchea `^oh-agent-server-` + `restart openhands`. Prohibido `down -v`, `exec`, `kill`, `rm` genérico.
+   - Compose allowlist: `ps`, `logs --tail<=80`, `restart`, `up -d --force-recreate --no-deps` de un servicio. `heal_openhands` (HITL vía `propose_ops` **no** existe; el job `inspect` lo corre **sin** teclado si hay finding): `docker rm -f` de contenedores cuyo nombre matchea `^oh-agent-server-` + `restart openhands`. Prohibido `down -v`, `exec`, `kill`, `rm` genérico. `postgres_db` nunca auto-recreate.
    - Sandbox TTL (operativo, no HITL): al kick de un job `code` sin otro `code`/`oh_poll` `running`, purga huérfanos `oh-agent-server-*`. Watcher cada 5 min borra los de más de 30 min si no hay vuelo. No reinicia `openhands`. No reemplaza `heal_openhands`.
    - `callback_data` Telegram ≤64 bytes: `APPROVE_OPS:<16 hex>`, `APPROVE_CLONE:<16 hex>`, `APPROVE_CODE:<16 hex>`, `APPROVE_DELETE:<16 hex>`, `APPROVE_PUSH:<16 hex>`, `STUCK_RETRY:<16 hex>`.
    - Clone: solo `https://github.com` / `https://gitlab.com`, shallow `--depth 1 --single-branch`, jail bajo `./workspace`. Pull/push/otra rama: `fetch --unshallow` + fetch. Token privado en `GITHUB_TOKEN` / `GITLAB_TOKEN` (`.env`), nunca en la URL ni el chat. Author de commit: default `Murray <murray-threepwood@users.noreply.github.com>` (override `MURRAY_GIT_*`).
@@ -176,14 +176,14 @@ Inbox vacía (`unread_count=0`, `status=ok`) **no** es stub. OAuth ausente es `5
 
 ### 3.1b. `murray-agent` (HTTP REST, DeepSeek + ops HITL + workspace)
 
-Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, coding, ... })`, `createCodingSession({ workspace, jobs, openhands, ops })`. Tests mockean `llm.complete`, `ops.runCommand` y `gitRun`. Cero DeepSeek/GitHub vivos en unit tests.
+Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, coding, ... })`, `createCodingSession({ workspace, jobs, openhands, ops, llm, operatorInbox })`. Tests mockean `llm.complete`, `ops.runCommand` y `gitRun`. Cero DeepSeek/GitHub vivos en unit tests.
 
 - **`GET /healthz`**: `200` `{"status":"ok","service":"murray-agent","model":"deepseek-chat"}`
 - **`POST /chat`**: `{ chat_id, text, message_id? }`
   - `200`: `{ reply, replies, parse_mode:"HTML", needs_hitl, hitl?, needs_job?, job_id? }`
   - Slash sin LLM: `/status`, `/health`, `/logs <servicio>`, `/repo`, `/workspace`, `/jobs`, `/jobs <id>`, `/triage`, `/model`
-  - `/jobs`: últimos 20 jobs del chat (id, type, status, start HH:MM America/Montevideo, duración desde `createdAt`, slug, error). `/jobs <id>` acepta id Murray (16 hex) o UUID OpenHands (32 hex): detalle + snapshot live (`sandbox`/`exec`). Edad **no** usa `updatedAt`. Solo lectura, sin HITL. "estado de los jobs" lista. UUID pegado o «en qué quedó task <hex>» diagnostica ese job.
-  - `/triage` / «qué pasa» / «qué pasa con el obrero» / «diagnosticá»: informe del obrero (jobs + `oh-agent-server-*` + git + RAM). Cero JSON de eventos. Hallazgos saneables → HITL `kind=ops` `action=heal_openhands`. `propose_ops` del LLM **no** incluye ese action.
+  - `/jobs`: últimos 20 jobs del chat (id, type, status, start HH:MM America/Montevideo, duración desde `createdAt`, slug, error). `/jobs <id>` acepta id Murray (16 hex) o UUID OpenHands (32 hex): detalle + snapshot live (`sandbox`/`exec`). Edad **no** usa `updatedAt`. Solo lectura, sin HITL. "estado de los jobs" lista. UUID pegado o «en qué quedó task <hex>» **no** dumpan el job: encolan `inspect`.
+  - `/triage` / «qué pasa» / «qué pasó» / «en qué andas murray» / «diagnosticá»: ACK job `inspect` (dump redacted + `llm.complete` sin tools + auto-ops allowlist). Cero JSON de eventos. Telegram **terminal** al terminar. Hallazgos que no entran en allowlist → `operator-inbox/YYYY-MM-DD.md` + `operator_notes`. `propose_ops` del LLM **no** incluye `heal_openhands`.
   - Clone sin URL, mutate sin repo activo, o delete sin path: pregunta, no HITL, no LLM
   - Misión de código con repo activo + comando de test extraíble (`Comando: …` / `Test: …` / `corré npm test`): intercept HITL `kind=code` **sin LLM**. Mutación sin comando (p. ej. `creá el test`) no va al LLM: receta Murray (`Comando:`).
   - `si` / `dale` / `ok` con repo activo confirma el plan previo (último assistant o `lastTestCommand`) y arma HITL. `seguí` / `retomá` / `seguí con L01` igual, desde `lastMission`. Sin plan recuperable, o «no me da los botones»: receta Murray, `needs_hitl=false`.
@@ -193,7 +193,7 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
   - Jobs `oh_poll`: Telegram al pausar, trancar o terminar (aunque `MURRAY_TELEGRAM_QUIET=1`; el quiet solo tapa progreso). `sandbox_status=PAUSED` + `execution_status` vacío **no** es done. Working tree sucio → status `paused` + aviso de commit; limpio → stuck HITL `sandbox_paused`. `finished` + git vacío + árbol limpio **y cero commits ahead de main** → stuck `empty_finish`. `finished` + commits locales sin pushear → misión lista, aviso explícito de que GitHub no los tiene. Reloj de 12 min no corta si sandbox `RUNNING` (tope 4 h). Tres fallos HTTP de poll → stuck `poll_error:…`. `kick` en vuelo se reusa (no segundo `startConversation`). ≥2 `oh-agent-server` running → code job `sandbox_busy`.
 - **`POST /ops/execute`** y **`POST /ops/reject`**: `{ approval_id }` solo `kind=ops`
   - `action=restart|recreate` exige `service` allowlist
-  - `action=heal_openhands`: lista `docker ps -a --filter name=oh-agent-server`, `rm -f` solo IDs cuyo **nombre** es `oh-agent-server-*`, después `compose restart openhands`. Emitido por `/triage`, nunca por `propose_ops`
+  - `action=heal_openhands`: lista `docker ps -a --filter name=oh-agent-server`, `rm -f` solo IDs cuyo **nombre** es `oh-agent-server-*`, después `compose restart openhands`. El job `inspect` lo invoca directo (P12, sin HITL). `propose_ops` nunca tiene ese action. `/ops/execute` sigue exigiendo `approval_id` si alguien emitió HITL ops.
   - TTL de sandboxes: hook al kick `code` + watcher 5 min / 30 min. Mismo regex. El watcher no hace `restart openhands`.
   - `200` con `reply` HTML
   - `403` `ops_approval_denied` si falta, está usado, venció (~15 min) o el kind no es ops
@@ -207,7 +207,7 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
 - **`POST /triage/mark-seen`**: `{ message_id, thread_id? }` upsert en `seen_emails`. `message_id` vacío → `400` `message_id_required`.
 - Gmail vía tool: solo `{ http, status, error, unread_count }`. Cero `messages`/`subject`.
 - Tool `list_seen_emails`: `{ count, emails: [{ message_id, processed_at }] }` del día civil America/Montevideo. Cero subject/sender. No pega a `/gmail/unread`.
-- n8n `Consultar Murray` timeout **45s**. Clone/misión largos van por jobs + `sendMessage`.
+- n8n `Consultar Murray` timeout **45s**. Clone/misión/inspect largos van por jobs + `sendMessage`.
 
 ### 3.2. `n8n` Workflows & Triggers
 

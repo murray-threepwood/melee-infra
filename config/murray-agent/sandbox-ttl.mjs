@@ -2,7 +2,7 @@ import { isOpenHandsSandboxName } from "./ops.mjs";
 
 export const TTL_MS = 30 * 60 * 1000;
 export const WATCH_EVERY_MS = 5 * 60 * 1000;
-const FLIGHT_TYPES = new Set(["code", "oh_poll"]);
+const FLIGHT_TYPES = new Set(["code", "oh_poll", "inspect"]);
 const FLIGHT_STATUSES = new Set(["running", "queued"]);
 
 export function isCodeFlight(jobs, { exceptId = "" } = {}) {
@@ -57,7 +57,7 @@ export function createSandboxJanitor({
       return [];
     }
     return store.running({
-      types: ["code", "oh_poll"],
+      types: ["code", "oh_poll", "inspect"],
       statuses: ["running", "queued"],
     });
   }
