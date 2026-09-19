@@ -3,6 +3,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
+import { openMurrayDb } from "../config/murray-agent/db.mjs";
 import {
   TERMINAL,
   createJobStore,
@@ -155,6 +156,28 @@ test("find por job id, conversationId y startTaskId; paused es terminal", async 
   const after = await worker.kick(job.id);
   assert.equal(after.status, "paused");
   assert.equal(hits.length, 0);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test("job encolado sobrevive a reabrir la DB", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "murray-jobs-reopen-"));
+  const filePath = path.join(dir, "murray.db");
+  const db1 = openMurrayDb({ filePath });
+  const first = createJobStore({ db: db1 });
+  const job = first.enqueue({
+    type: "code",
+    chatId: "3",
+    payload: { slug: "repo-b", conversationId: "conv-1" },
+  });
+  db1.close();
+  const db2 = openMurrayDb({ filePath });
+  const again = createJobStore({ db: db2 });
+  const got = again.get(job.id);
+  assert.equal(got.id, job.id);
+  assert.equal(got.type, "code");
+  assert.equal(got.payload.slug, "repo-b");
+  assert.equal(got.payload.conversationId, "conv-1");
+  db2.close();
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

@@ -1,9 +1,12 @@
 # Estado de Avance del Proyecto
 
-Última actualización: 2026-09-17 19:45 (UTC-3)
+Última actualización: 2026-09-18 21:25 (UTC-3)
 Agente ejecutor: Cursor
 
-## Fases y Tareas
+## Fases históricas (no re-ejecutar)
+
+Fuente: `roadmap/archive/`. Banner HISTÓRICO en cada archivo.
+
 - [x] Fase 1: Inicialización de Entorno y Red Segura
   - [x] Tarea 1.1: Inicialización de Directorios
   - [x] Tarea 1.2: Generación de .env.example y .env
@@ -38,12 +41,44 @@ Agente ejecutor: Cursor
   - [x] Delete HITL de path/slug/wipe bajo ./workspace
   - [x] pull/checkout/commit sin HITL; push HITL feature-only + unshallow
 
+## Fases vivas
+
+- [x] Fase 7: murray.db SQLite WAL
+  - [x] Tarea 7.1: Módulo db + schema + WAL
+  - [x] Tarea 7.2: Migración JSON y reemplazo de stores
+  - [x] Tarea 7.3: Imagen Node 22
+  - [x] Tarea 7.4: Tests y sync de docs
+- [ ] Fase 8: Memoria de correos en murray.db
+  - [ ] Tarea 8.1: POST /triage/filter y /triage/mark-seen
+  - [ ] Tarea 8.2: Tool list_seen_emails
+  - [ ] Tarea 8.3: Workflow email_triage_draft.json
+  - [ ] Tarea 8.4: Tests
+  - [ ] Tarea 8.5: Sync de docs
+- [ ] Fase 9: Gateway LiteLLM
+  - [ ] Tarea 9.1: Servicio litellm + config
+  - [ ] Tarea 9.2: Reencaminar murray-agent y openhands
+  - [ ] Tarea 9.3: /model + active_model
+  - [ ] Tarea 9.4: Tests y .env.example
+  - [ ] Tarea 9.5: Sync de docs
+- [ ] Fase 10: Lifecycle + TTL 30 min
+  - [ ] Tarea 10.1: Helper purge + regex
+  - [ ] Tarea 10.2: Hook al inicio del job
+  - [ ] Tarea 10.3: Watcher 30 min
+  - [ ] Tarea 10.4: Tests y sync de docs
+
+## Backlog (no ejecutar)
+
+- [ ] 90: Endurecimiento socket Docker (doble proxy + `VOLUMES=0` + `userns-remap`)
+
 ## Acciones humanas pendientes
+
 - H1–H12: cerrados. H12 (2026-09-16 ~20:34 UY): Rechazar → `✅ Orden procesada: REJECT_TASK:16`.
+- H13 (fase 9): `GEMINI_API_KEY` + `LITELLM_MASTER_KEY`. Ver `roadmap/99_HUMAN_OPERATOR.md`.
+- H14 (fase 8): reimport + publish + Active de `email_triage_draft` (`Z8f9K2mP1qRt5vWx`).
 - Gmail OAuth **live**. Workflows n8n **activos**: HITL `20uYWal9fr2bWwVV`, triage `Z8f9K2mP1qRt5vWx`.
 - Postgres 16: alerta de n8n 2.38 ignorada a propósito (no upgrade de major).
-- **Operador (no bloquea código)**:
-  1. Pegar `GITHUB_TOKEN` (PAT de murray-threepwood, scope `repo`) en `.env`. Import + publish + reactivar `telegram_hitl_router` (`_DELETE:` / `_PUSH:`) y `docker compose up -d --force-recreate murray-agent`.
+- **Operador (no bloquea código de 07–10)**:
+  1. Pegar `GITHUB_TOKEN` (PAT de murray-threepwood, scope `repo`) en `.env` si aún falta. Import + publish + reactivar `telegram_hitl_router` y `docker compose up -d --force-recreate murray-agent`.
   2. Telegram: `/workspace`. `cloná https://github.com/owner/repo` → Aprobar. `hacé pull`. `commiteá "feat: …"`. `pusheá` (HITL, no en main). `borrá <slug>` → Aprobar.
   3. Recreate de un servicio del stack sigue pidiendo Aprobar ops.
   4. `/oh` queda para sandbox crudo.

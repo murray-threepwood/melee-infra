@@ -1,6 +1,5 @@
 import crypto from "node:crypto";
-import fs from "node:fs";
-import path from "node:path";
+import { openMurrayDb } from "./db.mjs";
 
 const LOG_CAP = 40;
 const LIST_CAP = 20;
@@ -128,56 +127,106 @@ export function formatJobDetail(job, { now = Date.now(), tail = 20, timeZone = J
   );
 }
 
+function parseJson(text, fallback) {
+  try {
+    const data = JSON.parse(String(text || ""));
+    return data == null ? fallback : data;
+  } catch {
+    return fallback;
+  }
+}
+
+function rowToJob(row) {
+  if (!row) {
+    return null;
+  }
+  return {
+    id: row.id,
+    type: row.type,
+    status: row.status,
+    chatId: row.chat_id,
+    payload: parseJson(row.payload, {}),
+    error: row.error || "",
+    log: parseJson(row.log, []),
+    createdAt: Number(row.created_at),
+    runAfter: Number(row.run_after),
+    updatedAt: Number(row.updated_at),
+  };
+}
+
 export function createJobStore({
   filePath = process.env.MURRAY_JOBS_PATH || "/var/lib/murray-agent/jobs.json",
+  dbPath,
+  db,
 } = {}) {
-  function load() {
-    try {
-      const raw = fs.readFileSync(filePath, "utf8");
-      const data = JSON.parse(raw);
-      return data && typeof data === "object" ? data : {};
-    } catch {
-      return {};
-    }
-  }
+  const database =
+    db ||
+    openMurrayDb({
+      filePath,
+      dbPath,
+      jobsPath: filePath && String(filePath).endsWith(".json") ? filePath : undefined,
+    });
 
-  function save(data) {
-    fs.mkdirSync(path.dirname(filePath), { recursive: true });
-    fs.writeFileSync(filePath, JSON.stringify(data), "utf8");
+  const selectOne = database.prepare(`SELECT * FROM jobs WHERE id = ?`);
+  const insert = database.prepare(
+    `INSERT OR REPLACE INTO jobs (
+      id, type, status, chat_id, payload, error, log, created_at, run_after, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+  const selectChat = database.prepare(`SELECT * FROM jobs WHERE chat_id = ?`);
+  const selectAll = database.prepare(`SELECT * FROM jobs`);
+  const selectDue = database.prepare(
+    `SELECT * FROM jobs WHERE status IN ('queued', 'running') AND run_after <= ?`
+  );
+
+  function writeJob(job) {
+    insert.run(
+      job.id,
+      job.type,
+      job.status,
+      job.chatId,
+      JSON.stringify(job.payload && typeof job.payload === "object" ? job.payload : {}),
+      String(job.error || ""),
+      JSON.stringify(Array.isArray(job.log) ? job.log : []),
+      Number(job.createdAt),
+      Number(job.runAfter || 0),
+      Number(job.updatedAt)
+    );
+    return job;
   }
 
   function enqueue(job) {
-    const all = load();
-    const id = job.id || crypto.randomBytes(8).toString("hex");
+    const now = Date.now();
     const row = {
-      id,
+      id: job.id || crypto.randomBytes(8).toString("hex"),
       type: job.type,
       status: "queued",
       chatId: String(job.chatId || ""),
       payload: job.payload || {},
       error: "",
       log: Array.isArray(job.log) ? job.log.slice(-LOG_CAP) : [],
-      createdAt: Date.now(),
+      createdAt: now,
       runAfter: Number(job.runAfter || 0),
-      updatedAt: Date.now(),
+      updatedAt: now,
     };
-    all[id] = row;
-    save(all);
-    return row;
+    return writeJob(row);
   }
 
   function get(id) {
-    return load()[String(id)] || null;
+    return rowToJob(selectOne.get(String(id)));
   }
 
   function update(id, patch) {
-    const all = load();
-    const key = String(id);
-    if (!all[key]) {
+    const prev = get(id);
+    if (!prev) {
       return null;
     }
-    const prev = all[key];
-    const next = { ...prev, ...patch, updatedAt: Date.now() };
+    const now = Date.now();
+    const next = {
+      ...prev,
+      ...patch,
+      updatedAt: now <= Number(prev.updatedAt) ? Number(prev.updatedAt) + 1 : now,
+    };
     let log = Array.isArray(patch.log)
       ? patch.log.map(String)
       : Array.isArray(prev.log)
@@ -188,15 +237,12 @@ export function createJobStore({
       log.push(`status=${patch.status}${err ? ` ${err}` : ""}`);
     }
     next.log = log.slice(-LOG_CAP);
-    all[key] = next;
-    save(all);
-    return next;
+    return writeJob(next);
   }
 
   function appendLog(id, line) {
-    const all = load();
-    const key = String(id);
-    if (!all[key]) {
+    const prev = get(id);
+    if (!prev) {
       return null;
     }
     const chunks = String(line || "")
@@ -205,19 +251,21 @@ export function createJobStore({
       .filter(Boolean)
       .map((row) => row.slice(0, 500));
     if (!chunks.length) {
-      return all[key];
+      return prev;
     }
-    const log = [...(all[key].log || []), ...chunks].slice(-LOG_CAP);
-    all[key] = { ...all[key], log, updatedAt: Date.now() };
-    save(all);
-    return all[key];
+    const now = Date.now();
+    return writeJob({
+      ...prev,
+      log: [...(prev.log || []), ...chunks].slice(-LOG_CAP),
+      updatedAt: now <= Number(prev.updatedAt) ? Number(prev.updatedAt) + 1 : now,
+    });
   }
 
   function list({ chatId = "", limit = LIST_CAP } = {}) {
     const cap = Math.max(1, Math.min(Number(limit) || LIST_CAP, 50));
-    const rows = Object.values(load()).filter(
-      (job) => !chatId || String(job.chatId) === String(chatId)
-    );
+    const rows = (chatId ? selectChat.all(String(chatId)) : selectAll.all())
+      .map(rowToJob)
+      .filter((job) => !chatId || String(job.chatId) === String(chatId));
     rows.sort((a, b) => Number(b.updatedAt || 0) - Number(a.updatedAt || 0));
     return rows.slice(0, cap);
   }
@@ -227,9 +275,9 @@ export function createJobStore({
     if (!needle) {
       return null;
     }
-    const rows = Object.values(load()).filter(
-      (job) => !chatId || String(job.chatId) === String(chatId)
-    );
+    const rows = (chatId ? selectChat.all(String(chatId)) : selectAll.all())
+      .map(rowToJob)
+      .filter((job) => !chatId || String(job.chatId) === String(chatId));
     return (
       rows.find((job) => {
         const payload = job.payload || {};
@@ -243,11 +291,7 @@ export function createJobStore({
   }
 
   function due(now = Date.now()) {
-    return Object.values(load()).filter(
-      (job) =>
-        (job.status === "queued" || job.status === "running") &&
-        Number(job.runAfter || 0) <= now
-    );
+    return selectDue.all(Number(now)).map(rowToJob);
   }
 
   return { enqueue, get, update, appendLog, list, find, due };

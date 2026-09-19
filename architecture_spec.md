@@ -233,7 +233,7 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
 | `./config/mcp-auth` (Bind Mount) | `/app/auth` | `.gauth.json` OAuth (gitignore). |
 | `./config/murray-agent` (Bind Mount, RO) | `/opt/agent:ro` | Chat/ops/coding HTTP. **`working_dir=/tmp`**. |
 | `./workspace` (Bind Mount) | murray-agent `/opt/workspace`; openhands `/opt/workspace_base` | Repos clonados (un slug por repo). Writable. No es murray-infra. |
-| `murray_agent_data` | `/var/lib/murray-agent` | Memoria de chat (20 vueltas), session.json, jobs.json. |
+| `murray_agent_data` | `/var/lib/murray-agent` | `murray.db` SQLite WAL (`MURRAY_DB_PATH`). Tablas: `jobs`, `hitl_tokens`, `session_context`, `seen_emails`. JSON `jobs.json` / `memory.json` / `session.json` se migran one-shot si la tabla está vacía y se renombran a `*.migrated`. Postgres sigue siendo solo de n8n. |
 
 ---
 

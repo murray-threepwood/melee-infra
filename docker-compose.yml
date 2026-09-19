@@ -118,6 +118,7 @@ services:
       - N8N_HEALTH_URL=http://n8n:5678/healthz
       - OPENHANDS_HEALTH_URL=http://openhands:3000/health
       - OPENHANDS_URL=http://openhands:3000
+      - MURRAY_DB_PATH=/var/lib/murray-agent/murray.db
       - MURRAY_MEMORY_PATH=/var/lib/murray-agent/memory.json
       - MURRAY_SESSION_PATH=/var/lib/murray-agent/session.json
       - MURRAY_JOBS_PATH=/var/lib/murray-agent/jobs.json

@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { createApprovalStore } from "./approvals.mjs";
 import { createChatEngine } from "./chat.mjs";
 import { createCodingSession } from "./coding.mjs";
+import { openMurrayDb } from "./db.mjs";
 import { readDoc } from "./docs.mjs";
 import { fetchGmailMeta } from "./gmail-meta.mjs";
 import { createJobStore, createJobWorker } from "./jobs.mjs";
@@ -123,13 +124,14 @@ export function createEngineFromEnv() {
     process.env.MURRAY_PERSONA_PATH ||
     path.join(path.dirname(fileURLToPath(import.meta.url)), "persona.md");
   const personaText = fs.readFileSync(personaPath, "utf8");
+  const db = openMurrayDb();
   const ops = createOps();
   const llm = createLlm();
-  const memory = createMemory();
-  const approvals = createApprovalStore();
-  const session = createSessionStore();
+  const memory = createMemory({ db });
+  const approvals = createApprovalStore({ db });
+  const session = createSessionStore({ db });
   const workspace = createWorkspace();
-  const jobs = createJobStore();
+  const jobs = createJobStore({ db });
   const openhands = createOpenHandsClient();
   const telegram = createTelegramNotifier();
   const workerRef = { current: null };

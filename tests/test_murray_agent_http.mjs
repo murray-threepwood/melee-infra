@@ -301,15 +301,15 @@ test("gmail tool no deja subject en la respuesta al CEO", async () => {
 });
 
 test("memoria recorta a 20 mensajes", () => {
-  const filePath = path.join(os.tmpdir(), `murray-mem-${Date.now()}.json`);
-  const mem = createMemory({ filePath });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "murray-mem-"));
+  const mem = createMemory({ filePath: path.join(dir, "memory.json") });
   for (let i = 0; i < 25; i += 1) {
     mem.append("c1", "user", `m${i}`);
   }
   const rows = mem.get("c1");
   assert.equal(rows.length, 20);
   assert.equal(rows[0].content, "m5");
-  fs.unlinkSync(filePath);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 function codingStack(overrides = {}) {
