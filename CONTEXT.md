@@ -33,6 +33,9 @@ Loop HITL por Telegram: clonar un repo público/privado (token en `.env`) a `./w
 ## Triage
 Diagnóstico del obrero OpenHands sin LLM. Frase canónica `/triage`; hablado: «qué pasa», «qué pasa con el obrero», «diagnosticá». Resume jobs, sandboxes `oh-agent-server-*`, git del slug y RAM Docker. No vuelca eventos JSON. Sanar (purgar sandboxes + restart openhands) pide HITL `heal_openhands`.
 
+## seen_emails
+Tabla de `murray.db` con IDs de Gmail ya procesados (`message_id`, `thread_id`, `processed_at`). Sin asuntos ni cuerpos. El cron pregunta `POST /triage/filter` y marca `POST /triage/mark-seen` solo si el draft respondió 2xx. `workspace-mcp` no guarda vistos.
+
 ## empty_finish
 OpenHands `finished` con `git changes` vacío y working tree limpio. No es misión lista: job `stuck` + teclado. Casi siempre el obrero ni tocó el repo.
 

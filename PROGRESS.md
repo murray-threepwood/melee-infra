@@ -1,6 +1,6 @@
 # Estado de Avance del Proyecto
 
-Última actualización: 2026-09-18 21:25 (UTC-3)
+Última actualización: 2026-09-18 21:40 (UTC-3)
 Agente ejecutor: Cursor
 
 ## Fases históricas (no re-ejecutar)
@@ -48,12 +48,12 @@ Fuente: `roadmap/archive/`. Banner HISTÓRICO en cada archivo.
   - [x] Tarea 7.2: Migración JSON y reemplazo de stores
   - [x] Tarea 7.3: Imagen Node 22
   - [x] Tarea 7.4: Tests y sync de docs
-- [ ] Fase 8: Memoria de correos en murray.db
-  - [ ] Tarea 8.1: POST /triage/filter y /triage/mark-seen
-  - [ ] Tarea 8.2: Tool list_seen_emails
-  - [ ] Tarea 8.3: Workflow email_triage_draft.json
-  - [ ] Tarea 8.4: Tests
-  - [ ] Tarea 8.5: Sync de docs
+- [x] Fase 8: Memoria de correos en murray.db
+  - [x] Tarea 8.1: POST /triage/filter y /triage/mark-seen
+  - [x] Tarea 8.2: Tool list_seen_emails
+  - [x] Tarea 8.3: Workflow email_triage_draft.json
+  - [x] Tarea 8.4: Tests
+  - [x] Tarea 8.5: Sync de docs
 - [ ] Fase 9: Gateway LiteLLM
   - [ ] Tarea 9.1: Servicio litellm + config
   - [ ] Tarea 9.2: Reencaminar murray-agent y openhands

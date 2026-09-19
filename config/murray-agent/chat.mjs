@@ -6,6 +6,7 @@ import {
 import { TOOL_DEFS } from "./llm.mjs";
 import { looksLikeHitlCopy, packHitl, packHitlHelp, packReply } from "./reply.mjs";
 import { redact } from "./redact.mjs";
+import { formatSeenToday, isSeenEmailsIntent } from "./seen-emails.mjs";
 
 const HEALTH_URLS = {
   n8n: process.env.N8N_HEALTH_URL || "http://n8n:5678/healthz",
@@ -101,6 +102,7 @@ export function createChatEngine({
   memory,
   approvals,
   gmailMeta,
+  seen,
   readDoc,
   fetchImpl = fetch,
   personaText,
@@ -178,6 +180,21 @@ export function createChatEngine({
     if (name === "gmail_unread_meta") {
       const meta = await gmailMeta();
       return { payload: meta };
+    }
+    if (name === "list_seen_emails") {
+      if (!seen || typeof seen.listToday !== "function") {
+        return { payload: { error: "seen_store_unconfigured" } };
+      }
+      const rows = seen.listToday();
+      return {
+        payload: {
+          count: rows.length,
+          emails: rows.map((row) => ({
+            message_id: row.message_id,
+            processed_at: row.processed_at,
+          })),
+        },
+      };
     }
     if (name === "read_docs") {
       try {
@@ -518,6 +535,12 @@ export function createChatEngine({
       return packReply(
         `Comando /${slash.cmd} no existe. /status /health /logs <servicio> /repo /workspace /jobs /triage`
       );
+    }
+    if (isSeenEmailsIntent(trimmed)) {
+      if (!seen || typeof seen.listToday !== "function") {
+        return packReply("Memoria de mails no está configurada.");
+      }
+      return packReply(formatSeenToday(seen.listToday()));
     }
     if (coding && typeof coding.interceptChat === "function") {
       const intercepted = await coding.interceptChat({

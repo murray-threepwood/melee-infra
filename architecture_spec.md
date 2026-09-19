@@ -102,7 +102,10 @@ sequenceDiagram
     N8N->>MCP: GET /gmail/unread
     MCP-->>N8N: status=ok
     opt unread_count > 0
+        N8N->>Agent: POST /triage/filter
+        Agent-->>N8N: new_ids
         N8N->>MCP: POST /gmail/drafts
+        N8N->>Agent: POST /triage/mark-seen
         N8N->>CEO: alerta HTML
     end
 
@@ -194,7 +197,10 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
   - Reject no clona, no borra, no pushea ni llama OpenHands
   - `STUCK_RETRY|STOP|LOGS|CHG:<hex>`
   - `403` si el token HITL no vale
+- **`POST /triage/filter`**: `{ ids: string[] }` → `{ new_ids }` (orden de entrada, dedup). `ids` no-array → `400` `ids_required`.
+- **`POST /triage/mark-seen`**: `{ message_id, thread_id? }` upsert en `seen_emails`. `message_id` vacío → `400` `message_id_required`.
 - Gmail vía tool: solo `{ http, status, error, unread_count }`. Cero `messages`/`subject`.
+- Tool `list_seen_emails`: `{ count, emails: [{ message_id, processed_at }] }` del día civil America/Montevideo. Cero subject/sender. No pega a `/gmail/unread`.
 - n8n `Consultar Murray` timeout **45s**. Clone/misión largos van por jobs + `sendMessage`.
 
 ### 3.2. `n8n` Workflows & Triggers
@@ -209,10 +215,11 @@ Import: `n8n import:workflow --input=... --projectId=RtVLhOyjbwQ3l5th` (no combi
   - `_CLONE:` / `_CODE:` / `_DELETE:` / `_PUSH:` / `STUCK_` → `POST http://murray-agent:8080/workspace/hitl`. No OpenHands.
   - Teclado Murray: `callback_data` = `{{ $json.hitl.approve_data }}` / `reject_data`.
 - **Email Triage Draft** (`workflows/email_triage_draft.json`, id publicado `Z8f9K2mP1qRt5vWx`):
-  - Schedule 15 min → `GET http://workspace-mcp:8000/gmail/unread` → IF `unread_count > 0` → split `messages` → dedup por `id` (static data) → `POST /gmail/drafts` → notify Telegram HTML.
+  - Schedule 15 min → `GET http://workspace-mcp:8000/gmail/unread` → IF `unread_count > 0` → `POST http://murray-agent:8080/triage/filter` → solo `new_ids` → split → `POST /gmail/drafts` → (solo 2xx) `POST /triage/mark-seen` → notify Telegram HTML.
+  - `workspace-mcp` es stateless: no guarda vistos. La memoria es `seen_emails` en `murray.db`.
   - **No** lleva `telegramTrigger` (no se puede robar el webhook del HITL).
-  - **No** crea drafts en el schedule sin dedup (si no, cada 15 min duplica).
-  - Misma credencial Telegram. El clic de envío sigue siendo Gmail, no el bot.
+  - **No** crea drafts si `new_ids` está vacío. Mark-seen usa el id del mail, no el del draft.
+  - Misma credencial Telegram. El clic de envío sigue siendo Gmail, no el bot. Import/publish es H14 (humano).
 
 ### 3.3. Proveedor LLM y Orquestación de Agentes
 

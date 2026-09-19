@@ -48,6 +48,15 @@ export const TOOL_DEFS = [
   {
     type: "function",
     function: {
+      name: "list_seen_emails",
+      description:
+        "Mails ya procesados hoy (America/Montevideo). Devuelve count + message_id + processed_at. NUNCA asuntos ni remitentes.",
+      parameters: { type: "object", properties: {} },
+    },
+  },
+  {
+    type: "function",
+    function: {
       name: "read_docs",
       description: "Lee RUNBOOK, lessons-learned o architecture_spec (recortado).",
       parameters: {
