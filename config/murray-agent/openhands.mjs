@@ -257,7 +257,8 @@ export function createOpenHandsClient({
       system_message_suffix: garfioPersonaText,
     };
     if (llmModel && typeof llmModel === "string" && llmModel.trim()) {
-      body.llm_model = llmModel.trim();
+      const clean = llmModel.trim();
+      body.llm_model = clean.startsWith("openai/") ? clean : `openai/${clean}`;
     }
     return request("POST", "/api/v1/app-conversations", { body });
   }

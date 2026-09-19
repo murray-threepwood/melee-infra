@@ -827,6 +827,45 @@ test("stuck HITL ofrece opciones y no pushea", async () => {
   assert.ok(jobs);
 });
 
+test("stuck RETRY con error re-encola misión limpia sin followUp", async () => {
+  const { engine, session, worker, notes, root, jobs } = codingStack({
+    openhands: {
+      startConversation: async () => ({ id: "task-err-1", app_conversation_id: "conv-err-1" }),
+      getConversation: async () => ({
+        execution_status: "error",
+        sandbox_status: "RUNNING",
+      }),
+      searchEvents: async () => [],
+      gitChanges: async () => ({}),
+    },
+  });
+  session.patch("15", { slug: "octocat-Hello-World", url: "https://github.com/x/y.git" });
+  const proposed = await engine.dispatchTool(
+    "propose_code_mission",
+    { instruction: "test retry", test_command: "npm test" },
+    { chatId: "15" }
+  );
+  const hitl = await engine.handleWorkspaceHitl({
+    chat_id: "15",
+    callback_data: proposed.hitl.approve_data,
+  });
+  await worker.kick(hitl.job_id);
+  await worker.drain();
+  await worker.drain();
+  const stuckNote = notes.find((row) => row.buttons && row.buttons[0][0].text === "Reintentar");
+  assert.ok(stuckNote);
+  const retryBtn = stuckNote.buttons[0][0].callback_data;
+  const retryResult = await engine.handleWorkspaceHitl({
+    chat_id: "15",
+    callback_data: retryBtn,
+  });
+  assert.equal(retryResult.needs_job, true);
+  const retriedJob = jobs.get(retryResult.job_id);
+  assert.equal(retriedJob.payload.followUp, false);
+  assert.equal(retriedJob.payload.startTaskId, "task-err-1");
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
 test("slash /workspace lista disco; borrar pide HITL y ejecuta", async () => {
   const { engine, session, worker, notes, root } = codingStack();
   const slug = "octocat-Hello-World";

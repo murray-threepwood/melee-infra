@@ -948,6 +948,11 @@ export function createCodingSession({
       return packReply("Mandame la instrucción nueva. Armo un plan y pido Aprobar código otra vez.");
     }
     if (parsed.verb === "RETRY") {
+      const isError =
+        item.reason === "error" ||
+        item.reason === "sandbox_error" ||
+        item.reason === "sandbox_busy";
+      const followUp = Boolean(item.conversationId) && !isError;
       return startCodeJob(
         {
           chatId: chatId || item.chatId,
@@ -955,9 +960,9 @@ export function createCodingSession({
           instruction: item.instruction,
           testCommand: item.testCommand,
           filesPlan: item.filesPlan,
-          conversationId: item.conversationId,
+          conversationId: followUp ? item.conversationId : "",
         },
-        { followUp: Boolean(item.conversationId) }
+        { followUp }
       );
     }
     throw denied("stuck_verb_denied");
