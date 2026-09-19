@@ -48,6 +48,20 @@ CREATE TABLE IF NOT EXISTS seen_emails (
   thread_id TEXT NOT NULL DEFAULT '',
   processed_at INTEGER NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS garfio_rationales (
+  id TEXT PRIMARY KEY,
+  job_id TEXT NOT NULL DEFAULT '',
+  slug TEXT NOT NULL DEFAULT '',
+  conversation_id TEXT NOT NULL DEFAULT '',
+  instruction TEXT NOT NULL DEFAULT '',
+  test_command TEXT NOT NULL DEFAULT '',
+  summary TEXT NOT NULL DEFAULT '',
+  decisions TEXT NOT NULL DEFAULT '',
+  anti_patterns_avoided TEXT NOT NULL DEFAULT '',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_garfio_slug ON garfio_rationales(slug);
 `;
 
 const MEMORY_CAP = 20;

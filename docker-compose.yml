@@ -194,7 +194,7 @@ services:
     environment:
       - SANDBOX_RUNTIME_CONTAINER_IMAGE=ghcr.io/openhands/runtime:latest
       - WORKSPACE_MOUNT_PATH=./workspace
-      - LLM_MODEL=murray-worker
+      - LLM_MODEL=garfio-worker
       - LLM_BASE_URL=http://litellm:4000
       - LLM_API_KEY=${LITELLM_MASTER_KEY:-}
       - LOG_LEVEL=INFO

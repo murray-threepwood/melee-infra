@@ -1,10 +1,11 @@
 import { classifyUserText, extractTestCommand, isAffirmative, isHitlStuck, isResumeMission } from "./intent.mjs";
 import { formatJobDetail, formatJobsSummary, jobsHint } from "./jobs.mjs";
-import { detectStuck, gitChangeCount, isAgentDone, isSandboxPaused, summarizeEvents } from "./openhands.mjs";
+import { detectStuck, extractGarfioRationale, gitChangeCount, isAgentDone, isSandboxPaused, summarizeEvents } from "./openhands.mjs";
 import { packHitl, packHitlHelp, packReply } from "./reply.mjs";
 import { analyzeSnapshot, formatTriage } from "./triage.mjs";
 import { stuckKeyboard } from "./telegram.mjs";
 import { parseHttpsGitUrl } from "./workspace.mjs";
+import { formatGarfioLog } from "./garfio-store.mjs";
 
 export function parseWorkspaceCallback(data) {
   const raw = String(data || "").trim();
@@ -43,12 +44,12 @@ function denied(message = "approval_id inválido, usado o vencido") {
 
 function missionText({ slug, instruction, testCommand }) {
   return [
-    "Misión Murray (HITL CEO).",
+    "Misión Garfio (Obrero Mecánico Senior - OpenHands HITL CEO).",
     `Repo ya clonado en el mount OpenHands /opt/workspace_base/${slug} (host ./workspace/${slug}).`,
     "No clones de nuevo. No hagas git push. No toques murray-infra ni archivos fuera de ese directorio.",
     `Instrucción: ${instruction}`,
     `Tests a correr: ${testCommand}`,
-    "Al terminar: listá archivos tocados y el resultado de los tests. Si el mismo comando falla 3 veces, parate.",
+    "Al terminar: estructurá tu respuesta obligatoriamente con ### Resumen de Cambios, ### Racional Técnico y Decisiones, ### Humo y Antipatrones Descartados, y ### Estado de Tests. Si el mismo comando falla 3 veces, parate.",
   ].join("\n");
 }
 
@@ -61,6 +62,7 @@ export function createCodingSession({
   openhands,
   telegram,
   ops,
+  garfioStore,
   now = () => Date.now(),
   pollDelayMs = 4000,
   missionMaxMs = 12 * 60 * 1000,
@@ -352,6 +354,14 @@ export function createCodingSession({
     }
     if (verdict.action === "triage") {
       return runTriage({ chatId });
+    }
+    if (verdict.action === "garfio_log") {
+      if (!garfioStore || typeof garfioStore.list !== "function") {
+        return packReply("La bitácora de Garfio no está configurada.");
+      }
+      const targetSlug = verdict.slug || sess.slug || "";
+      const rows = garfioStore.list({ slug: targetSlug, limit: 5 });
+      return packReply(formatGarfioLog(rows));
     }
     if (verdict.action === "list_jobs" || verdict.action === "diagnose_job") {
       return describeJobs({
@@ -692,13 +702,13 @@ export function createCodingSession({
       });
       await notifyJob(
         job,
-        `OpenHands arrancó (task ${startTaskId || "n/a"}). Te aviso si pausa, se tranca o termina.`
+        `🪝 Garfio arrancó la misión (task ${startTaskId || "n/a"}). OpenHands arrancó. Te aviso si pausa, se tranca o termina.`
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
       await notifyJob(
         job,
-        `No pude disparar OpenHands (${err.code || err.message}). Revisá que el servicio esté healthy.`
+        `No pude disparar a Garfio (${err.code || err.message}). Revisá que OpenHands esté healthy.`
       );
     }
   }
@@ -753,7 +763,7 @@ export function createCodingSession({
       await notifyJob(
         job,
         [
-          `Obrero pausó en ${slug}. Sandbox PAUSED, no es misión lista.`,
+          `🪝 Garfio pausó en ${slug}. Sandbox PAUSED, no es misión lista.`,
           `Hay cambios sin commit: ${names}${files.length > 8 ? "…" : ""}.`,
           "Si el diff es el trabajo: commiteá. Si querés que siga: escribí seguí / retomá y re-armo HITL.",
         ].join("\n")
@@ -836,19 +846,38 @@ export function createCodingSession({
           await markStuck(job, "empty_finish", events);
           return;
         }
+        const rationale = extractGarfioRationale(events);
+        if (garfioStore && typeof garfioStore.save === "function") {
+          try {
+            garfioStore.save({
+              jobId: job.id,
+              slug: payload.slug,
+              conversationId,
+              instruction: payload.instruction,
+              testCommand: payload.testCommand,
+              summary: rationale.summary,
+              decisions: rationale.decisions,
+              antiPatternsAvoided: rationale.antiPatternsAvoided,
+            });
+          } catch {
+            // persistence non-blocking
+          }
+        }
         const changeText = JSON.stringify(changes).slice(0, 800);
         const summary = summarizeEvents(events);
         jobs.update(job.id, { status: "done", error: "" });
         await notifyJob(
           job,
           [
-            `Misión lista en ${payload.slug} (status ${conversation?.execution_status}).`,
-            summary,
+            `🪝 <b>Garfio completó la misión en ${payload.slug}</b> (Misión lista, status ${conversation?.execution_status}).`,
+            rationale.summary ? `<b>Resumen:</b> ${rationale.summary}` : summary,
+            rationale.decisions ? `<b>Racional Técnico y Decisiones:</b>\n${rationale.decisions}` : "",
+            rationale.antiPatternsAvoided ? `<b>Humo y Antipatrones Descartados:</b>\n${rationale.antiPatternsAvoided}` : "",
             changeText && changeText !== "{}" ? `git changes: ${changeText}` : "",
             "Si está bien, pedime commit y después push (HITL, nunca main).",
           ]
             .filter(Boolean)
-            .join("\n")
+            .join("\n\n")
         );
         return;
       }
@@ -893,7 +922,7 @@ export function createCodingSession({
       throw denied();
     }
     if (parsed.verb === "STOP") {
-      return packReply("Paré. El obrero no sigue. El repo queda como esté en ./workspace.");
+      return packReply("Paré. Garfio no sigue. El repo queda como esté en ./workspace.");
     }
     if (parsed.verb === "CHG") {
       session.patch(chatId || item.chatId, {

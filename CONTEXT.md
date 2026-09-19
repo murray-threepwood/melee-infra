@@ -19,7 +19,13 @@ Servicio de Gmail draft-only: lee y crea borradores vía Gmail API; no puede env
 Invariante: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true`. El clic de envío ocurre en Gmail, en manos del CEO.
 
 ## OpenHands
-Runtime de agente de código acotado a `./workspace`, con `no-new-privileges` y socket Docker para sandboxes hijos.
+Runtime de agente de código acotado a `./workspace`, con `no-new-privileges` y socket Docker para sandboxes hijos. Representa a **Garfio (Meathook)**, el obrero mecánico senior de código.
+
+## Garfio (Meathook)
+Obrero Mecánico e Ingeniero Principal Senior (30+ años IT, AACC 130+ IQ) ejecutando dentro del sandbox OpenHands. Con garfios en lugar de manos y de espaldas a la pantalla, pica código quirúrgico, extermina dependencias superfluas y rinde cuentas a Murray y al CEO. Usa el alias `garfio-worker` en LiteLLM.
+
+## garfio_rationales
+Tabla relacional en `murray.db` (SQLite WAL) donde se persisten el resumen, decisiones de arquitectura y humo/antipatrones descartados por Garfio tras cada misión. Consultable vía `/garfio` o `/garfio <slug>`.
 
 ## LiteLLM
 Gateway HTTP en `agent-net` (`litellm:4000`). Murray y OpenHands pegan acá, no a `api.deepseek.com`. Primario DeepSeek. Fallback Gemini 3.8 Flash y, si no entra, 2.5 Flash-Lite (AI Studio, no el OAuth de Gmail).

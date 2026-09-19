@@ -19,6 +19,7 @@ import { createSessionStore } from "./session.mjs";
 import { createTelegramNotifier } from "./telegram.mjs";
 import { createSandboxJanitor } from "./sandbox-ttl.mjs";
 import { createWorkspace } from "./workspace.mjs";
+import { createGarfioStore } from "./garfio-store.mjs";
 
 function sendJson(res, status, body) {
   const payload = JSON.stringify(body);
@@ -172,6 +173,7 @@ export function createEngineFromEnv() {
   const openhands = createOpenHandsClient();
   const telegram = createTelegramNotifier();
   const janitor = createSandboxJanitor({ ops, store: jobs });
+  const garfio = createGarfioStore({ db });
   const workerRef = { current: null };
   const coding = createCodingSession({
     workspace,
@@ -181,6 +183,7 @@ export function createEngineFromEnv() {
     openhands,
     telegram,
     ops,
+    garfioStore: garfio,
     worker: {
       kick(id) {
         return workerRef.current ? workerRef.current.kick(id) : Promise.resolve(null);
@@ -205,8 +208,9 @@ export function createEngineFromEnv() {
     coding,
     workspace,
     session,
+    garfioStore: garfio,
   });
-  return { engine, jobs, worker: workerRef.current, seen, janitor };
+  return { engine, jobs, worker: workerRef.current, seen, janitor, garfio };
 }
 
 const isDirectRun =

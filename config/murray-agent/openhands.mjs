@@ -1,3 +1,19 @@
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+let garfioPersonaText = "";
+try {
+  garfioPersonaText = fs.readFileSync(
+    path.join(__dirname, "garfio-persona.md"),
+    "utf8"
+  ).trim();
+} catch {
+  garfioPersonaText =
+    "Sos Garfio (Meathook), Obrero Mecánico Senior (AACC 130+, 30+ años IT). Trabajá SOLO en el repo ya clonado. No hagas git push. No edites murray-infra. Si el mismo comando falla 3 veces, parate y reportá.";
+}
+
 function deny(code, message, status = 502) {
   const err = new Error(message);
   err.code = code;
@@ -134,6 +150,51 @@ export function summarizeEvents(events = [], { maxChars = 1800 } = {}) {
   return lines.join("\n").slice(0, maxChars) || "(sin eventos útiles)";
 }
 
+export function extractGarfioRationale(events = []) {
+  let lastAgentText = "";
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i];
+    const kind = ev.kind || ev.event_type || "";
+    const payload = ev.payload || ev.message || ev;
+    const role = String(payload?.role || payload?.sender || "").toLowerCase();
+    let text = "";
+    if (typeof payload === "string") {
+      text = payload;
+    } else if (payload?.content) {
+      text = Array.isArray(payload.content)
+        ? payload.content.map((p) => p.text || "").join(" ")
+        : String(payload.content);
+    } else if (payload?.text) {
+      text = String(payload.text);
+    }
+    if (role === "assistant" || kind === "MessageEvent" || ev.source === "agent") {
+      if (text && (text.includes("###") || text.length > 40)) {
+        lastAgentText = text;
+        break;
+      }
+    }
+  }
+
+  function extractSection(heading) {
+    const regex = new RegExp(`###\\s*${heading}[^\\n]*\\n([\\s\\S]*?)(?=(?:###|\\Z))`, "i");
+    const match = lastAgentText.match(regex);
+    return match ? match[1].trim() : "";
+  }
+
+  const summary = extractSection("Resumen de Cambios");
+  const decisions = extractSection("Racional Técnico y Decisiones");
+  const antiPatternsAvoided = extractSection("Humo y Antipatrones Descartados");
+  const testStatus = extractSection("Estado de Tests");
+
+  return {
+    raw: lastAgentText,
+    summary,
+    decisions,
+    antiPatternsAvoided,
+    testStatus,
+  };
+}
+
 export function createOpenHandsClient({
   baseUrl = process.env.OPENHANDS_URL || "http://openhands:3000",
   fetchImpl = fetch,
@@ -142,36 +203,39 @@ export function createOpenHandsClient({
   const root = String(baseUrl).replace(/\/+$/, "");
 
   async function request(method, path, { query, body } = {}) {
-    const url = new URL(path, `${root}/`);
-    if (query) {
+    const url = new URL(`${root}${path}`);
+    if (query && typeof query === "object") {
       for (const [key, value] of Object.entries(query)) {
-        if (value === undefined || value === null || value === "") {
-          continue;
+        if (value !== undefined && value !== null) {
+          url.searchParams.set(key, String(value));
         }
-        url.searchParams.set(key, String(value));
       }
     }
-    const res = await fetchImpl(url, {
+    const headers = { Accept: "application/json" };
+    let bodyText = null;
+    if (body !== undefined) {
+      headers["Content-Type"] = "application/json";
+      bodyText = JSON.stringify(body);
+    }
+    const res = await fetchImpl(url.toString(), {
       method,
-      headers: { "content-type": "application/json", accept: "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
+      headers,
+      body: bodyText,
       signal: AbortSignal.timeout(timeoutMs),
     });
-    const text = await res.text();
-    let json = {};
-    try {
-      json = text ? JSON.parse(text) : {};
-    } catch {
-      json = { raw: text.slice(0, 400) };
-    }
     if (!res.ok) {
+      const text = await res.text().catch(() => "");
       deny(
-        "openhands_http_failed",
-        json.detail || json.message || `openhands_http_${res.status}`,
-        res.status
+        "openhands_http_error",
+        `OpenHands ${method} ${path} -> ${res.status}: ${text.slice(0, 300)}`,
+        res.status >= 500 ? 502 : res.status
       );
     }
-    return json;
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      return res.json();
+    }
+    return res.text();
   }
 
   async function health() {
@@ -186,13 +250,12 @@ export function createOpenHandsClient({
     const mission = String(text || "");
     return request("POST", "/api/v1/app-conversations", {
       body: {
-        title: String(title || "murray-code").slice(0, 80),
+        title: String(title || "garfio-code").slice(0, 80),
         initial_message: {
           role: "user",
           content: [{ type: "text", text: mission }],
         },
-        system_message_suffix:
-          "Trabajá SOLO en el repo ya clonado. No hagas git push. No edites murray-infra. Si el mismo comando falla 3 veces, parate y reportá.",
+        system_message_suffix: garfioPersonaText,
       },
     });
   }

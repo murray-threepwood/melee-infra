@@ -25,7 +25,7 @@ export const JOBS_INTENT =
   /estado de los jobs|cola de (?:los )?jobs|c[oó]mo van los jobs|qu[eé] jobs hay|list[áa](?:me)? los jobs|^\s*jobs(?:\s+\S+)?\s*$/i;
 
 export const DIAGNOSE_INTENT =
-  /en qu[eé] qued[oó]|qu[eé] pas[oó]|c[oó]mo (?:va|est[áa]|qued[oó]) (?:el )?(?:job|task|poll|obrero|misi[oó]n)|revis[áa](?:me)? (?:el )?(?:job|obrero|openhands|poll)|fijate .{0,160}(?:job|oh_poll|\/jobs|[a-f0-9]{16})|error:\s*\S+|task [a-f0-9]{16,32}|qu[eé] (?:hizo|est[áa] haciendo) (?:el )?(?:obrero|openhands)/i;
+  /en qu[eé] qued[oó]|qu[eé] pas[oó]|c[oó]mo (?:va|est[áa]|qued[oó]|viene) (?:el )?(?:job|task|poll|obrero|misi[oó]n|garfio|manco)|revis[áa](?:me)? (?:el )?(?:job|obrero|openhands|poll|garfio)|fijate .{0,160}(?:job|oh_poll|\/jobs|garfio|[a-f0-9]{16})|error:\s*\S+|task [a-f0-9]{16,32}|qu[eé] (?:hizo|est[áa] haciendo|carajo hace|anda haciendo) (?:el )?(?:obrero|openhands|garfio|manco)/i;
 
 export function isAffirmative(text) {
   const t = String(text || "")
@@ -63,13 +63,23 @@ export function isTriageIntent(text) {
   let t = String(text || "").trim();
   t = t.replace(/^\/+/, "");
   t = t.replace(/^murray[,:\s]+/i, "").trim();
-  t = t.replace(/[?.!]+$/g, "").trim();
+  t = t.replace(/[?.!¿¡]+$/g, "").trim();
+  t = t.replace(/^[¿¡]+/g, "").trim();
   if (!t || t.length > 140) {
     return false;
   }
-  return /^(?:triage|qu[eé] pasa(?:s)?(?: con(?: el)? (?:obrero|openhands|sandbox|la misi[oó]n)?)?|qu[eé] pas[oó](?: con(?: el)? (?:obrero|openhands|sandbox|la misi[oó]n)?)?|diagnostic[áa](?:me|lo)?(?: el obrero)?|c[oó]mo (?:est[áa]|anda) (?:el )?obrero)$/i.test(
+  return /^(?:triage(?: garfio)?|qu[eé] (?:pasa|pas[oó]|hace|anda haciendo|est[áa] haciendo)(?: con)?(?: (?:el )?(?:obrero|openhands|sandbox|la misi[oó]n|garfio|el manco|meathook))?|c[oó]mo (?:est[áa]|anda|va|viene)(?: (?:el )?(?:obrero|garfio|el manco|meathook))?|diagnostic[áa](?:me|lo)?(?: (?:el )?(?:obrero|garfio))?|fijate (?:en )?(?:garfio|el manco)|qu[eé] carajo hace (?:garfio|el manco)|revis[áa](?:me)? (?:a )?(?:garfio|el manco)|status garfio|garfio status)$/i.test(
     t
   );
+}
+
+export function isGarfioLogIntent(text) {
+  let t = String(text || "").trim();
+  t = t.replace(/^\/+/, "");
+  t = t.replace(/[?.!¿¡]+$/g, "").trim();
+  t = t.replace(/^[¿¡]+/g, "").trim();
+  return /^(?:bit[aá]cora|historial|decisiones|racional|lecciones)(?: de)? garfio(?:\s+(\S+))?$/i.test(t) ||
+         /^(?:qu[eé] decidi[oó]|qu[eé] descart[oó]|qu[eé] lecciones dej[oó]) garfio(?:\s+(\S+))?$/i.test(t);
 }
 
 export function extractJobId(text) {
@@ -201,6 +211,12 @@ export function classifyUserText(text, { hasSession = false } = {}) {
   }
   if (isHitlStuck(trimmed)) {
     return { action: "hitl_help" };
+  }
+  if (isGarfioLogIntent(trimmed)) {
+    const match =
+      trimmed.match(/^(?:bit[aá]cora|historial|decisiones|racional|lecciones)(?: de)? garfio(?:\s+(\S+))?$/i) ||
+      trimmed.match(/^(?:qu[eé] decidi[oó]|qu[eé] descart[oó]|qu[eé] lecciones dej[oó]) garfio(?:\s+(\S+))?$/i);
+    return { action: "garfio_log", slug: match?.[1] || "" };
   }
   if (isTriageIntent(trimmed) && !refs.ref) {
     return { action: "triage" };

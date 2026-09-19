@@ -224,15 +224,15 @@ export function formatTriage(report = {}) {
   const n = Number(report.sandboxCount || 0);
   const jobsLabel = report.jobHint || "sin jobs";
   if (!findings.length) {
-    return `Obrero quieto. ${n} sandbox(es) oh-agent-server, jobs: ${jobsLabel}. Nada que sanar. /jobs si querés el detalle.`;
+    return `🪝 Garfio quieto en reposo (afilando los garfios). ${n} sandbox(es) oh-agent-server, jobs: ${jobsLabel}. Nada que sanar. /jobs si querés el detalle.`;
   }
   const lines = [
-    `Obrero: ${report.summary || "hallazgos"}.`,
+    `🪝 Garfio: ${report.summary || "hallazgos"}.`,
     ...findings.map((row) => `- ${row.code}: ${row.detail}`),
   ];
   if (report.heal?.action === "heal_openhands") {
     lines.push(
-      "Aprobar limpia sandboxes oh-agent-server-* y reinicia openhands. No toca postgres/n8n."
+      "Aprobar limpia sandboxes oh-agent-server-* y reinicia openhands (Garfio). No toca postgres/n8n."
     );
   } else {
     lines.push("Sin heal de Docker. /jobs o el teclado stuck (Reintentar/Parar).");

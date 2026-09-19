@@ -7,6 +7,7 @@ import { ALLOWED_MODELS, DEFAULT_CHAT_MODEL, resolveChatModel, TOOL_DEFS } from 
 import { looksLikeHitlCopy, packHitl, packHitlHelp, packReply } from "./reply.mjs";
 import { redact } from "./redact.mjs";
 import { formatSeenToday, isSeenEmailsIntent } from "./seen-emails.mjs";
+import { formatGarfioLog } from "./garfio-store.mjs";
 
 const HEALTH_URLS = {
   n8n: process.env.N8N_HEALTH_URL || "http://n8n:5678/healthz",
@@ -47,6 +48,9 @@ export function parseSlash(text) {
   }
   if (name === "model") {
     return { cmd: "model", model: rest.join(" ").trim() };
+  }
+  if (name === "garfio") {
+    return { cmd: "garfio", slug: rest[0] || "" };
   }
   return { cmd: name, service: rest[0] || "" };
 }
@@ -112,6 +116,7 @@ export function createChatEngine({
   coding = null,
   workspace = null,
   session = null,
+  garfioStore = null,
 } = {}) {
   if (!ops || !llm || !memory || !approvals) {
     throw new Error("createChatEngine requiere ops, llm, memory, approvals");
@@ -561,8 +566,15 @@ export function createChatEngine({
         session.patch(chatId, { active_model: slash.model });
         return packReply(`Modelo de este chat: ${slash.model}`);
       }
+      if (slash.cmd === "garfio") {
+        if (!garfioStore || typeof garfioStore.list !== "function") {
+          return packReply("La bitácora de Garfio no está configurada.");
+        }
+        const rows = garfioStore.list({ slug: slash.slug, limit: 5 });
+        return packReply(formatGarfioLog(rows));
+      }
       return packReply(
-        `Comando /${slash.cmd} no existe. /status /health /logs <servicio> /repo /workspace /jobs /triage`
+        `Comando /${slash.cmd} no existe. /status /health /logs <servicio> /repo /workspace /jobs /triage /garfio`
       );
     }
     if (isSeenEmailsIntent(trimmed)) {
