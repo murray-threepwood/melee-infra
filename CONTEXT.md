@@ -22,7 +22,7 @@ Invariante: `GMAIL_ALLOW_SENDING=false` y `GMAIL_ALLOW_DRAFTS=true`. El clic de 
 Runtime de agente de código acotado a `./workspace`, con `no-new-privileges` y socket Docker para sandboxes hijos.
 
 ## LiteLLM
-Gateway HTTP en `agent-net` (`litellm:4000`). Murray y OpenHands pegan acá, no a `api.deepseek.com`. Primario DeepSeek, fallback Gemini 2.5 Flash (AI Studio, no el OAuth de Gmail).
+Gateway HTTP en `agent-net` (`litellm:4000`). Murray y OpenHands pegan acá, no a `api.deepseek.com`. Primario DeepSeek. Fallback Gemini 3.8 Flash y, si no entra, 2.5 Flash-Lite (AI Studio, no el OAuth de Gmail).
 
 ## murray-agent
 Servicio HTTP (`murray-agent:8080`) que habla con el CEO por el **mismo** bot Telegram. Chat vía LiteLLM + diagnóstico/ops del stack + conductor de coding sessions (`./workspace`). `/model` elige el modelo del chat. No edita murray-infra. Git de dev en el jail: pull/commit sin HITL; push y delete con Aprobar. Nunca force ni push a main/master. `/jobs` consulta la cola async.

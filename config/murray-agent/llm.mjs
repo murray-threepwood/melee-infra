@@ -267,7 +267,8 @@ export const DEFAULT_CHAT_MODEL = "murray-chat";
 export const ALLOWED_MODELS = Object.freeze([
   "deepseek-chat",
   "deepseek-reasoner",
-  "gemini-2.5-flash",
+  "gemini-3.8-flash",
+  "gemini-2.5-flash-lite",
 ]);
 
 export function resolveChatModel(activeModel = "") {
