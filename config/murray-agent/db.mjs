@@ -41,7 +41,8 @@ CREATE TABLE IF NOT EXISTS session_context (
   last_job_id TEXT NOT NULL DEFAULT '',
   awaiting_instruction INTEGER NOT NULL DEFAULT 0,
   active_model TEXT NOT NULL DEFAULT '',
-  garfio_model TEXT NOT NULL DEFAULT ''
+  garfio_model TEXT NOT NULL DEFAULT '',
+  micromanage_interval INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS seen_emails (
@@ -322,6 +323,9 @@ export function openMurrayDb({
   db.exec(SCHEMA_SQL);
   try {
     db.exec("ALTER TABLE session_context ADD COLUMN garfio_model TEXT NOT NULL DEFAULT '';");
+  } catch {}
+  try {
+    db.exec("ALTER TABLE session_context ADD COLUMN micromanage_interval INTEGER NOT NULL DEFAULT 0;");
   } catch {}
   migrateJsonIfNeeded(db, {
     dbFile: resolved,

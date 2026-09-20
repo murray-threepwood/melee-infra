@@ -1,7 +1,23 @@
 import { parseHitlBypass, shouldBypassHitl } from "./hitl-policy.mjs";
-import { classifyUserText, extractTestCommand, isAffirmative, isHitlStuck, isResumeMission } from "./intent.mjs";
+import {
+  classifyUserText,
+  extractTestCommand,
+  isAffirmative,
+  isHitlStuck,
+  isResumeMission,
+  parseMicromanageInterval,
+} from "./intent.mjs";
 import { formatJobDetail, formatJobsSummary, jobsHint } from "./jobs.mjs";
-import { detectStuck, extractGarfioRationale, isAgentDone, isSandboxPaused, missionHasDeliverable, summarizeEvents } from "./openhands.mjs";
+import {
+  detectStuck,
+  extractGarfioLiveActivity,
+  extractGarfioRationale,
+  formatMalManagerReport,
+  isAgentDone,
+  isSandboxPaused,
+  missionHasDeliverable,
+  summarizeEvents,
+} from "./openhands.mjs";
 import { packHitl, packHitlHelp, packReply } from "./reply.mjs";
 import { runInspectJob } from "./inspect.mjs";
 import { stuckKeyboard } from "./telegram.mjs";
@@ -384,6 +400,12 @@ export function createCodingSession({
       const rows = garfioStore.list({ slug: targetSlug, limit: 5 });
       return packReply(formatGarfioLog(rows));
     }
+    if (verdict.action === "micromanage") {
+      return setMicromanage({ chatId, intervalRaw: verdict.intervalRaw });
+    }
+    if (verdict.action === "garfio_peek") {
+      return garfioPeek({ chatId });
+    }
     if (verdict.action === "list_jobs" || verdict.action === "diagnose_job") {
       return describeJobs({
         chatId,
@@ -423,6 +445,128 @@ export function createCodingSession({
       });
     }
     return null;
+  }
+
+  async function setMicromanage({ chatId, intervalRaw }) {
+    const raw = String(intervalRaw || "").trim();
+    const intervalSec = parseMicromanageInterval(raw);
+    if (intervalSec === null) {
+      return packReply(
+        [
+          `💀 Intervalo de mal manager no reconocido: «${raw}».`,
+          `Opciones permitidas: 30s, 1m (default), 2m, 5m, 10m, 30m, o off.`,
+          `Ejemplo: /malmanager 1m o /malmanager off`,
+        ].join("\n")
+      );
+    }
+
+    session.patch(chatId, { micromanage_interval: intervalSec });
+
+    let runningJob = null;
+    if (jobs && typeof jobs.list === "function") {
+      const active = jobs.list({ chatId, limit: 10 });
+      runningJob = active.find(
+        (j) => j.type === "oh_poll" && (j.status === "queued" || j.status === "running")
+      );
+    }
+
+    if (intervalSec === 0) {
+      if (runningJob) {
+        const payload = runningJob.payload || {};
+        jobs.update(runningJob.id, {
+          payload: { ...payload, micromanage_interval: 0 },
+        });
+      }
+      return packReply(
+        "💀 Modo Mal Manager DESACTIVADO. Dejo de respirarle en la nuca a Garfio; te aviso únicamente cuando termine o se tranque."
+      );
+    }
+
+    const labelMap = {
+      30: "30 segundos",
+      60: "1 minuto",
+      120: "2 minutos",
+      300: "5 minutos",
+      600: "10 minutos",
+      1800: "30 minutos",
+    };
+    const label = labelMap[intervalSec] || `${intervalSec}s`;
+
+    if (runningJob) {
+      const payload = runningJob.payload || {};
+      jobs.update(runningJob.id, {
+        payload: {
+          ...payload,
+          micromanage_interval: intervalSec,
+          lastProgressNotifyAt: now(),
+        },
+      });
+
+      let peekText = "";
+      try {
+        const conversationId = payload.conversationId;
+        if (conversationId && openhands) {
+          const conversation = await openhands.getConversation(conversationId);
+          const events = await openhands.searchEvents(conversationId);
+          const activity = extractGarfioLiveActivity(events);
+          peekText =
+            "\n\n" +
+            formatMalManagerReport({
+              elapsedMs: now() - (payload.startedAt || runningJob.createdAt),
+              sandboxStatus: conversation?.sandbox_status || "RUNNING",
+              activity,
+              slug: payload.slug,
+            });
+        }
+      } catch {}
+
+      return packReply(
+        `💀 ¡Modo Mal Manager ACTIVADO (cada ${label})! Me paro atrás de Garfio con el látigo a contarte cada movimiento.${peekText}\n\n/malmanager off para apagarlo.`
+      );
+    }
+
+    return packReply(
+      `💀 Modo Mal Manager configurado (cada ${label}). En cuanto Garfio arranque una misión, te iré cantando su avance con este intervalo.\n/malmanager off para apagarlo.`
+    );
+  }
+
+  async function garfioPeek({ chatId }) {
+    let runningJob = null;
+    if (jobs && typeof jobs.list === "function") {
+      const active = jobs.list({ chatId, limit: 10 });
+      runningJob = active.find(
+        (j) => j.type === "oh_poll" && (j.status === "queued" || j.status === "running")
+      );
+    }
+
+    if (!runningJob) {
+      return packReply(
+        "Garfio está en el rincón tomando mate con los garfios hacia abajo. No hay ninguna misión de código en vuelo."
+      );
+    }
+
+    const payload = runningJob.payload || {};
+    const conversationId = payload.conversationId;
+    if (!conversationId || !openhands) {
+      return packReply(
+        `Garfio está inicializando el sandbox para ${payload.slug || "el repo"}. Todavía no hay eventos de código registrados.`
+      );
+    }
+
+    try {
+      const conversation = await openhands.getConversation(conversationId);
+      const events = await openhands.searchEvents(conversationId);
+      const activity = extractGarfioLiveActivity(events);
+      const report = formatMalManagerReport({
+        elapsedMs: now() - (payload.startedAt || runningJob.createdAt),
+        sandboxStatus: conversation?.sandbox_status || "RUNNING",
+        activity,
+        slug: payload.slug,
+      });
+      return packReply(report);
+    } catch (err) {
+      return packReply(`No pude espiar a Garfio (${err.code || err.message}).`);
+    }
   }
 
   async function notify(chatId, text, buttons, { terminal = false } = {}) {
@@ -655,12 +799,17 @@ export function createCodingSession({
   }
 
   function enqueuePoll(chatId, payload) {
+    const mi =
+      payload.micromanage_interval !== undefined
+        ? payload.micromanage_interval
+        : session.get(chatId)?.micromanage_interval || 0;
     const job = jobs.enqueue({
       type: "oh_poll",
       chatId,
       payload: {
         startedAt: now(),
         failLog: "",
+        micromanage_interval: mi,
         ...payload,
       },
     });
@@ -738,6 +887,10 @@ export function createCodingSession({
         instruction: payload.instruction,
         testCommand: payload.testCommand,
         garfioModel,
+        micromanage_interval:
+          payload.micromanage_interval !== undefined
+            ? payload.micromanage_interval
+            : session.get(job.chatId)?.micromanage_interval || 0,
       });
       const brainLabel = garfioModel ? ` [cerebro: ${garfioModel}]` : "";
       await notifyJob(
@@ -938,10 +1091,36 @@ export function createCodingSession({
         );
         return;
       }
+      const micromanageIntervalSec = Number(
+        payload.micromanage_interval !== undefined
+          ? payload.micromanage_interval
+          : session.get(job.chatId)?.micromanage_interval || 0
+      );
+      let nextLastNotify = payload.lastProgressNotifyAt;
+      if (micromanageIntervalSec > 0) {
+        const intervalMs = micromanageIntervalSec * 1000;
+        const lastNotify = Number(payload.lastProgressNotifyAt || payload.startedAt || job.createdAt || 0);
+        if (now() - lastNotify >= intervalMs) {
+          const activity = extractGarfioLiveActivity(events);
+          const report = formatMalManagerReport({
+            elapsedMs: now() - (payload.startedAt || job.createdAt),
+            sandboxStatus: conversation?.sandbox_status || "RUNNING",
+            activity,
+            slug: payload.slug,
+          });
+          await notifyJob(job, report, undefined, { terminal: true });
+          nextLastNotify = now();
+        }
+      }
       jobs.update(job.id, {
         status: "queued",
         runAfter: now() + pollDelayMs,
-        payload: { ...payload, conversationId, pollFails: 0 },
+        payload: {
+          ...payload,
+          conversationId,
+          pollFails: 0,
+          ...(nextLastNotify !== undefined ? { lastProgressNotifyAt: nextLastNotify } : {}),
+        },
       });
     } catch (err) {
       const fails = Number(payload.pollFails || 0) + 1;
@@ -1038,13 +1217,17 @@ export function createCodingSession({
             ? `Vacié ./workspace (${result.removed.length} entradas).`
             : `Borré ./workspace/${result.rel}.`,
           `Queda ${listing.entries.length} entradas, ${formatBytes(listing.bytes)}.`,
-        ].join("\n")
+        ].join("\n"),
+        undefined,
+        { terminal: true }
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
       await notifyJob(
         job,
-        `Delete falló (${err.code || "workspace_delete_failed"}): ${String(err.message || "").slice(0, 400)}`
+        `Delete falló (${err.code || "workspace_delete_failed"}): ${String(err.message || "").slice(0, 400)}`,
+        undefined,
+        { terminal: true }
       );
     }
   }
@@ -1059,13 +1242,17 @@ export function createCodingSession({
         [
           `Pull listo en ${slug}${result.unshallowed ? " (unshallow)" : ""}.`,
           result.stdout || "(sin stdout)",
-        ].join("\n")
+        ].join("\n"),
+        undefined,
+        { terminal: true }
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
       await notifyJob(
         job,
-        `Pull falló (${err.code || "git_pull_failed"}): ${String(err.message || "").slice(0, 400)}`
+        `Pull falló (${err.code || "git_pull_failed"}): ${String(err.message || "").slice(0, 400)}`,
+        undefined,
+        { terminal: true }
       );
     }
   }
@@ -1079,13 +1266,17 @@ export function createCodingSession({
         job,
         [`Push listo: ${slug} ${result.branch} → origin HEAD.`, result.stdout || "(sin stdout)"].join(
           "\n"
-        )
+        ),
+        undefined,
+        { terminal: true }
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
       await notifyJob(
         job,
-        `Push falló (${err.code || "git_push_failed"}): ${String(err.message || "").slice(0, 400)}`
+        `Push falló (${err.code || "git_push_failed"}): ${String(err.message || "").slice(0, 400)}`,
+        undefined,
+        { terminal: true }
       );
     }
   }
@@ -1100,13 +1291,17 @@ export function createCodingSession({
       jobs.update(job.id, { status: "done", error: "" });
       await notifyJob(
         job,
-        `Checkout ${result.created ? "creó" : "cambió a"} ${result.branch} en ${payload.slug}.`
+        `Checkout ${result.created ? "creó" : "cambió a"} ${result.branch} en ${payload.slug}.`,
+        undefined,
+        { terminal: true }
       );
     } catch (err) {
       jobs.update(job.id, { status: "failed", error: err.code || err.message });
       await notifyJob(
         job,
-        `Checkout falló (${err.code || "git_checkout_failed"}): ${String(err.message || "").slice(0, 400)}`
+        `Checkout falló (${err.code || "git_checkout_failed"}): ${String(err.message || "").slice(0, 400)}`,
+        undefined,
+        { terminal: true }
       );
     }
   }
@@ -1184,5 +1379,7 @@ export function createCodingSession({
     handleHitl,
     handlers,
     parseWorkspaceCallback,
+    setMicromanage,
+    garfioPeek,
   };
 }

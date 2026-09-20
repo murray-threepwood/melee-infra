@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.21 — Modo Mal Manager + Notificaciones Terminales de Git
+
+- **Notificaciones Terminales**: Corregido bug donde `pull`, `checkout`, `push` y `delete` finalizaban en silencio por omisión de `terminal: true` ante `MURRAY_TELEGRAM_QUIET=1`. Ahora avisan de inmediato en Telegram al terminar o fallar.
+- **Modo Mal Manager (`/malmanager`)**: Monitoreo periódico del avance de Garfio mientras corre una misión de código en el sandbox OpenHands.
+  - Intervalos soportados: `30s`, `1m` (default al activar), `2m`, `5m`, `10m`, `30m`, `off`. Persiste en `session_context.micromanage_interval`.
+  - Reporte esquemático anti-pared de texto con archivo tocado, último comando con exit code, foco de pensamiento y comentario sarcástico de Murray.
+  - Activación por comando (`/malmanager`, `/mirar`, `/verbose`) o lenguaje natural («mirar por el hombro lo que hace garfio como mal manager»).
+  - Soporte de consulta inmediata on-demand («¿en qué anda garfio?»).
+
 ## 0.1.20 — Inspect profundo + operator-inbox
 
 - «qué pasó» / `/triage` / «en qué andas murray» encolan un job `inspect` (n8n 45s): snapshot redacted → JSON del modelo → auto-fix allowlist (retry, heal, restart/recreate **sin** postgres) **sin teclado**.

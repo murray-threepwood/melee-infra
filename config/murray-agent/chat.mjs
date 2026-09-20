@@ -62,6 +62,9 @@ export function parseSlash(text) {
   if (name === "manual" || name === "help") {
     return { cmd: "manual" };
   }
+  if (name === "malmanager" || name === "mirar" || name === "verbose") {
+    return { cmd: "micromanage", interval: rest.join(" ").trim() };
+  }
   return { cmd: name, service: rest[0] || "" };
 }
 
@@ -133,6 +136,10 @@ export function formatManual() {
     "4. Misiones de Código para Garfio",
     "• Formato: <instrucción> Comando: <test> (ej: npm test / pytest).",
     "• Murray emite teclado HITL. Al tocar Aprobar, Garfio pica código y audita.",
+    "",
+    "5. Modo Mal Manager (Micro-management de Garfio)",
+    "• /malmanager [30s|1m|2m|5m|10m|30m|off]: Reporte esquemático y periódico de lo que hace Garfio.",
+    "• «mirar por el hombro lo que hace garfio como mal manager» o «¿en qué anda garfio?» para espiar en vivo.",
   ].join("\n");
 }
 
@@ -663,8 +670,14 @@ export function createChatEngine({
       if (slash.cmd === "garfio_brain") {
         return handleGarfioBrain({ session, chatId, model: slash.model });
       }
+      if (slash.cmd === "micromanage") {
+        if (!coding || typeof coding.setMicromanage !== "function") {
+          return packReply("Modo mal manager no disponible.");
+        }
+        return coding.setMicromanage({ chatId, intervalRaw: slash.interval });
+      }
       return packReply(
-        `Comando /${slash.cmd} no existe. /manual /status /health /logs <servicio> /repo /workspace /jobs /triage /garfio /model`
+        `Comando /${slash.cmd} no existe. /manual /status /health /logs <servicio> /repo /workspace /jobs /triage /garfio /model /malmanager`
       );
     }
     if (isSeenEmailsIntent(trimmed)) {

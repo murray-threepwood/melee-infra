@@ -287,6 +287,132 @@ export function extractGarfioRationale(events = []) {
   };
 }
 
+export function extractGarfioLiveActivity(events = []) {
+  let lastCommand = "";
+  let lastExitCode = null;
+  let lastFile = "";
+  let lastThought = "";
+  let actionCount = 0;
+
+  for (let i = events.length - 1; i >= 0; i--) {
+    const ev = events[i] || {};
+    const payload = ev.payload || ev.observation || ev.action || ev;
+    const actionName = String(ev.action || payload?.action || ev.kind || "").toLowerCase();
+    const args = payload?.args || ev.args || {};
+
+    if (!lastCommand) {
+      const cmd =
+        args?.command ||
+        payload?.command ||
+        (actionName === "run" || actionName === "execute_bash" ? payload?.content : "") ||
+        "";
+      if (typeof cmd === "string" && cmd.trim()) {
+        lastCommand = cmd.trim().replace(/\s+/g, " ").slice(0, 100);
+      }
+    }
+
+    if (lastExitCode === null) {
+      const exitMatch = JSON.stringify(payload).match(/exit[_ ]?code["']?\s*[:=]\s*(-?\d+)/i);
+      if (exitMatch) {
+        lastExitCode = Number(exitMatch[1]);
+      } else if (typeof payload?.exit_code === "number") {
+        lastExitCode = payload.exit_code;
+      }
+    }
+
+    if (!lastFile) {
+      const filePath =
+        args?.path ||
+        args?.file_path ||
+        payload?.path ||
+        payload?.file_path ||
+        "";
+      if (typeof filePath === "string" && filePath.trim()) {
+        lastFile = filePath.trim();
+      }
+    }
+
+    if (!lastThought) {
+      const thought =
+        payload?.thought ||
+        payload?.reasoning_content ||
+        ev?.thought ||
+        (ev?.source === "agent" && typeof payload?.content === "string" && !payload.content.startsWith("###")
+          ? payload.content
+          : "");
+      if (typeof thought === "string" && thought.trim()) {
+        const clean = thought.trim().replace(/\s+/g, " ");
+        if (clean.length > 5 && !clean.startsWith("<") && !clean.startsWith("###")) {
+          lastThought = clean.slice(0, 120);
+        }
+      }
+    }
+
+    if (ev.source === "agent" || ev.action) {
+      actionCount++;
+    }
+
+    if (lastCommand && lastFile && lastThought) {
+      break;
+    }
+  }
+
+  return {
+    lastCommand,
+    lastExitCode,
+    lastFile,
+    lastThought,
+    actionCount,
+  };
+}
+
+export function formatMalManagerReport({
+  elapsedMs = 0,
+  sandboxStatus = "RUNNING",
+  activity = {},
+  slug = "",
+} = {}) {
+  const mins = Math.floor(elapsedMs / 60000);
+  const secs = Math.floor((elapsedMs % 60000) / 1000);
+  const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+  const sand = String(sandboxStatus || "RUNNING").toUpperCase();
+
+  const lines = [
+    `💀 <b>[Murray: Mal Manager Report]</b>`,
+    `⏱️ <b>En vuelo:</b> ${timeStr} | <b>Sandbox:</b> ${sand}${slug ? ` | <b>Repo:</b> ${slug}` : ""}`,
+    ``,
+    `📋 <b>Qué anda haciendo Garfio:</b>`,
+  ];
+
+  if (activity.lastFile) {
+    lines.push(`• <b>Archivo:</b> <code>${activity.lastFile}</code>`);
+  }
+  if (activity.lastCommand) {
+    const exitPart =
+      activity.lastExitCode !== null && activity.lastExitCode !== undefined
+        ? ` (Exit: ${activity.lastExitCode})`
+        : "";
+    lines.push(`• <b>Comando:</b> <code>${activity.lastCommand}</code>${exitPart}`);
+  }
+  if (activity.lastThought) {
+    lines.push(`• <b>Paso:</b> ${activity.lastThought}`);
+  } else if (!activity.lastFile && !activity.lastCommand) {
+    lines.push(`• <i>Iniciando entorno y analizando el árbol de archivos...</i>`);
+  }
+
+  const verdicts = [
+    `"El manco sigue picando de espaldas al monitor. Por ahora no prendió fuego nada."`,
+    `"Tiene los garfios echando humo. No parece trancado, pero tampoco cantes victoria todavía."`,
+    `"Sigue peleando con el código como grumete en tormenta caribeña. Lo tengo bajo la lupa."`,
+    `"Trabaja a buen ritmo. Le estoy contando los segundos como todo buen jefe insoportable."`,
+    `"Avanza paso a paso. No lo interrumpas con preguntas filosóficas que se desconcentra."`,
+  ];
+  const verdictIndex = Math.floor(elapsedMs / 30000) % verdicts.length;
+  lines.push(``, `👁️ <b>El ojo de Murray:</b>`, `<i>${verdicts[verdictIndex]}</i>`);
+
+  return lines.join("\n");
+}
+
 export function createOpenHandsClient({
   baseUrl = process.env.OPENHANDS_URL || "http://openhands:3000",
   llmApiKey = process.env.LITELLM_MASTER_KEY || "",

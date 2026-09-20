@@ -114,6 +114,101 @@ export function isGarfioBrainIntent(text) {
   return null;
 }
 
+export const ALLOWED_MICROMANAGE_INTERVALS = Object.freeze({
+  "30s": 30,
+  "30 seg": 30,
+  "30 segundos": 30,
+  "30": 30,
+  "1m": 60,
+  "1 min": 60,
+  "1 minuto": 60,
+  "1": 60,
+  "60s": 60,
+  "60": 60,
+  "2m": 120,
+  "2 min": 120,
+  "2 minutos": 120,
+  "2": 120,
+  "120s": 120,
+  "120": 120,
+  "5m": 300,
+  "5 min": 300,
+  "5 minutos": 300,
+  "5": 300,
+  "300s": 300,
+  "300": 300,
+  "10m": 600,
+  "10 min": 600,
+  "10 minutos": 600,
+  "10": 600,
+  "600s": 600,
+  "600": 600,
+  "30m": 1800,
+  "30 min": 1800,
+  "30 minutos": 1800,
+  "1800s": 1800,
+  "1800": 1800,
+  off: 0,
+  "0": 0,
+  desactivar: 0,
+  apagar: 0,
+  silencio: 0,
+});
+
+export function parseMicromanageInterval(raw) {
+  const clean = String(raw || "").trim().toLowerCase();
+  if (!clean || clean === "on" || clean === "activar" || clean === "default") {
+    return 60;
+  }
+  if (ALLOWED_MICROMANAGE_INTERVALS[clean] !== undefined) {
+    return ALLOWED_MICROMANAGE_INTERVALS[clean];
+  }
+  return null;
+}
+
+export function isMicromanageIntent(text) {
+  let t = String(text || "").trim();
+  t = t.replace(/^\/+/, "");
+  t = t.replace(/^murray[,:\s]+/i, "").trim();
+  t = t.replace(/[?.!¿¡]+$/g, "").trim();
+  t = t.replace(/^[¿¡]+/g, "").trim();
+  if (!t || t.length > 140) {
+    return null;
+  }
+
+  const naturalMatch = t.match(
+    /^(?:mirar por el hombro(?: a| lo que hace)? garfio(?: como mal manager)?|modo mal manager|mal manager|vigil[aá] a garfio|espi[aá] a garfio|activar modo mal manager|desactivar modo mal manager)(?:\s+(?:cada\s+)?(.+))?$/i
+  );
+  if (naturalMatch) {
+    let raw = (naturalMatch[1] || "").trim();
+    if (/^desactivar/i.test(t)) {
+      raw = "off";
+    }
+    return { intervalRaw: raw };
+  }
+
+  const slashMatch = t.match(/^(?:malmanager|mirar|verbose)(?:\s+(.+))?$/i);
+  if (slashMatch) {
+    return { intervalRaw: slashMatch[1] || "" };
+  }
+
+  return null;
+}
+
+export function isGarfioPeekIntent(text) {
+  let t = String(text || "").trim();
+  t = t.replace(/^\/+/, "");
+  t = t.replace(/^murray[,:\s]+/i, "").trim();
+  t = t.replace(/[?.!¿¡]+$/g, "").trim();
+  t = t.replace(/^[¿¡]+/g, "").trim();
+  if (!t || t.length > 140) {
+    return false;
+  }
+  return /^(?:en qu[eé] anda garfio|qu[eé] hace garfio|qu[eé] est[aá] haciendo garfio|c[oó]mo viene garfio|espiar garfio|peek garfio|update garfio|informe garfio)$/i.test(
+    t
+  );
+}
+
 export function extractJobId(text) {
   return extractJobRefs(text).jobId;
 }
@@ -246,6 +341,13 @@ export function classifyUserText(text, { hasSession = false } = {}) {
   }
   if (isManualIntent(trimmed)) {
     return { action: "manual" };
+  }
+  const micromanageMatch = isMicromanageIntent(trimmed);
+  if (micromanageMatch) {
+    return { action: "micromanage", intervalRaw: micromanageMatch.intervalRaw };
+  }
+  if (isGarfioPeekIntent(trimmed)) {
+    return { action: "garfio_peek" };
   }
   const brainMatch = isGarfioBrainIntent(trimmed);
   if (brainMatch) {

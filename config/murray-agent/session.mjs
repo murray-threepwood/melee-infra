@@ -11,6 +11,8 @@ const EMPTY = {
   active_model: "",
   garfio_model: "",
   garfioModel: "",
+  micromanage_interval: 0,
+  micromanageInterval: 0,
 };
 
 function rowToSession(row) {
@@ -18,6 +20,7 @@ function rowToSession(row) {
     return { ...EMPTY };
   }
   const gm = row.garfio_model || "";
+  const mi = Number(row.micromanage_interval || 0);
   return {
     slug: row.slug || "",
     url: row.url || "",
@@ -29,6 +32,8 @@ function rowToSession(row) {
     active_model: row.active_model || "",
     garfio_model: gm,
     garfioModel: gm,
+    micromanage_interval: mi,
+    micromanageInterval: mi,
   };
 }
 
@@ -48,14 +53,16 @@ export function createSessionStore({
 
   const select = database.prepare(
     `SELECT slug, url, conversation_id, last_test_command, last_mission,
-            last_job_id, awaiting_instruction, active_model, garfio_model
+            last_job_id, awaiting_instruction, active_model, garfio_model,
+            micromanage_interval
        FROM session_context WHERE chat_id = ?`
   );
   const upsert = database.prepare(
     `INSERT INTO session_context (
       chat_id, slug, url, conversation_id, last_test_command, last_mission,
-      last_job_id, awaiting_instruction, active_model, garfio_model
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      last_job_id, awaiting_instruction, active_model, garfio_model,
+      micromanage_interval
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(chat_id) DO UPDATE SET
       slug = excluded.slug,
       url = excluded.url,
@@ -65,7 +72,8 @@ export function createSessionStore({
       last_job_id = excluded.last_job_id,
       awaiting_instruction = excluded.awaiting_instruction,
       active_model = excluded.active_model,
-      garfio_model = excluded.garfio_model`
+      garfio_model = excluded.garfio_model,
+      micromanage_interval = excluded.micromanage_interval`
   );
 
   return {
@@ -75,8 +83,11 @@ export function createSessionStore({
     patch(chatId, fields) {
       const next = { ...EMPTY, ...rowToSession(select.get(String(chatId))), ...fields };
       const gm = String(fields.garfio_model !== undefined ? fields.garfio_model : (fields.garfioModel !== undefined ? fields.garfioModel : (next.garfio_model || "")));
+      const mi = Number(fields.micromanage_interval !== undefined ? fields.micromanage_interval : (fields.micromanageInterval !== undefined ? fields.micromanageInterval : (next.micromanage_interval || 0)));
       next.garfio_model = gm;
       next.garfioModel = gm;
+      next.micromanage_interval = mi;
+      next.micromanageInterval = mi;
       upsert.run(
         String(chatId),
         String(next.slug || ""),
@@ -87,7 +98,8 @@ export function createSessionStore({
         String(next.lastJobId || ""),
         next.awaiting_instruction ? 1 : 0,
         String(next.active_model || ""),
-        gm
+        gm,
+        mi
       );
       return next;
     },

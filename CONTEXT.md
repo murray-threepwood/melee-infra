@@ -30,6 +30,9 @@ Tabla relacional en `murray.db` (SQLite WAL) donde se persisten el resumen, deci
 ## /manual
 Manual operativo interactivo esquemático y condensado que expone todas las herramientas, comandos y flujos disponibles en Murray y Garfio. Consultable vía `/manual`, `/help`, o diciendo `ayuda` / `comandos`.
 
+## Modo Mal Manager
+Monitoreo periódico o bajo demanda del avance de Garfio mientras corre una misión de código. Soportado vía `/malmanager [30s|1m|2m|5m|10m|30m|off]` o frases naturales como «mirar por el hombro lo que hace garfio como mal manager» y «¿en qué anda garfio?». Emite reportes concisos y esquemáticos en Telegram con `{ terminal: true }`, detallando archivo editado, último comando con exit code, paso actual y comentario sarcástico de Murray.
+
 ## LiteLLM
 Gateway HTTP en `agent-net` (`litellm:4000`). Murray y OpenHands pegan acá, no a `api.deepseek.com`. Primario DeepSeek. Fallback Gemini 3.8 Flash y, si no entra, 2.5 Flash-Lite (AI Studio, no el OAuth de Gmail).
 
