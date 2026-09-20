@@ -287,7 +287,24 @@ export function extractGarfioRationale(events = []) {
   };
 }
 
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 export function extractGarfioLiveActivity(events = []) {
+  if (!Array.isArray(events) || events.length === 0) {
+    return {
+      lastCommand: "",
+      lastExitCode: null,
+      lastFile: "",
+      lastThought: "",
+      actionCount: 0,
+    };
+  }
+
   let lastCommand = "";
   let lastExitCode = null;
   let lastFile = "";
@@ -296,7 +313,7 @@ export function extractGarfioLiveActivity(events = []) {
 
   for (let i = events.length - 1; i >= 0; i--) {
     const ev = events[i] || {};
-    const payload = ev.payload || ev.observation || ev.action || ev;
+    const payload = ev.payload || ev;
     const actionName = String(ev.action || payload?.action || ev.kind || "").toLowerCase();
     const args = payload?.args || ev.args || {};
 
@@ -307,7 +324,10 @@ export function extractGarfioLiveActivity(events = []) {
         (actionName === "run" || actionName === "execute_bash" ? payload?.content : "") ||
         "";
       if (typeof cmd === "string" && cmd.trim()) {
-        lastCommand = cmd.trim().replace(/\s+/g, " ").slice(0, 100);
+        let clean = cmd.trim();
+        clean = clean.replace(/^cd\s+\/workspace(?:\/[^&]+)?\s*&&\s*/i, "");
+        clean = clean.replace(/\s+/g, " ").slice(0, 95);
+        lastCommand = clean;
       }
     }
 
@@ -328,7 +348,10 @@ export function extractGarfioLiveActivity(events = []) {
         payload?.file_path ||
         "";
       if (typeof filePath === "string" && filePath.trim()) {
-        lastFile = filePath.trim();
+        let clean = filePath.trim();
+        clean = clean.replace(/^\/workspace\/project\/[^/]+\//i, "");
+        clean = clean.replace(/^\/workspace\/[^/]+\//i, "");
+        lastFile = clean;
       }
     }
 
@@ -342,8 +365,8 @@ export function extractGarfioLiveActivity(events = []) {
           : "");
       if (typeof thought === "string" && thought.trim()) {
         const clean = thought.trim().replace(/\s+/g, " ");
-        if (clean.length > 5 && !clean.startsWith("<") && !clean.startsWith("###")) {
-          lastThought = clean.slice(0, 120);
+        if (clean.length > 10 && clean.split(" ").length >= 3 && !clean.startsWith("<") && !clean.startsWith("###")) {
+          lastThought = clean.slice(0, 110);
         }
       }
     }
@@ -371,31 +394,38 @@ export function formatMalManagerReport({
   sandboxStatus = "RUNNING",
   activity = {},
   slug = "",
+  inline = false,
 } = {}) {
   const mins = Math.floor(elapsedMs / 60000);
   const secs = Math.floor((elapsedMs % 60000) / 1000);
   const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-  const sand = String(sandboxStatus || "RUNNING").toUpperCase();
+  const sand = escapeHtml(String(sandboxStatus || "RUNNING").toUpperCase());
+  const repoSlug = escapeHtml(slug || "");
 
-  const lines = [
-    `💀 <b>[Murray: Mal Manager Report]</b>`,
-    `⏱️ <b>En vuelo:</b> ${timeStr} | <b>Sandbox:</b> ${sand}${slug ? ` | <b>Repo:</b> ${slug}` : ""}`,
-    ``,
-    `📋 <b>Qué anda haciendo Garfio:</b>`,
-  ];
-
-  if (activity.lastFile) {
-    lines.push(`• <b>Archivo:</b> <code>${activity.lastFile}</code>`);
+  const lines = [];
+  if (!inline) {
+    lines.push(`💀 <b>[Murray: Mal Manager Report]</b>`);
   }
+  lines.push(
+    `⏱️ <b>En vuelo:</b> <code>${timeStr}</code> | <b>Sandbox:</b> <code>${sand}</code>${
+      repoSlug ? ` | <b>Repo:</b> <code>${repoSlug}</code>` : ""
+    }`
+  );
+  lines.push(``);
+  lines.push(`📋 <b>En qué anda Garfio:</b>`);
+
   if (activity.lastCommand) {
     const exitPart =
       activity.lastExitCode !== null && activity.lastExitCode !== undefined
         ? ` (Exit: ${activity.lastExitCode})`
         : "";
-    lines.push(`• <b>Comando:</b> <code>${activity.lastCommand}</code>${exitPart}`);
+    lines.push(`• <b>Comando:</b> <code>${escapeHtml(activity.lastCommand)}</code>${exitPart}`);
+  }
+  if (activity.lastFile) {
+    lines.push(`• <b>Archivo:</b> <code>${escapeHtml(activity.lastFile)}</code>`);
   }
   if (activity.lastThought) {
-    lines.push(`• <b>Paso:</b> ${activity.lastThought}`);
+    lines.push(`• <b>Paso:</b> ${escapeHtml(activity.lastThought)}`);
   } else if (!activity.lastFile && !activity.lastCommand) {
     lines.push(`• <i>Iniciando entorno y analizando el árbol de archivos...</i>`);
   }

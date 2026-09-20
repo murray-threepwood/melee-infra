@@ -30,7 +30,8 @@ export function packHitlHelp(extra = {}) {
 }
 
 export function packReply(text, extra = {}) {
-  const reply = redact(escapeHtml(text)).slice(0, 3900);
+  const sanitized = extra?.rawHtml ? redact(text) : redact(escapeHtml(text));
+  const reply = sanitized.slice(0, 3900);
   return {
     reply,
     replies: chunkTelegram(reply, 3900),

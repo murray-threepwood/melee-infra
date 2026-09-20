@@ -169,6 +169,8 @@
     },
     {
       "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
         "chatId": "={{ $('Telegram Trigger').item.json.callback_query.message.chat.id }}",
         "text": "={{ $json.reply || ('✅ Orden procesada: ' + $('Telegram Trigger').item.json.callback_query.data + '.') }}",
         "additionalFields": {
@@ -238,6 +240,8 @@
         }
       },
       "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
         "chatId": "={{ $json.message.chat.id }}",
         "text": "=⚡ Misión sandbox: \"{{ $json.message.text }}\"\n¿Autorizar ejecución en OpenHands?",
         "replyMarkup": "inlineKeyboard",
@@ -321,6 +325,8 @@
         }
       },
       "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
         "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
         "text": "={{ $json.reply }}",
         "replyMarkup": "inlineKeyboard",
@@ -365,6 +371,8 @@
         }
       },
       "parameters": {
+        "resource": "message",
+        "operation": "sendMessage",
         "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
         "text": "={{ $json.reply }}",
         "additionalFields": {

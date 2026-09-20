@@ -478,7 +478,8 @@ export function createCodingSession({
         });
       }
       return packReply(
-        "💀 Modo Mal Manager DESACTIVADO. Dejo de respirarle en la nuca a Garfio; te aviso únicamente cuando termine o se tranque."
+        "💀 <b>Modo Mal Manager DESACTIVADO.</b>\n<i>Dejo de respirarle en la nuca a Garfio; te aviso únicamente cuando termine o se tranque.</i>",
+        { rawHtml: true }
       );
     }
 
@@ -516,17 +517,20 @@ export function createCodingSession({
               sandboxStatus: conversation?.sandbox_status || "RUNNING",
               activity,
               slug: payload.slug,
+              inline: true,
             });
         }
       } catch {}
 
       return packReply(
-        `💀 ¡Modo Mal Manager ACTIVADO (cada ${label})! Me paro atrás de Garfio con el látigo a contarte cada movimiento.${peekText}\n\n/malmanager off para apagarlo.`
+        `💀 <b>¡Modo Mal Manager ACTIVADO (cada ${label})!</b>\n<i>Me paro atrás de Garfio con el látigo a contarte cada movimiento.</i>${peekText}\n\n/malmanager off para apagarlo.`,
+        { rawHtml: true }
       );
     }
 
     return packReply(
-      `💀 Modo Mal Manager configurado (cada ${label}). En cuanto Garfio arranque una misión, te iré cantando su avance con este intervalo.\n/malmanager off para apagarlo.`
+      `💀 <b>Modo Mal Manager configurado (cada ${label}).</b>\n<i>En cuanto Garfio arranque una misión, te iré cantando su avance con este intervalo.</i>\n\n/malmanager off para apagarlo.`,
+      { rawHtml: true }
     );
   }
 
@@ -563,7 +567,7 @@ export function createCodingSession({
         activity,
         slug: payload.slug,
       });
-      return packReply(report);
+      return packReply(report, { rawHtml: true });
     } catch (err) {
       return packReply(`No pude espiar a Garfio (${err.code || err.message}).`);
     }
