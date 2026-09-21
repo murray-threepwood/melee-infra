@@ -190,6 +190,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 8s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - agent-net
 
@@ -218,6 +220,11 @@ services:
       - SANDBOX_ENV_OPENAI_BASE_URL=http://host.docker.internal:${LITELLM_PORT:-4000}
       - SANDBOX_ENV_LLM_API_KEY=${LITELLM_MASTER_KEY:-}
       - SANDBOX_ENV_LLM_BASE_URL=http://host.docker.internal:${LITELLM_PORT:-4000}
+      # Unificación de Red Sandboxes (Fase 12 Tarea 2.3)
+      - SANDBOX_NETWORK=agent-net
+      - SANDBOX_NETWORK_MODE=agent-net
+      - SANDBOX_EXTRA_HOSTS=host.docker.internal:host-gateway
+      - SANDBOX_ADD_HOSTS=host.docker.internal:host-gateway
       - LOG_LEVEL=INFO
       - MAX_ITERATIONS=80
     volumes:

@@ -54,7 +54,7 @@ Corré verificación y dejá la suite en verde (DoD) antes de dar por concluida 
 ### Fase 2: Modernización Git y Worktrees para Repos de Trabajo
 - [x] **Tarea 2.1**: Módulo `SafeGitWorkspaceManager` en `git-worktree.mjs` para gestionar `./git-cache/<slug>.bare` y vincular worktrees en `./workspace/<slug>` con refspecs completos `remote.origin.fetch = +refs/heads/*:refs/remotes/origin/*`.
 - [x] **Tarea 2.2**: Implementar mecanismo `GIT_ASKPASS` efímero en `workspace.mjs` para push y fetch seguro de repositorios del workspace sin variables globales expuestas.
-- [ ] **Tarea 2.3**: Unificación de red de sandboxes: asegurar inyección de `--network agent-net` y `--add-host=host.docker.internal:host-gateway` en `docker-compose.yml` y configuración de OpenHands.
+- [x] **Tarea 2.3**: Unificación de red de sandboxes: asegurar inyección de `--network agent-net` y `--add-host=host.docker.internal:host-gateway` en `docker-compose.yml` y configuración de OpenHands.
 
 ### Fase 3: Determinismo, QA, Anti-Test Hacking y Sensor E2B
 - [ ] **Tarea 3.1**: Verificador estático AST anti-test hacking (`scripts/test_ast_auditor.py`) que audite archivos de prueba (`tests/**/test_*.py`) y aborte si se eliminan métodos o se reducen aserciones. Integrar la verificación en el hook de finalización de `coding.mjs`.

@@ -109,3 +109,15 @@ test("litellm acepta openai/garfio-worker y openai/deepseek-chat", () => {
   assert.match(yaml, /model_name: openai\/garfio-worker/);
   assert.match(yaml, /model_name: openai\/deepseek-chat/);
 });
+
+test("compose: sandboxes unificados en agent-net y host-gateway", () => {
+  const compose = fs.readFileSync(
+    new URL("../docker-compose.yml", import.meta.url),
+    "utf8"
+  );
+  assert.match(compose, /SANDBOX_NETWORK=agent-net/);
+  assert.match(compose, /SANDBOX_NETWORK_MODE=agent-net/);
+  assert.match(compose, /SANDBOX_EXTRA_HOSTS=host\.docker\.internal:host-gateway/);
+  assert.match(compose, /SANDBOX_ADD_HOSTS=host\.docker\.internal:host-gateway/);
+  assert.match(compose, /murray-agent:[\s\S]*extra_hosts:[\s\S]*- "host\.docker\.internal:host-gateway"/);
+});
