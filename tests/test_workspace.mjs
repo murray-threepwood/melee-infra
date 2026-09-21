@@ -5,6 +5,8 @@ import path from "node:path";
 import { test } from "node:test";
 import {
   assertSafeGitArgs,
+  createEphemeralAskpass,
+  askpassForHost,
   createWorkspace,
   extractHttpsGitUrl,
   isProtectedBranch,
@@ -348,4 +350,33 @@ test("commitsAhead cuenta origin/main..HEAD", async () => {
     true
   );
   fs.rmSync(root, { recursive: true, force: true });
+});
+
+test("createEphemeralAskpass: genera script ejecutable 0700 y limpia en cleanup", () => {
+  const secret = "ghp_superSecretToken123456789";
+  const askpass = createEphemeralAskpass({ token: secret });
+  assert.ok(askpass.scriptPath);
+  assert.equal(askpass.env.GIT_ASKPASS, askpass.scriptPath);
+  assert.equal(askpass.env.GIT_TERMINAL_PROMPT, "0");
+
+  assert.ok(fs.existsSync(askpass.scriptPath));
+  const stat = fs.statSync(askpass.scriptPath);
+  assert.equal(stat.mode & 0o777, 0o700, "El script askpass debe tener permisos 0700");
+
+  const content = fs.readFileSync(askpass.scriptPath, "utf8");
+  assert.ok(content.includes("x-access-token"));
+  assert.ok(content.includes(secret));
+
+  askpass.cleanup();
+  assert.equal(fs.existsSync(askpass.scriptPath), false, "El script debe ser eliminado al llamar cleanup");
+});
+
+test("createEphemeralAskpass: tokens vacíos o placeholders retornan env vacío sin script", () => {
+  const empty = createEphemeralAskpass({ token: "" });
+  assert.deepEqual(empty.env, {});
+  assert.equal(empty.scriptPath, null);
+
+  const placeholder = createEphemeralAskpass({ token: "REEMPLAZAR_POR_TOKEN" });
+  assert.deepEqual(placeholder.env, {});
+  assert.equal(placeholder.scriptPath, null);
 });

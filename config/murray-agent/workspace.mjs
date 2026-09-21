@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { redact } from "./redact.mjs";
 
@@ -281,10 +282,67 @@ async function defaultGitRun(args, { cwd, env = {}, timeoutMs = 120000, allowPus
   });
 }
 
-function tokenEnvForHost(host, { githubToken, gitlabToken }) {
+export function tokenForHost(host, { githubToken, gitlabToken } = {}) {
   const token =
     host === "gitlab.com" ? gitlabToken || githubToken : githubToken || gitlabToken;
   if (!token || /CAMBIAR_POR|REEMPLAZAR|ejemplo/i.test(token)) {
+    return "";
+  }
+  return token;
+}
+
+export function createEphemeralAskpass({ token, prefix = "murray-askpass-" } = {}) {
+  if (!token || /CAMBIAR_POR|REEMPLAZAR|ejemplo/i.test(token)) {
+    return {
+      env: {},
+      scriptPath: null,
+      cleanup: () => {},
+    };
+  }
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
+  const scriptPath = path.join(tmpDir, "askpass.sh");
+  const safeToken = String(token).replace(/'/g, "'\\''");
+  const content = `#!/bin/sh
+case "$1" in
+  *Username*|*username*)
+    printf '%s\\n' "x-access-token"
+    ;;
+  *Password*|*password*|*)
+    printf '%s\\n' '${safeToken}'
+    ;;
+esac
+`;
+  fs.writeFileSync(scriptPath, content, { mode: 0o700 });
+  try {
+    fs.chmodSync(scriptPath, 0o700);
+    fs.chmodSync(tmpDir, 0o700);
+  } catch {}
+
+  const env = {
+    GIT_ASKPASS: scriptPath,
+    GIT_TERMINAL_PROMPT: "0",
+  };
+
+  const cleanup = () => {
+    try {
+      if (fs.existsSync(tmpDir)) {
+        fs.rmSync(tmpDir, { recursive: true, force: true });
+      }
+    } catch {}
+  };
+
+  return { env, scriptPath, cleanup };
+}
+
+export function askpassForHost(host, { githubToken, gitlabToken } = {}) {
+  const token = tokenForHost(host, { githubToken, gitlabToken });
+  return createEphemeralAskpass({ token });
+}
+
+function tokenEnvForHost(host, { githubToken, gitlabToken }) {
+  const token = tokenForHost(host, { githubToken, gitlabToken });
+  if (!token) {
     return {};
   }
   const headerValue =
@@ -444,7 +502,38 @@ export function createWorkspace({
     }
   }
 
-  async function ensureHistory(dest, env) {
+  async function askpassForRepo(dest) {
+    const remote = await existingRemote(dest);
+    if (!remote) {
+      return { env: {}, cleanup: () => {} };
+    }
+    try {
+      const parsed = parseHttpsGitUrl(remote);
+      return askpassForHost(parsed.host, { githubToken, gitlabToken });
+    } catch {
+      return { env: {}, cleanup: () => {} };
+    }
+  }
+
+  async function withRepoAskpass(dest, fn) {
+    const askpass = await askpassForRepo(dest);
+    try {
+      return await fn(askpass.env);
+    } finally {
+      askpass.cleanup();
+    }
+  }
+
+  async function withHostAskpass(host, fn) {
+    const askpass = askpassForHost(host, { githubToken, gitlabToken });
+    try {
+      return await fn(askpass.env);
+    } finally {
+      askpass.cleanup();
+    }
+  }
+
+  async function ensureHistory(dest, callerEnv = {}) {
     await gitRun(["-C", dest, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"], {
       timeoutMs: 10000,
     }).catch(() => {});
@@ -452,23 +541,31 @@ export function createWorkspace({
       timeoutMs: 15000,
     });
     const isShallow = String(shallow.stdout || "").trim() === "true";
-    if (isShallow) {
-      const unshallow = await gitRun(
-        ["-C", dest, "fetch", "--unshallow", "--prune", "--", "origin"],
-        { env, timeoutMs: 180000 }
-      );
-      if (unshallow.code === 0) {
-        return { unshallowed: true };
+    const runFetch = async (authEnv) => {
+      const env = { ...callerEnv, ...authEnv };
+      if (isShallow) {
+        const unshallow = await gitRun(
+          ["-C", dest, "fetch", "--unshallow", "--prune", "--", "origin"],
+          { env, timeoutMs: 180000 }
+        );
+        if (unshallow.code === 0) {
+          return { unshallowed: true };
+        }
       }
+      const fetched = await gitRun(["-C", dest, "fetch", "--prune", "--", "origin"], {
+        env,
+        timeoutMs: 180000,
+      });
+      if (fetched.code !== 0) {
+        failGit("git_fetch_failed", fetched);
+      }
+      return { unshallowed: isShallow };
+    };
+
+    if (callerEnv && (callerEnv.GIT_ASKPASS || callerEnv.GIT_CONFIG_COUNT)) {
+      return await runFetch(callerEnv);
     }
-    const fetched = await gitRun(["-C", dest, "fetch", "--prune", "--", "origin"], {
-      env,
-      timeoutMs: 180000,
-    });
-    if (fetched.code !== 0) {
-      failGit("git_fetch_failed", fetched);
-    }
-    return { unshallowed: isShallow };
+    return await withRepoAskpass(dest, runFetch);
   }
 
   async function clone({ url }) {
@@ -486,23 +583,24 @@ export function createWorkspace({
         `ya hay otro árbol en ${parsed.slug}; pedime borrar ./workspace/${parsed.slug}`
       );
     }
-    const env = tokenEnvForHost(parsed.host, { githubToken, gitlabToken });
-    const result = await gitRun(
-      ["clone", "--depth", "1", "--single-branch", "--", parsed.href, dest],
-      { env, timeoutMs: 120000 }
-    );
-    if (result.code !== 0) {
-      const err = new Error(result.stderr.slice(0, 400) || "git clone falló");
-      err.code = /auth|403|401|could not read/i.test(result.stderr)
-        ? "git_auth_failed"
-        : "git_clone_failed";
-      throw err;
-    }
-    if (!fs.existsSync(dest)) {
-      deny("git_clone_failed", "clone no dejó directorio");
-    }
-    await ensureRepoIdentity(dest);
-    return { slug: parsed.slug, url: parsed.href, reused: false, dest };
+    return await withHostAskpass(parsed.host, async (authEnv) => {
+      const result = await gitRun(
+        ["clone", "--depth", "1", "--single-branch", "--", parsed.href, dest],
+        { env: authEnv, timeoutMs: 120000 }
+      );
+      if (result.code !== 0) {
+        const err = new Error(result.stderr.slice(0, 400) || "git clone falló");
+        err.code = /auth|403|401|could not read/i.test(result.stderr)
+          ? "git_auth_failed"
+          : "git_clone_failed";
+        throw err;
+      }
+      if (!fs.existsSync(dest)) {
+        deny("git_clone_failed", "clone no dejó directorio");
+      }
+      await ensureRepoIdentity(dest);
+      return { slug: parsed.slug, url: parsed.href, reused: false, dest };
+    });
   }
 
   function tree(slug) {
@@ -754,20 +852,21 @@ export function createWorkspace({
 
   async function pull(slug) {
     const dest = requireRepo(slug);
-    const env = await envForRepo(dest);
-    const history = await ensureHistory(dest, env);
-    const result = await gitRun(["-C", dest, "pull", "--ff-only", "--", "origin"], {
-      env,
-      timeoutMs: 180000,
+    return await withRepoAskpass(dest, async (authEnv) => {
+      const history = await ensureHistory(dest, authEnv);
+      const result = await gitRun(["-C", dest, "pull", "--ff-only", "--", "origin"], {
+        env: authEnv,
+        timeoutMs: 180000,
+      });
+      if (result.code !== 0) {
+        failGit("git_pull_failed", result);
+      }
+      return {
+        slug,
+        unshallowed: history.unshallowed,
+        stdout: redact(`${result.stdout || ""}\n${result.stderr || ""}`.trim()).slice(0, 2000),
+      };
     });
-    if (result.code !== 0) {
-      failGit("git_pull_failed", result);
-    }
-    return {
-      slug,
-      unshallowed: history.unshallowed,
-      stdout: redact(`${result.stdout || ""}\n${result.stderr || ""}`.trim()).slice(0, 2000),
-    };
   }
 
   async function checkout(slug, { branch, create = false } = {}) {
@@ -788,14 +887,15 @@ export function createWorkspace({
     if (local.code === 0) {
       return { slug, branch: name, created: false, stdout: redact(local.stdout || "") };
     }
-    const env = await envForRepo(dest);
-    await ensureHistory(dest, env);
-    await gitRun(["-C", dest, "fetch", "--", "origin", name], { env, timeoutMs: 120000 });
-    const result = await gitRun(["-C", dest, "checkout", name], { timeoutMs: 30000 });
-    if (result.code !== 0) {
-      failGit("git_checkout_failed", result);
-    }
-    return { slug, branch: name, created: false, stdout: redact(result.stdout || "") };
+    return await withRepoAskpass(dest, async (authEnv) => {
+      await ensureHistory(dest, authEnv);
+      await gitRun(["-C", dest, "fetch", "--", "origin", name], { env: authEnv, timeoutMs: 120000 });
+      const result = await gitRun(["-C", dest, "checkout", name], { timeoutMs: 30000 });
+      if (result.code !== 0) {
+        failGit("git_checkout_failed", result);
+      }
+      return { slug, branch: name, created: false, stdout: redact(result.stdout || "") };
+    });
   }
 
   async function commit(slug, { message, paths = [] } = {}) {
@@ -868,29 +968,30 @@ export function createWorkspace({
         `estás en ${branch || "HEAD"}. Creá una rama feat/... antes de pushear. main/master están vedados.`
       );
     }
-    const env = await envForRepo(dest);
-    await ensureHistory(dest, env);
-    const result = await gitRun(["-C", dest, "push", "-u", "--", "origin", "HEAD"], {
-      env,
-      timeoutMs: 180000,
-      allowPush: true,
+    return await withRepoAskpass(dest, async (authEnv) => {
+      await ensureHistory(dest, authEnv);
+      const result = await gitRun(["-C", dest, "push", "-u", "--", "origin", "HEAD"], {
+        env: authEnv,
+        timeoutMs: 180000,
+        allowPush: true,
+      });
+      if (result.code !== 0) {
+        const err = new Error(result.stderr.slice(0, 400) || "git push falló");
+        err.code = /auth|403|401|could not read/i.test(result.stderr)
+          ? "git_auth_failed"
+          : "git_push_failed";
+        throw err;
+      }
+      await gitRun(["-C", dest, "fetch", "--", "origin", branch], {
+        env: authEnv,
+        timeoutMs: 30000,
+      }).catch(() => {});
+      return {
+        slug,
+        branch,
+        stdout: redact(`${result.stdout || ""}\n${result.stderr || ""}`.trim()).slice(0, 2000),
+      };
     });
-    if (result.code !== 0) {
-      const err = new Error(result.stderr.slice(0, 400) || "git push falló");
-      err.code = /auth|403|401|could not read/i.test(result.stderr)
-        ? "git_auth_failed"
-        : "git_push_failed";
-      throw err;
-    }
-    await gitRun(["-C", dest, "fetch", "--", "origin", branch], {
-      env,
-      timeoutMs: 30000,
-    }).catch(() => {});
-    return {
-      slug,
-      branch,
-      stdout: redact(`${result.stdout || ""}\n${result.stderr || ""}`.trim()).slice(0, 2000),
-    };
   }
 
   async function getLastCommitInfo(slug) {
