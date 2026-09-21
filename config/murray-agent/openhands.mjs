@@ -577,6 +577,73 @@ export function createOpenHandsClient({
     return page.items || page.events || [];
   }
 
+  async function* eventStream(id, { signal } = {}) {
+    const url = new URL(`${root}/api/v1/conversation/${id}/events/stream`);
+    let res = null;
+    try {
+      res = await fetchImpl(url.toString(), {
+        headers: { Accept: "text/event-stream" },
+        signal,
+      });
+    } catch {
+      res = null;
+    }
+
+    if (!res || !res.ok) {
+      const rows = await searchEvents(id);
+      for (const item of rows) {
+        yield item;
+      }
+      return;
+    }
+
+    if (res.body) {
+      let buffer = "";
+      const decoder = new TextDecoder();
+      try {
+        for await (const chunk of res.body) {
+          buffer += typeof chunk === "string" ? chunk : decoder.decode(chunk, { stream: true });
+          const lines = buffer.split(/\r?\n/);
+          buffer = lines.pop() || "";
+          for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed.startsWith("data:")) {
+              const payload = trimmed.slice(5).trim();
+              if (payload) {
+                try {
+                  yield JSON.parse(payload);
+                } catch {
+                  yield { raw: payload };
+                }
+              }
+            }
+          }
+        }
+      } catch {
+        const rows = await searchEvents(id);
+        for (const item of rows) {
+          yield item;
+        }
+      }
+    } else {
+      const rows = await searchEvents(id);
+      for (const item of rows) {
+        yield item;
+      }
+    }
+  }
+
+  async function consumeEventStream(id, { onEvent, signal } = {}) {
+    const collected = [];
+    for await (const ev of eventStream(id, { signal })) {
+      collected.push(ev);
+      if (typeof onEvent === "function") {
+        onEvent(ev);
+      }
+    }
+    return collected;
+  }
+
   async function gitChanges(id) {
     try {
       return await request("GET", `/api/v1/app-conversations/${id}/git/changes`);
@@ -592,6 +659,8 @@ export function createOpenHandsClient({
     getConversation,
     sendMessage,
     searchEvents,
+    eventStream,
+    consumeEventStream,
     gitChanges,
   };
 }

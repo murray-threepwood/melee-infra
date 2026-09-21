@@ -7,6 +7,7 @@ import {
   classifyUserText,
 } from "../config/murray-agent/intent.mjs";
 import {
+  createOpenHandsClient,
   extractGarfioLiveActivity,
   formatMalManagerReport,
 } from "../config/murray-agent/openhands.mjs";
@@ -204,4 +205,38 @@ test("codingSession: setMicromanage y watcher periódico en handlePollJob", asyn
   const deactivated = await coding.setMicromanage({ chatId: "42", intervalRaw: "off" });
   assert.equal(sessionData.micromanage_interval, 0);
   assert.match(deactivated.reply, /DESACTIVADO/);
+});
+
+test("openhands client consumeEventStream procesa eventos SSE y fallback", async () => {
+  const sseBody = [
+    'data: {"kind":"Action","action":"run","args":{"command":"pytest"}}\n\n',
+    'data: {"kind":"Observation","payload":{"exit_code":0,"content":"1 passed"}}\n\n',
+  ];
+
+  async function* sseGenerator() {
+    for (const chunk of sseBody) {
+      yield Buffer.from(chunk);
+    }
+  }
+
+  const mockFetchSSE = async (url) => {
+    if (url.includes("/events/stream")) {
+      return {
+        ok: true,
+        body: sseGenerator(),
+      };
+    }
+    return { ok: false, status: 404 };
+  };
+
+  const client = createOpenHandsClient({
+    baseUrl: "http://openhands:3000",
+    fetchImpl: mockFetchSSE,
+  });
+
+  const events = await client.consumeEventStream("conv-test-1");
+  assert.equal(events.length, 2);
+  assert.equal(events[0].kind, "Action");
+  assert.equal(events[0].args.command, "pytest");
+  assert.equal(events[1].payload.exit_code, 0);
 });

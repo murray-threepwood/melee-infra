@@ -679,7 +679,10 @@ export function createCodingSession({
         const conversationId = payload.conversationId;
         if (conversationId && openhands) {
           const conversation = await openhands.getConversation(conversationId);
-          const events = await openhands.searchEvents(conversationId);
+          const events =
+            typeof openhands.consumeEventStream === "function"
+              ? await openhands.consumeEventStream(conversationId).catch(() => openhands.searchEvents(conversationId))
+              : await openhands.searchEvents(conversationId);
           const activity = extractGarfioLiveActivity(events);
           peekText =
             "\n\n" +
@@ -1179,7 +1182,10 @@ export function createCodingSession({
         return;
       }
       const conversation = await openhands.getConversation(conversationId);
-      const events = await openhands.searchEvents(conversationId);
+      const events =
+        typeof openhands.consumeEventStream === "function"
+          ? await openhands.consumeEventStream(conversationId).catch(() => openhands.searchEvents(conversationId))
+          : await openhands.searchEvents(conversationId);
       const stuck = detectStuck({
         executionStatus: conversation?.execution_status,
         sandboxStatus: conversation?.sandbox_status,
