@@ -60,7 +60,7 @@ Corré verificación y dejá la suite en verde (DoD) antes de dar por concluida 
 - [x] **Tarea 3.1**: Verificador estático AST anti-test hacking (`scripts/test_ast_auditor.py`) que audite archivos de prueba (`tests/**/test_*.py`) y aborte si se eliminan métodos o se reducen aserciones. Integrar la verificación en el hook de finalización de `coding.mjs`.
 - [x] **Tarea 3.2**: Monitor de saturación de recursos locales (`resource-monitor.mjs`): intercepta código de salida 137 (OOM) o RAM > 4.2 GB, asienta en SQLite / `operator-inbox`, y despacha aviso en Telegram con el racional de migración a MicroVMs remotas E2B.
 - [x] **Tarea 3.3**: Seam abstracto `SandboxRunner` (`DockerLocalRunner` activo, `E2BRunner` desacoplado) en `sandbox-runner.mjs`.
-- [ ] **Tarea 3.4**: Esquemas Zod con uniones discriminadas en `schemas.mjs` y migración de `intent.mjs` erradicando regexes desancladas de borrado/mutación.
+- [x] **Tarea 3.4**: Esquemas Zod con uniones discriminadas en `schemas.mjs` y migración de `intent.mjs` erradicando regexes desancladas de borrado/mutación.
 
 ### Fase 4: Observabilidad en Vivo y Simplificación de Topología
 - [ ] **Tarea 4.1**: Conectar consumidor sobre `EventStream` de OpenHands en `coding.mjs` para despachar resúmenes del "Modo Mal Manager" cada 60s a Telegram.

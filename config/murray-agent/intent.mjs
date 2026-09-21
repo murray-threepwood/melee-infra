@@ -2,13 +2,45 @@ import { extractHttpsGitUrl } from "./workspace.mjs";
 
 export const CLONE_INTENT = /cloná|clonar|\bclona\b|\bclone\b/i;
 export const MUTATE_INTENT =
-  /modific|cambi|edita|agregá|agrega|cre[áa]r?|escrib[íi]|añad|sumá |refactor|implement|mejorá|mejora|arregla|teste|corré |corre los test|npm test|pytest|hacer que|pegale|\bfix\b/i;
+  /(?:^|[^\wáéíóúñ])(?:modific[áa]|modificar|cambi[áa]|cambiar|edit[áa]|edita|editar|agreg[áa]|agrega|agregar|cre[áa]|crear|escrib[íi]|escribir|añad[íi]|añadir|sum[áa]|sumar|refactor(?:iz[áa]|izar)?|implement[áa]|implementar|mejor[áa]|mejora|mejorar|arregl[áa]|arregla|arreglar|correg[íi]|corregir|teste[áa]|testear|corré|correr|corre los tests?|npm test|pytest|hacer que|pegale|fix)(?=[^\wáéíóúñ]|$)/iu;
 
 export const STACK_TALK =
   /\b(n8n|postgres|cloudflared|openhands|compose|webhook|gmail|stack|contenedor|murray-agent)\b/i;
 
-export const DELETE_INTENT =
-  /^(?:por favor\s+)?(?:borr[áa]r?|elimin[áa]r?|delete|\brm\b)(?:\s+(?:el\s+)?(?:workspace|repo|directorio|carpeta|archivo))?(?:\s+([A-Za-z0-9._/-]+|\.))?\s*$|^(?:vaciar|limpi[áa]r?)\s+(?:el\s+)?workspace\b|borr[áa]r?\s+todo(?:\s+el\s+workspace)?\b|\bdelete\s+(?:el\s+)?(?:repo|workspace)\b/i;
+export function isCodeContext(text) {
+  const t = String(text || "").trim();
+  if (!t) return false;
+  if (
+    /\b(código|función|variable|parámetro|import|micro-gaps|clamping|assert|def |class |return |pytest|git diff|PR\b|revisor)\b/i.test(
+      t
+    ) ||
+    /```|`[^`]+`/.test(t) ||
+    (t.includes("\n") &&
+      /\b(?:elimin[áa]|borr[áa])\s+[_a-zA-Z0-9]+(?:\s+e\s+|\s+y\s+|\s+en\s+)/i.test(
+        t
+      ))
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export const ANCHORED_DELETE_INTENT =
+  /^(?:por favor\s+)?(?:borr[áa]r?|elimin[áa]r?|delete|\brm\b)(?:\s+(?:el|la|los|las)\s+)?(?:\s*(?:workspace|repo|directorio|carpeta|archivo)\b)?(?:\s+([A-Za-z0-9._/-]+|\.))?\s*$|^(?:por favor\s+)?(?:vaciar|limpi[áa]r?)\s+(?:el\s+)?workspace\s*$|^(?:por favor\s+)?(?:borr[áa]r?|elimin[áa]r?|delete)\s+todo(?:\s+el\s+workspace)?\s*$/i;
+
+export function isDeleteIntent(text) {
+  const t = String(text || "").trim();
+  if (!t || isCodeContext(t)) {
+    return false;
+  }
+  return ANCHORED_DELETE_INTENT.test(t);
+}
+
+export const DELETE_INTENT = {
+  test(text) {
+    return isDeleteIntent(text);
+  },
+};
 
 export const PUSH_INTENT =
   /(?:^|\n)\s*(?:git )?push\b|pushe[áa]|\bhac[ée](?:r)? push\b|\bsub[íi] (?:el commit|los cambios|la rama)/i;
@@ -249,20 +281,29 @@ export function isResumeMission(text) {
 
 export function extractDeletePath(text) {
   const t = String(text || "").trim();
+  if (isCodeContext(t)) {
+    return "";
+  }
   if (
-    /todo (el )?workspace|vaciar (el )?workspace|limpi[áa] (el )?workspace|\.\/workspace/i.test(t)
+    /^(?:por favor\s+)?(?:(?:borr[áa]r?|elimin[áa]r?|delete)\s+)?(?:todo (?:el )?workspace|vaciar (?:el )?workspace|limpi[áa] (?:el )?workspace|\.\/workspace)\s*$/i.test(
+      t
+    )
   ) {
     return ".";
   }
   const match = t.match(
-    /^(?:por favor\s+)?(?:borr[áa]r?|elimin[áa]r?|delete|rm(?:\s+-rf)?)\s+(?:el |la |los |las )?(?:repo |directorio |carpeta |archivo )?([A-Za-z0-9._/-]+|\.)\s*$/i
+    /^(?:por favor\s+)?(?:borr[áa]r?|elimin[áa]r?|delete|rm(?:\s+-rf)?)\s+(?:(?:el|la|los|las)\s+)?(?:(?:repo|directorio|carpeta|archivo)\s+)?([A-Za-z0-9._/-]+|\.)\s*$/i
   );
   if (!match) {
     return "";
   }
-  return String(match[1] || "")
+  const extracted = String(match[1] || "")
     .replace(/[?.!]+$/, "")
     .trim();
+  if (extracted === "todo" || extracted === "workspace") {
+    return ".";
+  }
+  return extracted;
 }
 
 export function extractCommitMessage(text) {
