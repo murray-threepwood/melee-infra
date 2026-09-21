@@ -77,7 +77,7 @@ Fuente: `roadmap/archive/`. Banner HISTÓRICO en cada archivo.
   - [x] Tarea 2.2: GIT_ASKPASS efímero 0700
   - [x] Tarea 2.3: Unificación de Red Sandboxes (agent-net + host-gateway)
   - [x] Tarea 3.1: Auditor AST Anti-Test Hacking en Python
-  - [ ] Tarea 3.2: Sensor de Saturación OOM 137 y Alerta Telegram con Solución E2B
+  - [x] Tarea 3.2: Sensor de Saturación OOM 137 y Alerta Telegram con Solución E2B
   - [ ] Tarea 3.3: Seam Abstracto SandboxRunner
   - [ ] Tarea 3.4: Esquemas Zod con uniones discriminadas
   - [ ] Tarea 4.1: Modo Mal Manager con EventStream cada 60s

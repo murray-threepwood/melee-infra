@@ -28,6 +28,7 @@ import { escapeTelegramHtml, stuckKeyboard } from "./telegram.mjs";
 import { parseHttpsGitUrl } from "./workspace.mjs";
 import { formatGarfioLog } from "./garfio-store.mjs";
 import { formatManual, handleGarfioBrain } from "./chat.mjs";
+import { createResourceMonitor } from "./resource-monitor.mjs";
 
 export async function defaultAstAuditor(repoDir, { pythonScriptPath, spawnImpl = spawn } = {}) {
   const script =
@@ -125,12 +126,22 @@ export function createCodingSession({
   readDoc,
   operatorInbox,
   astAuditor = defaultAstAuditor,
+  resourceMonitor,
   hitlBypass = parseHitlBypass(process.env.MURRAY_HITL_BYPASS),
   now = () => Date.now(),
   pollDelayMs = 4000,
   missionMaxMs = 12 * 60 * 1000,
   pollFailsMax = 3,
 } = {}) {
+  const resMonitor =
+    resourceMonitor ||
+    createResourceMonitor({
+      ops,
+      jobs,
+      telegram,
+      now,
+      operatorInboxDir: operatorInbox?.dir,
+    });
   function issueHitl(kind, payload) {
     const approvalId = approvals.issue({ kind, ...payload });
     const token = String(kind).toUpperCase();
@@ -1178,6 +1189,15 @@ export function createCodingSession({
         maxMs: missionMaxMs,
       });
       if (stuck.stuck) {
+        if (resMonitor && typeof resMonitor.inspectAndAlert === "function") {
+          await resMonitor.inspectAndAlert({
+            jobId: job.id,
+            chatId: job.chatId,
+            slug: payload.slug,
+            exitCode: stuck.reason === "sandbox_oom_137" ? 137 : null,
+            startedAt: payload.startedAt || job.createdAt,
+          });
+        }
         await markStuck(job, stuck.reason, events);
         return;
       }
