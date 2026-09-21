@@ -21,6 +21,9 @@ config/mcp-auth/.accounts.json
 workspace/*
 !workspace/.gitkeep
 
+# Cache de repositorios Git Bare (Fase 12)
+git-cache/
+
 # Inbox humano de inspect (commitear README; dumps los revisás vos)
 operator-inbox/*
 !operator-inbox/README.md

@@ -52,7 +52,7 @@ Corré verificación y dejá la suite en verde (DoD) antes de dar por concluida 
 - [x] **Tarea 1.4**: Inicialización de `package.json` con `zod` en `config/murray-agent` y actualización del `Dockerfile` (`RUN npm install --omit=dev`).
 
 ### Fase 2: Modernización Git y Worktrees para Repos de Trabajo
-- [ ] **Tarea 2.1**: Módulo `SafeGitWorkspaceManager` en `git-worktree.mjs` para gestionar `./git-cache/<slug>.bare` y vincular worktrees en `./workspace/<slug>` con refspecs completos `remote.origin.fetch = +refs/heads/*:refs/remotes/origin/*`.
+- [x] **Tarea 2.1**: Módulo `SafeGitWorkspaceManager` en `git-worktree.mjs` para gestionar `./git-cache/<slug>.bare` y vincular worktrees en `./workspace/<slug>` con refspecs completos `remote.origin.fetch = +refs/heads/*:refs/remotes/origin/*`.
 - [ ] **Tarea 2.2**: Implementar mecanismo `GIT_ASKPASS` efímero en `workspace.mjs` para push y fetch seguro de repositorios del workspace sin variables globales expuestas.
 - [ ] **Tarea 2.3**: Unificación de red de sandboxes: asegurar inyección de `--network agent-net` y `--add-host=host.docker.internal:host-gateway` en `docker-compose.yml` y configuración de OpenHands.
 
