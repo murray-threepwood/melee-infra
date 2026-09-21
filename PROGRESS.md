@@ -81,7 +81,7 @@ Fuente: `roadmap/archive/`. Banner HISTÓRICO en cada archivo.
   - [x] Tarea 3.3: Seam Abstracto SandboxRunner
   - [x] Tarea 3.4: Esquemas Zod con uniones discriminadas
   - [x] Tarea 4.1: Modo Mal Manager con EventStream cada 60s
-  - [ ] Tarea 4.2: Simplificación n8n como Ingress Passthrough
+  - [x] Tarea 4.2: Simplificación n8n como Ingress Passthrough
   - [ ] Tarea 4.3: Verificación Integral E2E
 
 ## Backlog (no ejecutar)

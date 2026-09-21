@@ -64,7 +64,7 @@ Corré verificación y dejá la suite en verde (DoD) antes de dar por concluida 
 
 ### Fase 4: Observabilidad en Vivo y Simplificación de Topología
 - [x] **Tarea 4.1**: Conectar consumidor sobre `EventStream` de OpenHands en `coding.mjs` para despachar resúmenes del "Modo Mal Manager" cada 60s a Telegram.
-- [ ] **Tarea 4.2**: Reducción de n8n: simplificar `telegram_hitl_router.json` como mero webhook passthrough sin decisiones ni mutaciones de texto.
+- [x] **Tarea 4.2**: Reducción de n8n: simplificar `telegram_hitl_router.json` como mero webhook passthrough sin decisiones ni mutaciones de texto.
 - [ ] **Tarea 4.3**: Verificación completa de suite E2E (`bash tests/test_e2e_stack.sh`) y presupuesto de memoria RAM (<4.5 GB).
 
 ---
