@@ -65,6 +65,24 @@ export function parseSlash(text) {
   if (name === "malmanager" || name === "mirar" || name === "verbose") {
     return { cmd: "micromanage", interval: rest.join(" ").trim() };
   }
+  if (name === "push") {
+    return { cmd: "push" };
+  }
+  if (name === "pull") {
+    return { cmd: "pull" };
+  }
+  if (name === "commit") {
+    return { cmd: "commit", message: rest.join(" ").trim() };
+  }
+  if (name === "estado" || name === "resumen") {
+    return { cmd: "estado" };
+  }
+  if (name === "roadmap" || name === "tickets" || name === "tareas") {
+    return { cmd: "roadmap" };
+  }
+  if (name === "diff") {
+    return { cmd: "diff" };
+  }
   return { cmd: name, service: rest[0] || "" };
 }
 
@@ -126,6 +144,11 @@ export function formatManual() {
     `• Modelos válidos: ${ALLOWED_GARFIO_MODELS.join(", ")}.`,
     "",
     "3. Espacio de Trabajo & Git (./workspace)",
+    "• /estado (o /resumen): Resumen ejecutivo, último commit de Garfio, roadmap y botón para PUSH.",
+    "• /roadmap (o /tickets): Lista de tickets pendientes y completados del repo activo.",
+    "• /push: Pedir aprobación HITL para subir la rama a origin y abrir PR.",
+    "• /pull: Traer cambios remotos a la rama actual (ff-only).",
+    "• /diff: Ver cambios pendientes en el árbol de trabajo.",
     "• /repo: Ver repositorio activo en sesión.",
     "• /workspace: Listar archivos y directorios.",
     "• /jobs [id]: Ver cola de tareas async en vuelo.",
@@ -676,8 +699,62 @@ export function createChatEngine({
         }
         return coding.setMicromanage({ chatId, intervalRaw: slash.interval });
       }
+      if (slash.cmd === "push") {
+        if (!coding || typeof coding.proposePush !== "function") {
+          return packReply("Push no está disponible.");
+        }
+        return coding.proposePush({ chatId });
+      }
+      if (slash.cmd === "pull") {
+        if (!coding || typeof coding.startPull !== "function") {
+          return packReply("Pull no está disponible.");
+        }
+        return coding.startPull({ chatId });
+      }
+      if (slash.cmd === "estado") {
+        if (!coding || typeof coding.describeRepoStatus !== "function") {
+          return packReply("Estado no disponible.");
+        }
+        return coding.describeRepoStatus({ chatId });
+      }
+      if (slash.cmd === "roadmap") {
+        if (!coding || typeof coding.describeRoadmap !== "function") {
+          return packReply("Roadmap no disponible.");
+        }
+        return coding.describeRoadmap({ chatId });
+      }
+      if (slash.cmd === "commit") {
+        const sess = session ? session.get(chatId) : { slug: "" };
+        if (!sess.slug) {
+          return packReply("No hay repo activo. Cloná uno primero.");
+        }
+        if (!slash.message) {
+          return packReply('¿Mensaje de commit? Ej: /commit "feat: nueva feature"');
+        }
+        try {
+          const result = await workspace.commit(sess.slug, { message: slash.message });
+          const skipped = result.skipped_secrets?.length
+            ? `\nNo toqué secretos: ${result.skipped_secrets.join(", ")}`
+            : "";
+          return packReply(`Commit en ${sess.slug}: ${result.files.join(", ")}\n${result.stdout}${skipped}`);
+        } catch (err) {
+          return packReply(`Commit falló (${err.code || "git_commit_failed"}): ${err.message}`);
+        }
+      }
+      if (slash.cmd === "diff") {
+        const sess = session ? session.get(chatId) : { slug: "" };
+        if (!sess.slug) {
+          return packReply("No hay repo activo.");
+        }
+        try {
+          const d = await workspace.diff(sess.slug);
+          return packReply(d.text ? `Diff en ${sess.slug}:\n<pre>${d.text.slice(0, 3500)}</pre>` : "Árbol limpio, sin diff.");
+        } catch (err) {
+          return packReply(`No pude leer diff: ${err.message}`);
+        }
+      }
       return packReply(
-        `Comando /${slash.cmd} no existe. /manual /status /health /logs <servicio> /repo /workspace /jobs /triage /garfio /model /malmanager`
+        `Comando /${slash.cmd} no existe. /manual /estado /roadmap /push /status /health /logs /repo /workspace /jobs /triage /garfio /model /malmanager`
       );
     }
     if (isSeenEmailsIntent(trimmed)) {

@@ -245,7 +245,7 @@ test("commit saltea .env, defaulta identidad Murray y exige mensaje", async () =
   });
   assert.deepEqual(identCommit.files, ["README.md"]);
   assert.equal(
-    calls.some((args) => args.includes("user.email=murray-threepwood@users.noreply.github.com")),
+    calls.some((args) => args.includes("user.email=329125804+murray-threepwood@users.noreply.github.com")),
     true
   );
   await assert.rejects(() => workspace.commit("octocat-Hello-World", { message: "x" }), {

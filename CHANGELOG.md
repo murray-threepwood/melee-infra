@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.1.23 — Apertura Automática de Pull Requests en GitHub + Flujo 1-Tap
+
+- **Apertura Automática de Pull Requests (Opción B)**:
+  - Implementado `createOrGetPullRequest` en `workspace.mjs`: integración con GitHub REST API v3 (`POST /repos/:owner/:repo/pulls`).
+  - Generación de título y descripción Markdown estructurada del PR con ticket, hash de commit, comando de test verificado y bitácora técnica de Garfio.
+  - Idempotencia total: ante respuesta `422` (PR ya existente), consulta automáticamente y recupera el PR abierto.
+  - Al completar el push (`handlePushJob`), Murray notifica a Telegram con el enlace clickeable directo: `<a href="https://github.com/.../pull/X">#X título</a>`.
+- **Botón Directo de Aprobación al Terminar Misión**:
+  - `handlePollJob` en `coding.mjs`: tan pronto como Garfio finaliza una misión con tests pasados y commits locales pendientes, adjunta inmediatamente el teclado inline `[ 🚀 Aprobar Push & Abrir PR ] [ ❌ Rechazar ]`.
+- **Autenticación Git Smart HTTP en GitHub**:
+  - Corregido `tokenEnvForHost` en `workspace.mjs`: Git Smart HTTP sobre HTTPS en `github.com` rechaza tokens Bearer con exit code 128. Se implementó `Authorization: Basic base64(x-access-token:token)`, permitiendo operaciones push/fetch desatendidas.
+  - Configuración de refspec estándar `remote.origin.fetch = +refs/heads/*:refs/remotes/origin/*` en `ensureHistory`, permitiendo seguimiento de ramas creadas en repos clonados con `--single-branch`.
+
+## 0.1.22 — Diagnóstico Forense Garfio + /estado, /roadmap y Push HITL
+
+- **Diagnóstico Forense de Garfio (TK-01)**:
+  - Se determinó que Garfio finalizó exitosamente TK-01 en 23 minutos (commit `e209b4e` en `feat/tk01-numerical-purity`), pero por diseño HITL nunca pushea a GitHub sin confirmación humana.
+  - Se corrigió `extractGarfioRationale` en `openhands.mjs`: OpenHands v1 ubica el mensaje final en `event.action.message` (FinishAction) o `event.thought`, antes omitido por buscar únicamente `event.payload.content`. Ahora extrae y formatea el resumen técnico completo para Telegram.
+  - Corrección de falsos positivos en `inspect.mjs`: un sandbox con `execution_status === 'finished'` (estado MISSING esperado post-ejecución) y jobs `stuck` viejos ya superados ya no provocan reinicios innecesarios de `openhands`.
+- **Comandos Telegram y Ruteo de Intención (`/estado`, `/roadmap`, `/push`)**:
+  - Implementado `/estado` (alias `/status` o «qué hizo garfio», «qué hiciste», «qué hay hecho») para inspeccionar el repo activo, rama actual, último commit realizado por Garfio, tickets resueltos vs pendientes, y si hay commits locales pendientes de push.
+  - Si el repo tiene commits locales pendientes de subida (`commitsAhead > 0`), `/estado` adjunta automáticamente el teclado HITL `[ Aprobar PUSH ] [ Rechazar ]` para que el usuario pueda autorizar el push en un toque.
+  - Implementado `/roadmap` (o «qué hay para hacer», «tickets pendientes») para listar todos los tickets en `roadmap/tickets/*.md` categorizados como `[COMPLETADO]` o `[PENDIENTE]` basándose en el historial de git.
+  - Habilitados los comandos de barra `/push`, `/pull`, `/commit`, `/diff`, `/estado`, `/roadmap` en `chat.mjs:parseSlash` y `/help`.
+  - Corregido `packHitl` en `reply.mjs` para respetar `{ rawHtml: true }` y evitar el doble escape de etiquetas HTML como `<b>` y `<code>`.
+
 ## 0.1.21 — Modo Mal Manager + Notificaciones Terminales de Git
 
 - **Notificaciones Terminales**: Corregido bug donde `pull`, `checkout`, `push` y `delete` finalizaban en silencio por omisión de `terminal: true` ante `MURRAY_TELEGRAM_QUIET=1`. Ahora avisan de inmediato en Telegram al terminar o fallar.

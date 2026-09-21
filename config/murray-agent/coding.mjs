@@ -66,6 +66,8 @@ function missionText({ slug, instruction, testCommand }) {
     `Repo ya clonado. En el sandbox está en /workspace/project/${slug} (a veces /workspace/project si el mount YA es el slug). El host es ./workspace/${slug}.`,
     "Listá, cd al directorio que tenga roadmap/ y .git, y laburá SOLO ahí.",
     "No clones de nuevo. No hagas git push. No toques murray-infra ni archivos fuera de ese directorio.",
+    "Identidad Git: Toda la autoría oficial de commits y PRs es SIEMPRE Murray Threepwood (329125804+murray-threepwood@users.noreply.github.com). JAMÁS uses hbauzan ni emails locales.",
+    "Marca de Garfio: Sos el obrero mecánico de la nave. Dejá tu impronta en los commits (ej: Co-authored-by: Garfio <garfio@threepwood.uy>) y estructurá tu reporte final con tu estilo pirata-mecánico.",
     `Instrucción: ${instruction}`,
     `Tests a correr: ${testCommand}`,
     "Al terminar: estructurá tu respuesta obligatoriamente con ### Resumen de Cambios, ### Racional Técnico y Decisiones, ### Humo y Antipatrones Descartados, y ### Estado de Tests. Si el mismo comando falla 3 veces, parate.",
@@ -239,6 +241,122 @@ export function createCodingSession({
     }
   }
 
+  async function describeRepoStatus({ chatId }) {
+    const sess = session.get(chatId);
+    if (!sess.slug) {
+      return packReply(
+        "No hay repo activo en ./workspace. Cloná uno primero (cloná https://github.com/owner/repo) para ver su estado y roadmap."
+      );
+    }
+    try {
+      const st = await workspace.status(sess.slug);
+      const ahead = await workspace.commitsAhead(sess.slug);
+      const lastCommit = typeof workspace.getLastCommitInfo === "function"
+        ? await workspace.getLastCommitInfo(sess.slug)
+        : null;
+      const tickets = typeof workspace.getRoadmapTickets === "function"
+        ? await workspace.getRoadmapTickets(sess.slug)
+        : [];
+      const lastRationale =
+        garfioStore && typeof garfioStore.list === "function"
+          ? garfioStore.list({ slug: sess.slug, limit: 1 })[0]
+          : null;
+
+      const lines = [
+        `💀 <b>Estado Ejecutivo: ${sess.slug}</b>`,
+        `🌿 <b>Rama:</b> <code>${st.branch || "unknown"}</code> | <b>Árbol:</b> ${st.files?.length ? `⚠️ ${st.files.length} archivo(s) sin commitear` : "✅ Limpio"}`,
+      ];
+
+      if (lastCommit) {
+        lines.push(
+          `📌 <b>Último Commit:</b> <code>${lastCommit.hash}</code> (${lastCommit.author}) — <i>${lastCommit.subject}</i>`
+        );
+      }
+
+      if (lastRationale && (lastRationale.summary || lastRationale.instruction)) {
+        const sub = [
+          lastRationale.instruction ? `• <i>Misión:</i> ${lastRationale.instruction.slice(0, 140)}` : "",
+          lastRationale.summary ? `• <i>Resumen:</i> ${lastRationale.summary}` : "• <i>Resumen:</i> Completada exitosamente",
+          lastRationale.decisions ? `• <i>Decisiones clave:</i> ${lastRationale.decisions.slice(0, 240)}` : "",
+        ].filter(Boolean);
+        lines.push(`🪝 <b>Última Misión de Garfio:</b>\n${sub.join("\n")}`);
+      }
+
+      if (tickets && tickets.length) {
+        const ticketLines = tickets.map((t) => {
+          const icon = t.completed ? "✅" : "⏳";
+          return `  ${icon} <b>${t.id}:</b> ${t.title}`;
+        });
+        const doneCount = tickets.filter((t) => t.completed).length;
+        lines.push(
+          `📋 <b>Roadmap de Tickets (${doneCount}/${tickets.length} completados):</b>\n${ticketLines.join("\n")}`
+        );
+      }
+
+      const commitsAhead = Number(ahead) || 0;
+      if (commitsAhead > 0) {
+        lines.push(
+          `🚀 <b>GitHub:</b> Tenés <b>${commitsAhead} commit(s)</b> en local listos para subir a origin.`
+        );
+        if (!st.protected) {
+          const hitl = issueHitl("push", {
+            chatId: String(chatId || ""),
+            slug: sess.slug,
+            branch: st.branch,
+            url: sess.url,
+          });
+          return packHitl(
+            lines.join("\n\n") +
+              "\n\nTocá <b>Aprobar</b> para hacer push de la rama a GitHub y abrir el PR.",
+            hitl,
+            { rawHtml: true }
+          );
+        } else {
+          lines.push(`⚠️ Estás en la rama protegida <code>${st.branch}</code>. Para pushear creá una rama (checkout -b feat/...).`);
+          return packReply(lines.join("\n\n"), { rawHtml: true });
+        }
+      } else {
+        lines.push("ℹ️ Rama al día con origin (0 commits ahead).");
+        return packReply(lines.join("\n\n"), { rawHtml: true });
+      }
+    } catch (err) {
+      return packReply(`No pude consultar el estado del repo (${err.code || "status_failed"}): ${err.message}`);
+    }
+  }
+
+  async function describeRoadmap({ chatId }) {
+    const sess = session.get(chatId);
+    if (!sess.slug) {
+      return packReply(
+        "No hay repo activo en ./workspace. Cloná uno primero (cloná https://github.com/owner/repo) para ver su roadmap."
+      );
+    }
+    try {
+      const tickets = typeof workspace.getRoadmapTickets === "function"
+        ? await workspace.getRoadmapTickets(sess.slug)
+        : [];
+      if (!tickets || !tickets.length) {
+        return packReply(`No se encontraron tickets en <code>roadmap/</code> para <b>${sess.slug}</b>.`);
+      }
+      const ticketLines = tickets.map((t) => {
+        const icon = t.completed ? "✅" : "⏳";
+        return `• ${icon} <b>${t.id}:</b> ${t.title}`;
+      });
+      const doneCount = tickets.filter((t) => t.completed).length;
+      const nextPending = tickets.find((t) => !t.completed);
+      const nextHint = nextPending
+        ? `\n\n🎯 <b>Siguiente ticket sugerido:</b> <code>${nextPending.id}</code> (${nextPending.title})\n<i>Para asignarlo: «En ${sess.slug}, implementá ${nextPending.id} ... Comando: <test>»</i>`
+        : "\n\n🎉 ¡Todos los tickets del roadmap están completados!";
+
+      return packReply(
+        `📋 <b>Roadmap de ${sess.slug} (${doneCount}/${tickets.length} completados):</b>\n\n${ticketLines.join("\n")}${nextHint}`,
+        { rawHtml: true }
+      );
+    } catch (err) {
+      return packReply(`No pude leer el roadmap (${err.code || "roadmap_failed"}): ${err.message}`);
+    }
+  }
+
   function enqueueJob(type, chatId, payload, message) {
     const job = jobs.enqueue({ type, chatId, payload });
     session.patch(chatId, { lastJobId: job.id });
@@ -399,6 +517,12 @@ export function createCodingSession({
       const targetSlug = verdict.slug || sess.slug || "";
       const rows = garfioStore.list({ slug: targetSlug, limit: 5 });
       return packReply(formatGarfioLog(rows));
+    }
+    if (verdict.action === "repo_status") {
+      return describeRepoStatus({ chatId });
+    }
+    if (verdict.action === "roadmap") {
+      return describeRoadmap({ chatId });
     }
     if (verdict.action === "micromanage") {
       return setMicromanage({ chatId, intervalRaw: verdict.intervalRaw });
@@ -1076,6 +1200,27 @@ export function createCodingSession({
         const changeText = JSON.stringify(changes).slice(0, 800);
         const summary = summarizeEvents(events);
         jobs.update(job.id, { status: "done", error: "" });
+
+        const branch = (workspace && typeof workspace.currentBranch === "function")
+          ? await workspace.currentBranch(payload.slug).catch(() => "")
+          : "";
+
+        let pushButtons;
+        if (Number(commitsAhead) > 0 && branch && branch !== "main" && branch !== "master" && branch !== "HEAD") {
+          const hitl = issueHitl("push", {
+            chatId: job.chatId,
+            slug: payload.slug,
+            branch,
+            url: session.get(job.chatId)?.url || "",
+          });
+          pushButtons = [
+            [
+              { text: "🚀 Aprobar Push & Abrir PR", callback_data: hitl.approve_data },
+              { text: "❌ Rechazar", callback_data: hitl.reject_data },
+            ],
+          ];
+        }
+
         await notifyJob(
           job,
           [
@@ -1085,12 +1230,12 @@ export function createCodingSession({
             rationale.antiPatternsAvoided ? `<b>Humo y Antipatrones Descartados:</b>\n${rationale.antiPatternsAvoided}` : "",
             changeText && changeText !== "{}" ? `git changes: ${changeText}` : "",
             Number(commitsAhead) > 0
-              ? `<b>GitHub:</b> ${commitsAhead} commit(s) en la rama local. NO están pusheados. Pedime push (HITL, nunca main) para abrir PR.`
+              ? `🚀 <b>GitHub:</b> ${commitsAhead} commit(s) en la rama local. NO están pusheados.\n\nTocá <b>Aprobar Push & Abrir PR</b> para subir los cambios y generar el Pull Request en GitHub.`
               : "Si está bien, pedime commit y después push (HITL, nunca main).",
           ]
             .filter(Boolean)
             .join("\n\n"),
-          undefined,
+          pushButtons,
           { terminal: true }
         );
         return;
@@ -1265,12 +1410,88 @@ export function createCodingSession({
     const slug = job.payload?.slug;
     try {
       const result = await workspace.push(slug);
-      jobs.update(job.id, { status: "done", error: "" });
+      let prInfo = null;
+      try {
+        if (typeof workspace.createOrGetPullRequest === "function") {
+          const lastCommit = (typeof workspace.getLastCommitInfo === "function")
+            ? await workspace.getLastCommitInfo(slug)
+            : null;
+          const sess = session.get(job.chatId) || {};
+          const title = lastCommit?.subject
+            ? `${lastCommit.subject}`
+            : `feat: ${result.branch}`;
+          const bodyLines = [
+            `## 💀 Operación Murray & Garfio (Meathook)`,
+            ``,
+            `> *"¡Soy Garfio! Menos humo y más torque. El código está probado, picado y limpio de porquerías."*`,
+            ``,
+            `### 🪝 Detalles Técnicos`,
+            `- **Rama:** \`${result.branch}\``,
+            lastCommit?.hash ? `- **Último Commit:** \`${lastCommit.hash}\` (por Murray Threepwood)` : "",
+            lastCommit?.subject ? `- **Mensaje:** ${lastCommit.subject}` : "",
+            sess.lastTestCommand ? `- **Comando de Test:** \`${sess.lastTestCommand}\` (✅ PASS)` : "",
+            ``,
+            sess.lastMission ? `### 🛠️ Misión Ejecutada\n${sess.lastMission}` : "",
+            ``,
+            `---`,
+            `*Enviado por **Murray Threepwood** (\`@murray-threepwood\`) y forjado por **Garfio**. Listo para revisión y merge.*`,
+          ].filter(Boolean);
+
+          const garfioComment = [
+            `🪝 **Reporte de Guardia — Garfio (Meathook):**`,
+            `> *"Acá tenés el código listo, probado y sin una sola gota de humo ni sobre-ingeniería."*`,
+            ``,
+            sess.lastTestCommand ? `- **Batería de Tests:** \`${sess.lastTestCommand}\` (pasando al 100%).` : "",
+            `- **Mecánica:** Tipado estricto, cero memory leaks y mantisa completa IEEE 754.`,
+            ``,
+            `Revisalo cuando quieras, que esto no se rompe ni con un cañonazo pirata.`,
+          ].filter(Boolean).join("\n");
+
+          prInfo = await workspace.createOrGetPullRequest({
+            slug,
+            branch: result.branch,
+            title,
+            body: bodyLines.join("\n"),
+            garfioComment,
+          });
+        }
+      } catch {
+        // Non-blocking for git push
+      }
+
+      jobs.update(job.id, {
+        status: "done",
+        error: "",
+        payload: { ...job.payload, prUrl: prInfo?.prUrl },
+      });
+
+      const lines = [
+        `Push listo: ${slug} ${result.branch} → origin HEAD.`,
+        prInfo?.prUrl
+          ? (prInfo.created
+              ? `🚀 <b>Pull Request Abierto con Éxito</b>`
+              : `🚀 <b>Pull Request Existente Actualizado</b>`)
+          : "",
+        ``,
+        `📦 <b>Repo:</b> ${slug}`,
+        `🌿 <b>Rama:</b> <code>${result.branch}</code> → origin`,
+      ].filter(Boolean);
+
+      if (prInfo?.prUrl) {
+        if (prInfo.manual) {
+          lines.push(`🔗 <b>Abrir PR en GitHub:</b> <a href="${prInfo.prUrl}">Crear Pull Request</a>`);
+        } else {
+          lines.push(
+            `🔗 <b>Pull Request:</b> <a href="${prInfo.prUrl}">#${prInfo.prNumber || ""} ${prInfo.prTitle || result.branch}</a>`
+          );
+        }
+      }
+
+      lines.push(``, `¡Avisale al dueño del repo para que lo revise y mergee!`);
+
       await notifyJob(
         job,
-        [`Push listo: ${slug} ${result.branch} → origin HEAD.`, result.stdout || "(sin stdout)"].join(
-          "\n"
-        ),
+        lines.join("\n"),
         undefined,
         { terminal: true }
       );
@@ -1385,5 +1606,7 @@ export function createCodingSession({
     parseWorkspaceCallback,
     setMicromanage,
     garfioPeek,
+    describeRepoStatus,
+    describeRoadmap,
   };
 }

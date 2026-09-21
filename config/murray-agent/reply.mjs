@@ -41,12 +41,13 @@ export function packReply(text, extra = {}) {
   };
 }
 
-export function packHitl(text, hitl) {
+export function packHitl(text, hitl, extra = {}) {
   const kind = String(hitl.kind || "ops").toLowerCase();
   const token = kind.toUpperCase();
   const approvalId = String(hitl.approval_id || "");
   const packed = packReply(text, {
     needs_hitl: true,
+    ...extra,
     hitl: {
       ...hitl,
       kind,

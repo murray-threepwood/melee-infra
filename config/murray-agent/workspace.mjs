@@ -285,10 +285,14 @@ function tokenEnvForHost(host, { githubToken, gitlabToken }) {
   if (!token || /CAMBIAR_POR|REEMPLAZAR|ejemplo/i.test(token)) {
     return {};
   }
+  const headerValue =
+    host === "github.com"
+      ? `Authorization: Basic ${Buffer.from(`x-access-token:${token}`).toString("base64")}`
+      : `AUTHORIZATION: bearer ${token}`;
   return {
     GIT_CONFIG_COUNT: "1",
     GIT_CONFIG_KEY_0: "http.extraHeader",
-    GIT_CONFIG_VALUE_0: `AUTHORIZATION: bearer ${token}`,
+    GIT_CONFIG_VALUE_0: headerValue,
   };
 }
 
@@ -378,11 +382,12 @@ export function createWorkspace({
   gitRun = defaultGitRun,
   githubToken = process.env.GITHUB_TOKEN || "",
   gitlabToken = process.env.GITLAB_TOKEN || "",
-  gitName = process.env.MURRAY_GIT_NAME || "Murray",
-  gitEmail = process.env.MURRAY_GIT_EMAIL || "murray-threepwood@users.noreply.github.com",
+  gitName = process.env.MURRAY_GIT_NAME || "Murray Threepwood",
+  gitEmail = process.env.MURRAY_GIT_EMAIL || "329125804+murray-threepwood@users.noreply.github.com",
   maxFiles = 200,
   maxBytes = 32768,
   maxHits = 40,
+  fetchImpl = fetch,
 } = {}) {
   function repoDir(slug) {
     const safe = String(slug || "").replace(/[^A-Za-z0-9._-]/g, "");
@@ -398,6 +403,19 @@ export function createWorkspace({
       deny("workspace_missing", `no hay repo activo ${slug}`);
     }
     return dest;
+  }
+
+  async function ensureRepoIdentity(dest) {
+    if (!fs.existsSync(path.join(dest, ".git"))) {
+      return;
+    }
+    try {
+      const ident = gitIdentity(gitName, gitEmail);
+      await gitRun(["-C", dest, "config", "user.name", ident.name], { timeoutMs: 10000 });
+      await gitRun(["-C", dest, "config", "user.email", ident.email], { timeoutMs: 10000 });
+    } catch {
+      // Ignorar si gitRun no está disponible
+    }
   }
 
   async function existingRemote(dest) {
@@ -425,6 +443,9 @@ export function createWorkspace({
   }
 
   async function ensureHistory(dest, env) {
+    await gitRun(["-C", dest, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"], {
+      timeoutMs: 10000,
+    }).catch(() => {});
     const shallow = await gitRun(["-C", dest, "rev-parse", "--is-shallow-repository"], {
       timeoutMs: 15000,
     });
@@ -455,6 +476,7 @@ export function createWorkspace({
     if (fs.existsSync(dest)) {
       const remote = await existingRemote(dest);
       if (remote.replace(/\.git$/i, "") === parsed.href.replace(/\.git$/i, "")) {
+        await ensureRepoIdentity(dest);
         return { slug: parsed.slug, url: parsed.href, reused: true, dest };
       }
       deny(
@@ -477,6 +499,7 @@ export function createWorkspace({
     if (!fs.existsSync(dest)) {
       deny("git_clone_failed", "clone no dejó directorio");
     }
+    await ensureRepoIdentity(dest);
     return { slug: parsed.slug, url: parsed.href, reused: false, dest };
   }
 
@@ -664,6 +687,7 @@ export function createWorkspace({
 
   async function status(slug) {
     const dest = requireRepo(slug);
+    await ensureRepoIdentity(dest);
     const branch = await currentBranch(slug);
     const result = await gitRun(["-C", dest, "status", "--porcelain=v1", "-b"], {
       timeoutMs: 15000,
@@ -706,8 +730,13 @@ export function createWorkspace({
 
   async function commitsAhead(slug, { base = "main" } = {}) {
     const dest = requireRepo(slug);
+    const curr = await currentBranch(slug).catch(() => "");
     const branch = sanitizeBranchName(String(base || "main"));
-    const refs = [`origin/${branch}`, branch];
+    const refs = [];
+    if (curr && curr !== "main" && curr !== "master" && curr !== "HEAD") {
+      refs.push(`origin/${curr}`);
+    }
+    refs.push(`origin/${branch}`, branch);
     for (const ref of refs) {
       const result = await gitRun(
         ["-C", dest, "rev-list", "--count", `${ref}..HEAD`],
@@ -741,6 +770,7 @@ export function createWorkspace({
 
   async function checkout(slug, { branch, create = false } = {}) {
     const dest = requireRepo(slug);
+    await ensureRepoIdentity(dest);
     const name = sanitizeBranchName(branch);
     if (create && isProtectedBranch(name)) {
       deny("git_protected_branch", "no creo ramas main/master");
@@ -768,6 +798,7 @@ export function createWorkspace({
 
   async function commit(slug, { message, paths = [] } = {}) {
     const dest = requireRepo(slug);
+    await ensureRepoIdentity(dest);
     const msg = String(message || "").trim();
     if (msg.length < 3) {
       deny("git_commit_message", "pasame un mensaje de commit (≥ 3 caracteres)");
@@ -827,6 +858,7 @@ export function createWorkspace({
 
   async function push(slug) {
     const dest = requireRepo(slug);
+    await ensureRepoIdentity(dest);
     const branch = await currentBranch(slug);
     if (isProtectedBranch(branch) || !branch || branch === "HEAD") {
       deny(
@@ -848,11 +880,248 @@ export function createWorkspace({
         : "git_push_failed";
       throw err;
     }
+    await gitRun(["-C", dest, "fetch", "--", "origin", branch], {
+      env,
+      timeoutMs: 30000,
+    }).catch(() => {});
     return {
       slug,
       branch,
       stdout: redact(`${result.stdout || ""}\n${result.stderr || ""}`.trim()).slice(0, 2000),
     };
+  }
+
+  async function getLastCommitInfo(slug) {
+    const dest = requireRepo(slug);
+    const result = await gitRun(
+      ["-C", dest, "log", "-1", "--pretty=format:%h|%an|%s|%cI"],
+      { timeoutMs: 10000 }
+    );
+    if (result.code !== 0 || !result.stdout?.trim()) {
+      return null;
+    }
+    const [hash, author, subject, date] = result.stdout.trim().split("|");
+    return { hash, author, subject, date };
+  }
+
+  async function getRoadmapTickets(slug) {
+    const dest = requireRepo(slug);
+    const ticketsDir = path.join(dest, "roadmap", "tickets");
+    const fallbackDir = path.join(dest, "roadmap");
+    let targetDir = "";
+    if (fs.existsSync(ticketsDir)) {
+      targetDir = ticketsDir;
+    } else if (fs.existsSync(fallbackDir)) {
+      targetDir = fallbackDir;
+    } else {
+      return [];
+    }
+
+    let files = [];
+    try {
+      files = fs.readdirSync(targetDir).filter((f) => f.endsWith(".md") && !f.startsWith("README") && !f.startsWith("00-"));
+    } catch {
+      return [];
+    }
+    files.sort();
+
+    let logText = "";
+    try {
+      const logRes = await gitRun(["-C", dest, "log", "-n", "40", "--pretty=format:%s%n%b"], { timeoutMs: 15000 });
+      if (logRes.code === 0) {
+        logText = logRes.stdout || "";
+      }
+    } catch {}
+
+    let branchName = "";
+    try {
+      const branchRes = await gitRun(["-C", dest, "rev-parse", "--abbrev-ref", "HEAD"], { timeoutMs: 5000 });
+      if (branchRes.code === 0) {
+        branchName = branchRes.stdout?.trim() || "";
+      }
+    } catch {}
+
+    const tickets = [];
+    for (const file of files) {
+      const fullPath = path.join(targetDir, file);
+      let title = file.replace(/\.md$/, "");
+      let ticketId = "";
+      try {
+        const content = fs.readFileSync(fullPath, "utf8");
+        const headingMatch = content.match(/^#+\s*(.+)$/m);
+        if (headingMatch) {
+          title = headingMatch[1].trim();
+        }
+      } catch {}
+
+      const idMatch = file.match(/^([A-Za-z]+)[-_]?([0-9]+)/);
+      let completed = false;
+      if (idMatch) {
+        const prefix = idMatch[1].toUpperCase();
+        const num = idMatch[2];
+        ticketId = `${prefix}-${num}`;
+        const numInt = parseInt(num, 10);
+        const patterns = [
+          `${prefix}${num}`,
+          `${prefix}-${num}`,
+          `${prefix}${numInt}`,
+          `${prefix}-${numInt}`,
+        ];
+        const idRegex = new RegExp(`\\b(${patterns.join("|")})\\b`, "i");
+        completed = idRegex.test(logText) || idRegex.test(branchName);
+      }
+
+      tickets.push({
+        id: ticketId || file.replace(/\.md$/, ""),
+        filename: file,
+        title,
+        completed,
+      });
+    }
+
+    return tickets;
+  }
+
+  async function createOrGetPullRequest({
+    slug,
+    branch,
+    title = "",
+    body = "",
+    base = "main",
+    garfioComment = "",
+  }) {
+    const dest = requireRepo(slug);
+    const remote = await existingRemote(dest);
+    if (!remote) {
+      return { prUrl: "", manual: true, error: "no_remote" };
+    }
+
+    let parsed;
+    try {
+      parsed = parseHttpsGitUrl(remote);
+    } catch (err) {
+      return { prUrl: "", manual: true, error: err.message || "invalid_remote" };
+    }
+
+    const { host, owner, repo } = parsed;
+    if (host !== "github.com") {
+      if (host === "gitlab.com") {
+        return {
+          prUrl: `https://gitlab.com/${owner}/${repo}/-/merge_requests/new?merge_request%5Bsource_branch%5D=${encodeURIComponent(branch)}`,
+          manual: true,
+          owner,
+          repo,
+        };
+      }
+      return { prUrl: "", manual: true, error: `unsupported_host: ${host}` };
+    }
+
+    const compareUrl = `https://github.com/${owner}/${repo}/compare/${encodeURIComponent(branch)}?expand=1`;
+
+    const token = githubToken || process.env.GITHUB_TOKEN || "";
+    if (!token || /CAMBIAR_POR|REEMPLAZAR|ejemplo/i.test(token)) {
+      return {
+        prUrl: compareUrl,
+        manual: true,
+        reason: "no_github_token",
+        owner,
+        repo,
+      };
+    }
+
+    const prTitle = String(title || `feat: ${branch}`).trim();
+    const prBody = String(body || `Automated PR generated by Murray & Garfio for branch ${branch}.`).trim();
+
+    let prResult = null;
+    try {
+      const createRes = await fetchImpl(`https://api.github.com/repos/${owner}/${repo}/pulls`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "User-Agent": "murray-agent",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          title: prTitle,
+          head: branch,
+          base: base || "main",
+          body: prBody,
+        }),
+      });
+
+      if (createRes.status === 201) {
+        const data = await createRes.json();
+        prResult = {
+          prUrl: data.html_url,
+          prNumber: data.number,
+          prTitle: data.title,
+          created: true,
+          owner,
+          repo,
+        };
+      } else if (createRes.status === 422) {
+        const getRes = await fetchImpl(
+          `https://api.github.com/repos/${owner}/${repo}/pulls?head=${encodeURIComponent(`${owner}:${branch}`)}&state=open`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              Accept: "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+              "User-Agent": "murray-agent",
+            },
+          }
+        );
+        if (getRes.ok) {
+          const list = await getRes.json();
+          if (Array.isArray(list) && list.length > 0) {
+            prResult = {
+              prUrl: list[0].html_url,
+              prNumber: list[0].number,
+              prTitle: list[0].title,
+              created: false,
+              owner,
+              repo,
+            };
+          }
+        }
+      }
+
+      if (prResult && prResult.prNumber && garfioComment) {
+        await fetchImpl(`https://api.github.com/repos/${owner}/${repo}/issues/${prResult.prNumber}/comments`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+            "User-Agent": "murray-agent",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ body: garfioComment }),
+        }).catch(() => {});
+      }
+
+      if (prResult) {
+        return prResult;
+      }
+
+      return {
+        prUrl: compareUrl,
+        manual: true,
+        error: `github_api_status_${createRes.status}`,
+        owner,
+        repo,
+      };
+    } catch (fetchErr) {
+      return {
+        prUrl: compareUrl,
+        manual: true,
+        error: fetchErr.message,
+        owner,
+        repo,
+      };
+    }
   }
 
   return {
@@ -876,5 +1145,8 @@ export function createWorkspace({
     checkout,
     commit,
     push,
+    getLastCommitInfo,
+    getRoadmapTickets,
+    createOrGetPullRequest,
   };
 }

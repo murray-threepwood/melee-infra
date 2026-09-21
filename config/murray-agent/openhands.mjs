@@ -245,11 +245,12 @@ export function summarizeEvents(events = [], { maxChars = 1800 } = {}) {
 export function extractGarfioRationale(events = []) {
   let lastAgentText = "";
   for (let i = events.length - 1; i >= 0; i--) {
-    const ev = events[i];
+    const ev = events[i] || {};
     const kind = ev.kind || ev.event_type || "";
     const payload = ev.payload || ev.message || ev;
     const role = String(payload?.role || payload?.sender || "").toLowerCase();
     let text = "";
+
     if (typeof payload === "string") {
       text = payload;
     } else if (payload?.content) {
@@ -259,24 +260,51 @@ export function extractGarfioRationale(events = []) {
     } else if (payload?.text) {
       text = String(payload.text);
     }
-    if (role === "assistant" || kind === "MessageEvent" || ev.source === "agent") {
-      if (text && (text.includes("###") || text.length > 40)) {
+
+    if (!text || text.length < 20) {
+      const actionMsg =
+        ev.action?.message ||
+        ev.action?.args?.message ||
+        (typeof ev.action === "string" ? ev.action : "");
+      if (actionMsg) {
+        text = String(actionMsg);
+      }
+    }
+
+    if (!text || text.length < 20) {
+      if (Array.isArray(ev.thought)) {
+        text = ev.thought.map((t) => t?.text || "").filter(Boolean).join("\n");
+      } else if (typeof ev.thought === "string") {
+        text = ev.thought;
+      }
+    }
+
+    const isAgent =
+      role === "assistant" ||
+      kind === "MessageEvent" ||
+      kind === "ActionEvent" ||
+      ev.source === "agent" ||
+      ev.tool_name === "finish" ||
+      ev.action?.kind === "FinishAction";
+
+    if (isAgent) {
+      if (text && (text.includes("###") || text.includes("##") || text.length > 40)) {
         lastAgentText = text;
         break;
       }
     }
   }
 
-  function extractSection(heading) {
-    const regex = new RegExp(`###\\s*${heading}[^\\n]*\\n([\\s\\S]*?)(?=(?:###|\\Z))`, "i");
+  function extractSection(headingPattern) {
+    const regex = new RegExp(`#{2,4}\\s*${headingPattern}[^\\n]*\\n([\\s\\S]*?)(?=(?:#{2,4}|$))`, "i");
     const match = lastAgentText.match(regex);
     return match ? match[1].trim() : "";
   }
 
-  const summary = extractSection("Resumen de Cambios");
-  const decisions = extractSection("Racional Técnico y Decisiones");
-  const antiPatternsAvoided = extractSection("Humo y Antipatrones Descartados");
-  const testStatus = extractSection("Estado de Tests");
+  const summary = extractSection("(?:Resumen(?: de Cambios)?)");
+  const decisions = extractSection("(?:Racional(?: T[eé]cnico)?(?: y Decisiones)?)");
+  const antiPatternsAvoided = extractSection("(?:Humo(?: y Antipatrones Descartados)?)");
+  const testStatus = extractSection("(?:Estado de Tests|Tests)");
 
   return {
     raw: lastAgentText,

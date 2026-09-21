@@ -25,7 +25,7 @@ export const JOBS_INTENT =
   /estado de los jobs|cola de (?:los )?jobs|c[oó]mo van los jobs|qu[eé] jobs hay|list[áa](?:me)? los jobs|^\s*jobs(?:\s+\S+)?\s*$/i;
 
 export const DIAGNOSE_INTENT =
-  /en qu[eé] qued[oó]|qu[eé] pas[oó]|c[oó]mo (?:va|est[áa]|qued[oó]|viene) (?:el )?(?:job|task|poll|obrero|misi[oó]n|garfio|manco)|revis[áa](?:me)? (?:el )?(?:job|obrero|openhands|poll|garfio)|fijate .{0,160}(?:job|oh_poll|\/jobs|garfio|[a-f0-9]{16})|error:\s*\S+|task [a-f0-9]{16,32}|qu[eé] (?:hizo|est[áa] haciendo|carajo hace|anda haciendo) (?:el )?(?:obrero|openhands|garfio|manco)/i;
+  /en qu[eé] qued[oó]|qu[eé] pas[oó]|c[oó]mo (?:va|est[áa]|qued[oó]|viene) (?:el )?(?:job|task|poll)|revis[áa](?:me)? (?:el )?(?:job|openhands|poll)|fijate .{0,160}(?:job|oh_poll|\/jobs|[a-f0-9]{16})|error:\s*\S+|task [a-f0-9]{16,32}/i;
 
 export function isAffirmative(text) {
   const t = String(text || "")
@@ -80,6 +80,30 @@ export function isGarfioLogIntent(text) {
   t = t.replace(/^[¿¡]+/g, "").trim();
   return /^(?:bit[aá]cora|historial|decisiones|racional|lecciones)(?: de)? garfio(?:\s+(\S+))?$/i.test(t) ||
          /^(?:qu[eé] decidi[oó]|qu[eé] descart[oó]|qu[eé] lecciones dej[oó]) garfio(?:\s+(\S+))?$/i.test(t);
+}
+
+export function isRepoStatusIntent(text) {
+  let t = String(text || "").trim();
+  t = t.replace(/^\/+/, "");
+  t = t.replace(/^murray[,:\s]+/i, "").trim();
+  t = t.replace(/[?.!¿¡]+$/g, "").trim();
+  t = t.replace(/^[¿¡]+/g, "").trim();
+  if (!t || t.length > 140) {
+    return false;
+  }
+  return /^(?:estado(?: (?:del )?repo)?|resumen(?: (?:del )?repo)?|c[oó]mo (?:venimos|va el repo)|qu[eé] est[áa] hecho|qu[eé] se hizo|qu[eé] hizo garfio(?:[\s,?.!¿¡].*)?|en qu[eé] est[áa] (?:el )?(?:trabajo|repo)|status repo|repo status|qu[eé] est[áa] hecho y qu[eé] hay para hacer|estado garfio)$/i.test(t);
+}
+
+export function isRoadmapIntent(text) {
+  let t = String(text || "").trim();
+  t = t.replace(/^\/+/, "");
+  t = t.replace(/^murray[,:\s]+/i, "").trim();
+  t = t.replace(/[?.!¿¡]+$/g, "").trim();
+  t = t.replace(/^[¿¡]+/g, "").trim();
+  if (!t || t.length > 140) {
+    return false;
+  }
+  return /^(?:roadmap|tickets|tareas(?: pendientes)?|qu[eé] hay para hacer|qu[eé] falta(?: por hacer)?|pr[oó]ximos tickets|siguiente ticket)$/i.test(t);
 }
 
 export function isManualIntent(text) {
@@ -358,6 +382,12 @@ export function classifyUserText(text, { hasSession = false } = {}) {
       trimmed.match(/^(?:bit[aá]cora|historial|decisiones|racional|lecciones)(?: de)? garfio(?:\s+(\S+))?$/i) ||
       trimmed.match(/^(?:qu[eé] decidi[oó]|qu[eé] descart[oó]|qu[eé] lecciones dej[oó]) garfio(?:\s+(\S+))?$/i);
     return { action: "garfio_log", slug: match?.[1] || "" };
+  }
+  if (isRepoStatusIntent(trimmed)) {
+    return { action: "repo_status" };
+  }
+  if (isRoadmapIntent(trimmed)) {
+    return { action: "roadmap" };
   }
   if (isTriageIntent(trimmed) && !refs.ref) {
     return { action: "inspect", jobId: "" };

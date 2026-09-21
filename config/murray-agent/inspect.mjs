@@ -61,14 +61,20 @@ export function stripConversationSecrets(conv) {
 }
 
 function hasStuckJob(snapshot) {
+  if (snapshot.resolvedJob && snapshot.resolvedJob.status === "done") {
+    return false;
+  }
   const rows = [
     snapshot.resolvedJob,
     ...(Array.isArray(snapshot.jobs) ? snapshot.jobs : []),
   ].filter(Boolean);
-  return rows.some(
+  const relevant = rows.filter((j) => j.type === "code" || j.type === "oh_poll");
+  if (relevant.length && relevant[0].status === "done") {
+    return false;
+  }
+  return relevant.some(
     (job) =>
-      (job.type === "code" || job.type === "oh_poll") &&
-      (job.status === "stuck" || job.status === "paused" || job.status === "failed")
+      job.status === "stuck" || job.status === "paused" || job.status === "failed"
   );
 }
 
@@ -77,16 +83,25 @@ function healBacked(snapshot) {
   if (boxes.length) {
     return true;
   }
+  const execStatus = String(snapshot.openhands?.conversation?.execution_status || "").toLowerCase();
+  const isFinished = execStatus === "finished" || execStatus === "done";
   const sand = String(snapshot.openhands?.conversation?.sandbox_status || "").toUpperCase();
-  if (sand === "ERROR" || sand === "MISSING") {
+  if (!isFinished && (sand === "ERROR" || sand === "MISSING")) {
     return true;
+  }
+  if (snapshot.resolvedJob && snapshot.resolvedJob.status === "done") {
+    return false;
   }
   const rows = [
     snapshot.resolvedJob,
     ...(Array.isArray(snapshot.jobs) ? snapshot.jobs : []),
   ].filter(Boolean);
+  const relevant = rows.filter((j) => j.type === "code" || j.type === "oh_poll");
+  if (relevant.length && relevant[0].status === "done") {
+    return false;
+  }
   return rows.some((job) =>
-    /sandbox_|start_error|timeout|oom|137/i.test(String(job.error || ""))
+    job.status !== "done" && /sandbox_|start_error|timeout|oom|137/i.test(String(job.error || ""))
   );
 }
 
