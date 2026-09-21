@@ -132,6 +132,23 @@ export function createMurrayAgentServer({
         return;
       }
 
+      if ((req.method === "POST" || req.method === "GET") && pathname === "/triage") {
+        const body = req.method === "POST" ? await parseJsonBody(req) : {};
+        const chatId = String(body.chat_id || body.chatId || url.searchParams.get("chat_id") || "anon");
+        const jobRef = String(body.job_id || body.job_ref || body.jobRef || url.searchParams.get("job_id") || url.searchParams.get("job_ref") || "");
+        let result;
+        if (typeof engine.handleTriage === "function") {
+          result = await engine.handleTriage({ chat_id: chatId, job_ref: jobRef });
+        } else if (typeof engine.handleChat === "function") {
+          result = await engine.handleChat({ chat_id: chatId, text: jobRef ? `/triage ${jobRef}` : "/triage" });
+        } else {
+          sendJson(res, 503, { error: "triage_unavailable" });
+          return;
+        }
+        sendJson(res, 200, result);
+        return;
+      }
+
       if (req.method === "POST" && pathname === "/workspace/hitl") {
         if (typeof engine.handleWorkspaceHitl !== "function") {
           sendJson(res, 503, { error: "coding_session_unconfigured" });

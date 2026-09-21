@@ -203,11 +203,15 @@ Seam: `createMurrayAgentServer({ engine })`, `createChatEngine({ ops, llm, codin
   - `200` con `reply` HTML
   - `403` `ops_approval_denied` si falta, está usado, venció (~15 min) o el kind no es ops
 - **`POST /workspace/hitl`**: `{ callback_data, chat_id }`
+  - Responde HTTP 200 en <50ms una vez asentada la orden en SQLite WAL (`jobs`), evitando timeouts 504 y Double Kicks por reintentos de webhook
   - Clone/code/delete/push approve → encola job, `needs_job=true` (el webhook no espera `git clone`, `rm`, `git push` ni OpenHands)
   - Pull/checkout también son jobs (pueden unshallow); no piden HITL
   - Reject no clona, no borra, no pushea ni llama OpenHands
   - `STUCK_RETRY|STOP|LOGS|CHG:<hex>`
-  - `403` si el token HITL no vale
+  - `403` si el token HITL no vale o ya fue consumido
+- **`POST /triage`** (y `GET /triage`): `{ chat_id?, job_id? }`
+  - Responde HTTP 200 en <50ms asentando job `inspect` en SQLite WAL (`jobs`), con `needs_job=true` y `job_id`
+  - Desacopla inspecciones profundas de Docker y LLM, eliminando timeouts HTTP 504 de Telegram
 - **`POST /triage/filter`**: `{ ids: string[] }` → `{ new_ids }` (orden de entrada, dedup). `ids` no-array → `400` `ids_required`.
 - **`POST /triage/mark-seen`**: `{ message_id, thread_id? }` upsert en `seen_emails`. `message_id` vacío → `400` `message_id_required`.
 - Gmail vía tool: solo `{ http, status, error, unread_count }`. Cero `messages`/`subject`.
