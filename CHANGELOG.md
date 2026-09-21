@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.25 — Habilitación de git config local en workspace y wrapper asíncrono
+
+- **Desbloqueo de `git config` local (`workspace.mjs`)**:
+  - Se eliminó `"config"` de `GIT_FORBIDDEN`. La lista prohibía erróneamente comandos requeridos internamente por Murray para la configuración de identidad (`user.name`, `user.email`) y refspecs (`remote.origin.fetch`).
+  - Se añadieron guardas específicas en `assertSafeGitArgs` contra flags que modifican configuración fuera del repo: `--global`, `--system`, `--file`, `--blob`.
+- **Manejo de Errores en `defaultGitRun` (`workspace.mjs`)**:
+  - Se convirtió `defaultGitRun` en `async function` para que los throws de validación previa al spawn retornen Promesas rechazadas. Esto garantiza que encadenamientos como `.catch(() => {})` atrapen excepciones sin interrumpir síncronamente el flujo de push/pull.
+- **Verificación en Vivo y Push de PR #18**:
+  - Se re-encoló el push pendiente de `hbauzan-semantic-firewall` (`feat/tk01-numerical-purity`). El push subió los dos commits (`f9dd1ee` y `a71e340`) al PR #18 en GitHub bajo la identidad de Murray Threepwood con Garfio como co-autor, y publicó el reporte técnico de Garfio como comentario.
+
 ## 0.1.24 — Corrección de Falso Positivo DELETE_INTENT y Extracción de Pytest
 
 - **Corrección de Regex en DELETE_INTENT (`intent.mjs`)**:

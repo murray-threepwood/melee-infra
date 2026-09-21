@@ -18,7 +18,6 @@ const GIT_FORBIDDEN = new Set([
   "rebase",
   "reset",
   "clean",
-  "config",
 ]);
 
 const GIT_FORCE = new Set(["--force", "--force-with-lease", "--force-if-includes", "-f"]);
@@ -102,6 +101,9 @@ export function assertSafeGitArgs(args, { allowPush = false } = {}) {
     }
     if (GIT_FORBIDDEN.has(token) || GIT_FORBIDDEN.has(bare) || GIT_FORBIDDEN.has(lower)) {
       deny("git_forbidden", `git ${token} está prohibido`);
+    }
+    if (lower === "--global" || lower === "--system" || lower === "--file" || lower === "--blob") {
+      deny("git_forbidden", `git flag ${token} está prohibido`);
     }
     if (lower === "push" || bare === "push") {
       if (!allowPush) {
@@ -242,7 +244,7 @@ export function assertInsideRoot(root, target) {
   return mapped;
 }
 
-function defaultGitRun(args, { cwd, env = {}, timeoutMs = 120000, allowPush = false } = {}) {
+async function defaultGitRun(args, { cwd, env = {}, timeoutMs = 120000, allowPush = false } = {}) {
   assertSafeGitArgs(args, { allowPush });
   return new Promise((resolve, reject) => {
     const child = spawn("git", args, {

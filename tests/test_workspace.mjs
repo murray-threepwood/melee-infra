@@ -123,6 +123,29 @@ test("git push --force y push a main siguen prohibidos aunque allowPush", () => 
   ]);
 });
 
+test("git config local está permitido pero --global/--system prohibidos", () => {
+  assert.deepEqual(
+    assertSafeGitArgs(["config", "user.name", "Murray Threepwood"]),
+    ["config", "user.name", "Murray Threepwood"]
+  );
+  assert.deepEqual(
+    assertSafeGitArgs(["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"]),
+    ["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"]
+  );
+  assert.throws(() => assertSafeGitArgs(["config", "--global", "user.name", "x"]), {
+    code: "git_forbidden",
+  });
+  assert.throws(() => assertSafeGitArgs(["config", "--system", "user.name", "x"]), {
+    code: "git_forbidden",
+  });
+  assert.throws(() => assertSafeGitArgs(["config", "--file", "/etc/gitconfig"]), {
+    code: "git_forbidden",
+  });
+  assert.throws(() => assertSafeGitArgs(["rebase", "main"]), {
+    code: "git_forbidden",
+  });
+});
+
 test("parseWorkspaceTarget jail y wipe", () => {
   assert.equal(parseWorkspaceTarget(".").wipe, true);
   assert.equal(parseWorkspaceTarget("todo el workspace").wipe, true);
