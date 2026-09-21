@@ -65,6 +65,24 @@ Fuente: `roadmap/archive/`. Banner HISTÓRICO en cada archivo.
   - [x] Tarea 10.2: Hook al inicio del job
   - [x] Tarea 10.3: Watcher 30 min
   - [x] Tarea 10.4: Tests y sync de docs
+- [x] Fase 11: Self-inspect + operator-inbox
+  - [x] Tarea 11.1: Inspect async + auto-ops allowlist
+  - [x] Tarea 11.2: operator-inbox append-only y notas de operador
+- [ ] Fase 12: Estabilización, Sandboxing y Orquestación Determinista
+  - [x] Tarea 1.1: Sanitización Universal Telegram HTML + parse_mode HTML + fallback HTTP 400
+  - [ ] Tarea 1.2: Desacoplamiento de Webhooks (ACK <50ms en /chat, /workspace/hitl, /triage)
+  - [ ] Tarea 1.3: Janitor Docker Fortalecido (TTL 30m)
+  - [ ] Tarea 1.4: Base de esquemas Zod en murray-agent
+  - [ ] Tarea 2.1: Git Bare Cache + Worktrees
+  - [ ] Tarea 2.2: GIT_ASKPASS efímero 0700
+  - [ ] Tarea 2.3: Unificación de Red Sandboxes (agent-net + host-gateway)
+  - [ ] Tarea 3.1: Auditor AST Anti-Test Hacking en Python
+  - [ ] Tarea 3.2: Sensor de Saturación OOM 137 y Alerta Telegram con Solución E2B
+  - [ ] Tarea 3.3: Seam Abstracto SandboxRunner
+  - [ ] Tarea 3.4: Esquemas Zod con uniones discriminadas
+  - [ ] Tarea 4.1: Modo Mal Manager con EventStream cada 60s
+  - [ ] Tarea 4.2: Simplificación n8n como Ingress Passthrough
+  - [ ] Tarea 4.3: Verificación Integral E2E
 
 ## Backlog (no ejecutar)
 

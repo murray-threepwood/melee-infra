@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.1.26 — Fase 12 (Tarea 1.1): Sanitización Universal Telegram HTML y Resiliencia HTTP 400
+
+- **Sanitización HTML y Exportación Centralizada (`telegram.mjs`)**:
+  - Se exportó la función `escapeTelegramHtml(value)` para codificar deterministamente `<`, `>`, `&`.
+  - Se corrigió la normalización de mensajes multilínea: cuando el texto llega como array de líneas, ahora se unen con saltos de línea (`\n`) en lugar de comas por coerción a string.
+  - **Mecanismo de Fallback ante HTTP 400 (`telegram.mjs`)**: Ante un eventual error de parseo de entidades de Telegram Bot API (HTTP 400 `can't parse entities`), el notificador reintenta automáticamente con el texto completamente sanitizado mediante `escapeTelegramHtml`, evitando que el bot enmudezca silenciosamente.
+- **Escape Seguro de Git Diff (`chat.mjs`)**:
+  - En el comando `/diff`, el bloque `<pre>` ahora sanitiza el diff con `escapeTelegramHtml` y utiliza `{ rawHtml: true }`, previniendo que diffs con caracteres como `<iostream>`, `<div>` o operadores relacionales provoquen rechazo de Telegram.
+- **Suite de Pruebas (`tests/test_telegram_html.mjs`)**:
+  - Se incorporaron 3 pruebas unitarias para certificar la sanitización de entidades, la unión de arrays multilínea y el circuito de recuperación ante HTTP 400.
+- **Hoja de Ruta Fase 12 (`roadmap/12_DETERMINISTIC_SANDBOXING.md`)**:
+  - Especificación exhaustiva de la Fase 12 y actualización de `roadmap/README.md` y `PROGRESS.md`.
+
 ## 0.1.25 — Habilitación de git config local en workspace y wrapper asíncrono
 
 - **Desbloqueo de `git config` local (`workspace.mjs`)**:

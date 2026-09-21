@@ -64,12 +64,13 @@ El socket Docker de `murray-agent` y `openhands` **sigue montado como hoy**. No 
 | [09_LITELLM_GATEWAY.md](./09_LITELLM_GATEWAY.md) | **Fase 9 (viva)** | Contenedor LiteLLM. DeepSeek primario, Gemini fallback. | `config/litellm/`, servicio `litellm` |
 | [10_SANDBOX_LIFECYCLE_TTL.md](./10_SANDBOX_LIFECYCLE_TTL.md) | **Fase 10 (viva)** | Hook al kick + watcher 30 min. Socket sin cambios. | `ops.mjs` allowlist `rm`, tests de reloj |
 | [11_SELF_INSPECT.md](./11_SELF_INSPECT.md) | **Fase 11 (viva)** | Inspect async + auto-ops allowlist + `operator-inbox/`. | `inspect.mjs`, `operator_notes`, binds :ro de CHANGELOG/CONTEXT/91 |
+| [12_DETERMINISTIC_SANDBOXING.md](./12_DETERMINISTIC_SANDBOXING.md) | **Fase 12 (viva)** | Estabilización, Worktrees, AST anti-hackeo, Sensor OOM/E2B, Zod. | `git-worktree.mjs`, `test_ast_auditor.py`, `resource-monitor.mjs` |
 | [90_BACKLOG_HARDENING.md](./90_BACKLOG_HARDENING.md) | **Backlog** | Paquete socket Docker (doble proxy + `VOLUMES=0` + `userns-remap`). **No ejecutar.** | — |
 | [91_PERMISSIVE_WINDOW.md](./91_PERMISSIVE_WINDOW.md) | **Inventario** | Relajos 2026-09-19 para que Garfio labure. **No es fase viva.** Un agente de cyber los revierte. | LiteLLM loopback, HITL bypass code/clone, telegram quiet |
 | [99_HUMAN_OPERATOR.md](./99_HUMAN_OPERATOR.md) | **Humano** | Clicks y keys. H13 Gemini + LiteLLM. H14 reimport triage. | `.env` |
 | [archive/](./archive/) | **Histórico** | Fases 1–6 y el dictamen del arquitecto. **No ejecutar.** | — |
 
-Dependencias: 08 y 09 y 10 requieren 07. 10 no requiere proxies.
+Dependencias: 08 y 09 y 10 requieren 07. 10 no requiere proxies. 12 requiere 11.
 
 ---
 
@@ -90,6 +91,7 @@ Implementá UNA sola fase viva, en este orden, y solo si la anterior está 100% 
 - roadmap/09_LITELLM_GATEWAY.md
 - roadmap/10_SANDBOX_LIFECYCLE_TTL.md
 - roadmap/11_SELF_INSPECT.md
+- roadmap/12_DETERMINISTIC_SANDBOXING.md
 
 Prohibido:
 - Re-ejecutar roadmap/archive/ (fases 1–6).

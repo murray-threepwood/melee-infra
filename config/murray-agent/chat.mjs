@@ -8,6 +8,7 @@ import { looksLikeHitlCopy, packHitl, packHitlHelp, packReply } from "./reply.mj
 import { redact } from "./redact.mjs";
 import { formatSeenToday, isSeenEmailsIntent } from "./seen-emails.mjs";
 import { formatGarfioLog } from "./garfio-store.mjs";
+import { escapeTelegramHtml } from "./telegram.mjs";
 
 const HEALTH_URLS = {
   n8n: process.env.N8N_HEALTH_URL || "http://n8n:5678/healthz",
@@ -748,7 +749,12 @@ export function createChatEngine({
         }
         try {
           const d = await workspace.diff(sess.slug);
-          return packReply(d.text ? `Diff en ${sess.slug}:\n<pre>${d.text.slice(0, 3500)}</pre>` : "Árbol limpio, sin diff.");
+          return packReply(
+            d.text
+              ? `Diff en ${sess.slug}:\n<pre>${escapeTelegramHtml(d.text.slice(0, 3500))}</pre>`
+              : "Árbol limpio, sin diff.",
+            { rawHtml: true }
+          );
         } catch (err) {
           return packReply(`No pude leer diff: ${err.message}`);
         }

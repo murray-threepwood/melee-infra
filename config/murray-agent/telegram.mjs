@@ -1,6 +1,13 @@
 import { isTelegramQuiet } from "./hitl-policy.mjs";
 import { chunkTelegram, redact } from "./redact.mjs";
 
+export function escapeTelegramHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
 export function createTelegramNotifier({
   token = process.env.TELEGRAM_BOT_TOKEN || "",
   chatId = process.env.TELEGRAM_CHAT_ID || "",
@@ -23,7 +30,8 @@ export function createTelegramNotifier({
       err.code = "telegram_chat_denied";
       throw err;
     }
-    const chunks = chunkTelegram(redact(String(text || "")), 3900);
+    const raw = Array.isArray(text) ? text.filter(Boolean).join("\n") : String(text || "");
+    const chunks = chunkTelegram(redact(raw), 3900);
     let last = { ok: true };
     for (const chunk of chunks) {
       const body = {
@@ -35,13 +43,31 @@ export function createTelegramNotifier({
       if (buttons && buttons.length) {
         body.reply_markup = { inline_keyboard: buttons };
       }
-      const res = await fetchImpl(`${apiBase}/bot${token}/sendMessage`, {
+      let res = await fetchImpl(`${apiBase}/bot${token}/sendMessage`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
         signal: AbortSignal.timeout(15000),
       });
       last = await res.json().catch(() => ({ ok: false }));
+      if ((!res.ok || last.ok === false) && res.status === 400) {
+        const fallbackBody = {
+          ...body,
+          text: escapeTelegramHtml(chunk),
+          parse_mode: "HTML",
+        };
+        const retryRes = await fetchImpl(`${apiBase}/bot${token}/sendMessage`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(fallbackBody),
+          signal: AbortSignal.timeout(15000),
+        });
+        const retryLast = await retryRes.json().catch(() => ({ ok: false }));
+        if (retryRes.ok && retryLast.ok !== false) {
+          last = retryLast;
+          continue;
+        }
+      }
       if (!res.ok || last.ok === false) {
         const err = new Error("telegram_send_failed");
         err.code = "telegram_send_failed";
