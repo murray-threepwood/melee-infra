@@ -45,7 +45,7 @@ export function parseSlash(text) {
     return { cmd: "jobs", jobId: rest[0] || "" };
   }
   if (name === "triage") {
-    return { cmd: "triage" };
+    return { cmd: "triage", jobId: rest[0] || "" };
   }
   if (name === "model") {
     return { cmd: "model", model: rest.join(" ").trim() };
@@ -661,7 +661,7 @@ export function createChatEngine({
         if (!coding || typeof coding.triage !== "function") {
           return packReply("Triage no está configurado.");
         }
-        return coding.triage({ chatId });
+        return coding.triage({ chatId, jobRef: slash.jobId });
       }
       if (slash.cmd === "model") {
         if (!session || typeof session.get !== "function") {
@@ -851,5 +851,13 @@ export function createChatEngine({
     return coding.handleHitl({ callback_data, chat_id });
   }
 
-  return { handleChat, executeOps, rejectOps, handleWorkspaceHitl, dispatchTool };
+  async function handleTriage({ chat_id, job_ref = "" } = {}) {
+    const chatId = String(chat_id || "anon");
+    if (!coding || typeof coding.triage !== "function") {
+      return packReply("Triage no está configurado.");
+    }
+    return coding.triage({ chatId, jobRef: String(job_ref || "") });
+  }
+
+  return { handleChat, executeOps, rejectOps, handleWorkspaceHitl, handleTriage, dispatchTool };
 }
