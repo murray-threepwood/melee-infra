@@ -68,7 +68,7 @@ Fuente: `roadmap/archive/`. Banner HISTÓRICO en cada archivo.
 - [x] Fase 11: Self-inspect + operator-inbox
   - [x] Tarea 11.1: Inspect async + auto-ops allowlist
   - [x] Tarea 11.2: operator-inbox append-only y notas de operador
-- [ ] Fase 12: Estabilización, Sandboxing y Orquestación Determinista
+- [x] Fase 12: Estabilización, Sandboxing y Orquestación Determinista
   - [x] Tarea 1.1: Sanitización Universal Telegram HTML + parse_mode HTML + fallback HTTP 400
   - [x] Tarea 1.2: Desacoplamiento de Webhooks (ACK <50ms en /chat, /workspace/hitl, /triage)
   - [x] Tarea 1.3: Janitor Docker Fortalecido (TTL 30m)
@@ -82,7 +82,7 @@ Fuente: `roadmap/archive/`. Banner HISTÓRICO en cada archivo.
   - [x] Tarea 3.4: Esquemas Zod con uniones discriminadas
   - [x] Tarea 4.1: Modo Mal Manager con EventStream cada 60s
   - [x] Tarea 4.2: Simplificación n8n como Ingress Passthrough
-  - [ ] Tarea 4.3: Verificación Integral E2E
+  - [x] Tarea 4.3: Verificación Integral E2E
 
 ## Backlog (no ejecutar)
 
