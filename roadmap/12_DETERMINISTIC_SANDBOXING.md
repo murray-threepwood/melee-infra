@@ -57,7 +57,7 @@ Corré verificación y dejá la suite en verde (DoD) antes de dar por concluida 
 - [x] **Tarea 2.3**: Unificación de red de sandboxes: asegurar inyección de `--network agent-net` y `--add-host=host.docker.internal:host-gateway` en `docker-compose.yml` y configuración de OpenHands.
 
 ### Fase 3: Determinismo, QA, Anti-Test Hacking y Sensor E2B
-- [ ] **Tarea 3.1**: Verificador estático AST anti-test hacking (`scripts/test_ast_auditor.py`) que audite archivos de prueba (`tests/**/test_*.py`) y aborte si se eliminan métodos o se reducen aserciones. Integrar la verificación en el hook de finalización de `coding.mjs`.
+- [x] **Tarea 3.1**: Verificador estático AST anti-test hacking (`scripts/test_ast_auditor.py`) que audite archivos de prueba (`tests/**/test_*.py`) y aborte si se eliminan métodos o se reducen aserciones. Integrar la verificación en el hook de finalización de `coding.mjs`.
 - [ ] **Tarea 3.2**: Monitor de saturación de recursos locales (`resource-monitor.mjs`): intercepta código de salida 137 (OOM) o RAM > 4.2 GB, asienta en SQLite / `operator-inbox`, y despacha aviso en Telegram con el racional de migración a MicroVMs remotas E2B.
 - [ ] **Tarea 3.3**: Seam abstracto `SandboxRunner` (`DockerLocalRunner` activo, `E2BRunner` desacoplado) en `sandbox-runner.mjs`.
 - [ ] **Tarea 3.4**: Esquemas Zod con uniones discriminadas en `schemas.mjs` y migración de `intent.mjs` erradicando regexes desancladas de borrado/mutación.

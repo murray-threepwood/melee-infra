@@ -1,3 +1,7 @@
+import { spawn } from "node:child_process";
+import fs from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseHitlBypass, shouldBypassHitl } from "./hitl-policy.mjs";
 import {
   classifyUserText,
@@ -20,10 +24,43 @@ import {
 } from "./openhands.mjs";
 import { packHitl, packHitlHelp, packReply } from "./reply.mjs";
 import { runInspectJob } from "./inspect.mjs";
-import { stuckKeyboard } from "./telegram.mjs";
+import { escapeTelegramHtml, stuckKeyboard } from "./telegram.mjs";
 import { parseHttpsGitUrl } from "./workspace.mjs";
 import { formatGarfioLog } from "./garfio-store.mjs";
 import { formatManual, handleGarfioBrain } from "./chat.mjs";
+
+export async function defaultAstAuditor(repoDir, { pythonScriptPath, spawnImpl = spawn } = {}) {
+  const script =
+    pythonScriptPath ||
+    path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../scripts/test_ast_auditor.py");
+  if (!fs.existsSync(script) || !repoDir || !fs.existsSync(repoDir)) {
+    return { passed: true, violations: [] };
+  }
+  return new Promise((resolve) => {
+    const child = spawnImpl("python3", [script, repoDir], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    child.stdout.on("data", (chunk) => {
+      stdout += chunk.toString("utf8");
+    });
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk.toString("utf8");
+    });
+    child.on("error", () => {
+      resolve({ passed: true, violations: [], error: "spawn_failed" });
+    });
+    child.on("close", (code) => {
+      try {
+        const parsed = JSON.parse(stdout);
+        resolve(parsed);
+      } catch {
+        resolve({ passed: code === 0, violations: [] });
+      }
+    });
+  });
+}
 
 export function parseWorkspaceCallback(data) {
   const raw = String(data || "").trim();
@@ -87,6 +124,7 @@ export function createCodingSession({
   llm,
   readDoc,
   operatorInbox,
+  astAuditor = defaultAstAuditor,
   hitlBypass = parseHitlBypass(process.env.MURRAY_HITL_BYPASS),
   now = () => Date.now(),
   pollDelayMs = 4000,
@@ -1177,6 +1215,37 @@ export function createCodingSession({
         if (!missionHasDeliverable({ changes, files, commitsAhead })) {
           await markStuck(job, "empty_finish", events);
           return;
+        }
+        if (payload.slug && workspace && typeof workspace.repoDir === "function" && typeof astAuditor === "function") {
+          let repoPath = "";
+          try {
+            repoPath = workspace.repoDir(payload.slug);
+          } catch {
+            repoPath = "";
+          }
+          if (repoPath) {
+            const audit = await astAuditor(repoPath).catch(() => ({ passed: true, violations: [] }));
+            if (audit && !audit.passed) {
+              await markStuck(job, "test_hacking_detected", events, {
+                violations: audit.violations || [],
+              });
+              const detailLines = (audit.violations || []).map(
+                (v) => `• <code>${escapeTelegramHtml(v.message || v.type)}</code>`
+              );
+              await notifyJob(
+                job,
+                [
+                  "🚨 <b>Auditoría Anti-Test Hacking:</b>",
+                  "Garfio intentó completar la misión degradando pruebas o reduciendo aserciones.",
+                  ...detailLines,
+                  "Misión bloqueada en estado <i>stuck</i>.",
+                ].join("\n"),
+                undefined,
+                { terminal: true }
+              );
+              return;
+            }
+          }
         }
         const rationale = extractGarfioRationale(events);
         if (garfioStore && typeof garfioStore.save === "function") {
