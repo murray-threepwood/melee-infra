@@ -1,0 +1,10 @@
+{
+  "name": "murray-agent",
+  "version": "1.0.0",
+  "description": "Murray Agent - Sistema de Automatización Ejecutiva",
+  "type": "module",
+  "private": true,
+  "dependencies": {
+    "zod": "^3.24.2"
+  }
+}

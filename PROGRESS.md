@@ -72,7 +72,7 @@ Fuente: `roadmap/archive/`. Banner HISTÓRICO en cada archivo.
   - [x] Tarea 1.1: Sanitización Universal Telegram HTML + parse_mode HTML + fallback HTTP 400
   - [x] Tarea 1.2: Desacoplamiento de Webhooks (ACK <50ms en /chat, /workspace/hitl, /triage)
   - [x] Tarea 1.3: Janitor Docker Fortalecido (TTL 30m)
-  - [ ] Tarea 1.4: Base de esquemas Zod en murray-agent
+  - [x] Tarea 1.4: Base de esquemas Zod en murray-agent
   - [ ] Tarea 2.1: Git Bare Cache + Worktrees
   - [ ] Tarea 2.2: GIT_ASKPASS efímero 0700
   - [ ] Tarea 2.3: Unificación de Red Sandboxes (agent-net + host-gateway)
