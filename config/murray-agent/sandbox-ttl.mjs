@@ -25,9 +25,43 @@ export function selectOrphans(rows) {
   return (rows || []).filter((row) => isOpenHandsSandboxName(row?.name));
 }
 
+export function isOrphanSandboxState(row) {
+  if (!row || !isOpenHandsSandboxName(row.name)) {
+    return false;
+  }
+  if (row.running === false) {
+    return true;
+  }
+  const s = String(row.status || "").trim().toLowerCase();
+  if (s.startsWith("exited") || s.startsWith("dead") || s.startsWith("created")) {
+    return true;
+  }
+  if (typeof row.exitCode === "number" && !Number.isNaN(row.exitCode)) {
+    return true;
+  }
+  return false;
+}
+
 export function selectExpiredSandboxes(rows, { now = Date.now(), ttlMs = TTL_MS } = {}) {
   const cutoff = Number(now) - Number(ttlMs);
   return selectOrphans(rows).filter((row) => Number(row.createdAt || 0) <= cutoff);
+}
+
+export function selectPurgeableSandboxes(rows, { now = Date.now(), ttlMs = TTL_MS } = {}) {
+  const cutoff = Number(now) - Number(ttlMs);
+  return selectOrphans(rows).filter((row) => {
+    if (isOrphanSandboxState(row)) {
+      return true;
+    }
+    const created = Number(row.createdAt);
+    if (Number.isFinite(created) && created > 0 && created <= cutoff) {
+      return true;
+    }
+    if (created === 0) {
+      return true;
+    }
+    return false;
+  });
 }
 
 export function createSandboxJanitor({
@@ -79,8 +113,8 @@ export function createSandboxJanitor({
       return { skipped: "code_flight", removed: [] };
     }
     const rows = await listFn();
-    const expired = selectExpiredSandboxes(rows, { now: now(), ttlMs });
-    const ids = expired.map((row) => row.id).filter(Boolean);
+    const targets = selectPurgeableSandboxes(rows, { now: now(), ttlMs });
+    const ids = targets.map((row) => row.id).filter(Boolean);
     if (!ids.length) {
       return { removed: [] };
     }

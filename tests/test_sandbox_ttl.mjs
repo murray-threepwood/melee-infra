@@ -10,8 +10,10 @@ import {
   TTL_MS,
   createSandboxJanitor,
   isCodeFlight,
+  isOrphanSandboxState,
   selectExpiredSandboxes,
   selectOrphans,
+  selectPurgeableSandboxes,
 } from "../config/murray-agent/sandbox-ttl.mjs";
 
 const NOW = Date.parse("2026-09-18T21:00:00.000Z");
@@ -175,4 +177,45 @@ test("tick: vuelo no purge; 31 min sí; 10 min no", async () => {
   });
   await idle.tick();
   assert.deepEqual(purged[0], ["aaa111"]);
+});
+
+test("isOrphanSandboxState detecta estados de salida, muerte y creación huérfana", () => {
+  assert.equal(isOrphanSandboxState({ name: "oh-agent-server-a", running: false }), true);
+  assert.equal(isOrphanSandboxState({ name: "oh-agent-server-b", status: "Exited (137)" }), true);
+  assert.equal(isOrphanSandboxState({ name: "oh-agent-server-c", status: "Dead" }), true);
+  assert.equal(isOrphanSandboxState({ name: "oh-agent-server-d", status: "Created" }), true);
+  assert.equal(isOrphanSandboxState({ name: "oh-agent-server-e", exitCode: 1 }), true);
+  assert.equal(isOrphanSandboxState({ name: "oh-agent-server-f", running: true, status: "Up 5 minutes" }), false);
+  assert.equal(isOrphanSandboxState({ name: "murray-n8n", running: false, status: "Exited (0)" }), false);
+  assert.equal(isOrphanSandboxState(null), false);
+});
+
+test("selectPurgeableSandboxes purga por TTL (>30m) y por estados huérfanos (<30m)", () => {
+  const rows = [
+    { id: "old1", name: "oh-agent-server-old", createdAt: NOW - 31 * 60 * 1000, running: true },
+    { id: "dead1", name: "oh-agent-server-dead", createdAt: NOW - 5 * 60 * 1000, running: false, status: "Exited (137)" },
+    { id: "alive1", name: "oh-agent-server-alive", createdAt: NOW - 5 * 60 * 1000, running: true, status: "Up 5 minutes" },
+    { id: "non_oh", name: "murray-agent", createdAt: NOW - 40 * 60 * 1000, running: false },
+  ];
+  const purgeable = selectPurgeableSandboxes(rows, { now: NOW, ttlMs: TTL_MS });
+  assert.deepEqual(purgeable.map((r) => r.id), ["old1", "dead1"]);
+});
+
+test("tick purga sandboxes huérfanos incluso con <30m si están caídos", async () => {
+  const rows = [
+    { id: "dead1", name: "oh-agent-server-dead", createdAt: NOW - 5 * 60 * 1000, running: false, status: "Exited (137)" },
+    { id: "alive1", name: "oh-agent-server-alive", createdAt: NOW - 5 * 60 * 1000, running: true },
+  ];
+  const purged = [];
+  const janitor = createSandboxJanitor({
+    store: { running: () => [] },
+    now: () => NOW,
+    list: async () => rows,
+    purge: async (ids) => {
+      purged.push(ids);
+      return { removed: ids };
+    },
+  });
+  await janitor.tick();
+  assert.deepEqual(purged, [["dead1"]]);
 });

@@ -48,7 +48,7 @@ Corré verificación y dejá la suite en verde (DoD) antes de dar por concluida 
 ### Fase 1: Estabilización Operativa Inmediata
 - [x] **Tarea 1.1**: Sanitización Universal Telegram HTML. Implementar `escapeTelegramHtml(text)` y garantizar `parse_mode: 'HTML'` en `config/murray-agent/telegram.mjs` y en todas las emisiones de `chat.mjs` y `coding.mjs`. Tests unitarios dedicados en `tests/test_telegram_html.mjs`.
 - [x] **Tarea 1.2**: Desacoplamiento de Webhooks. Garantizar que los endpoints de entrada (`/chat`, `/workspace/hitl`, `/triage`) en `server.mjs` emitan HTTP `200 OK` en <50ms tras asentar en SQLite WAL, eliminando timeouts 504 de Telegram. Tests unitarios en `tests/test_webhook_decoupling.mjs`.
-- [ ] **Tarea 1.3**: Janitor de Docker Fortalecido. Configurar en `sandbox-ttl.mjs` inspección cada 300s sobre `/var/run/docker.sock` con purga forzada de contenedores `oh-agent-server-*` con TTL > 30 min o estados huérfanos.
+- [x] **Tarea 1.3**: Janitor de Docker Fortalecido. Configurar en `sandbox-ttl.mjs` inspección cada 300s sobre `/var/run/docker.sock` con purga forzada de contenedores `oh-agent-server-*` con TTL > 30 min o estados huérfanos.
 - [ ] **Tarea 1.4**: Inicialización de `package.json` con `zod` en `config/murray-agent` y actualización del `Dockerfile` (`RUN npm install --omit=dev`).
 
 ### Fase 2: Modernización Git y Worktrees para Repos de Trabajo
