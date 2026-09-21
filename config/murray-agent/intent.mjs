@@ -8,7 +8,7 @@ export const STACK_TALK =
   /\b(n8n|postgres|cloudflared|openhands|compose|webhook|gmail|stack|contenedor|murray-agent)\b/i;
 
 export const DELETE_INTENT =
-  /borr[áa]|elimin[áa]|vaciar (el )?workspace|limpi[áa] (el )?workspace|\brm\b|delete (el )?(repo|workspace)/i;
+  /^(?:por favor\s+)?(?:borr[áa]r?|elimin[áa]r?|delete|\brm\b)(?:\s+(?:el\s+)?(?:workspace|repo|directorio|carpeta|archivo))?(?:\s+([A-Za-z0-9._/-]+|\.))?\s*$|^(?:vaciar|limpi[áa]r?)\s+(?:el\s+)?workspace\b|borr[áa]r?\s+todo(?:\s+el\s+workspace)?\b|\bdelete\s+(?:el\s+)?(?:repo|workspace)\b/i;
 
 export const PUSH_INTENT =
   /(?:^|\n)\s*(?:git )?push\b|pushe[áa]|\bhac[ée](?:r)? push\b|\bsub[íi] (?:el commit|los cambios|la rama)/i;
@@ -255,7 +255,7 @@ export function extractDeletePath(text) {
     return ".";
   }
   const match = t.match(
-    /(?:borr[áa]e?|elimin[áa]e?|delete|rm(?:\s+-rf)?)\s+(?:el |la |los |las )?(?:repo |directorio |carpeta |archivo )?(.*)$/i
+    /^(?:por favor\s+)?(?:borr[áa]r?|elimin[áa]r?|delete|rm(?:\s+-rf)?)\s+(?:el |la |los |las )?(?:repo |directorio |carpeta |archivo )?([A-Za-z0-9._/-]+|\.)\s*$/i
   );
   if (!match) {
     return "";
@@ -291,6 +291,10 @@ function lastRunnerOnLine(line) {
 
 export function extractTestCommand(text) {
   const t = String(text || "");
+  const backticked = t.match(/`([^`]+)`/);
+  if (backticked && /(?:pytest|npm test|pnpm test|yarn test|bun test|cargo test|go test|make test)/i.test(backticked[1])) {
+    return backticked[1].trim();
+  }
   const labeled = t.match(
     /(?:^|\n)\s*(?:[-*]\s*)?(?:comando(?:\s+de\s+test)?|test[_ ]command|tests?)\s*[:\-]\s*(.+)/i
   );
@@ -302,6 +306,12 @@ export function extractTestCommand(text) {
   );
   if (runPhrase && TEST_RUNNER.test(runPhrase[1])) {
     return lastRunnerOnLine(runPhrase[1].split(/\n/)[0]);
+  }
+  const pytestMatch = t.match(
+    /\b((?:uv run\s+)?pytest(?:\s+(?:-[a-zA-Z0-9_-]+|--[a-zA-Z0-9_-]+(?:=\S+)?|"[^"]+"|\x27[^\x27]+\x27|\S+\.py(?:::[a-zA-Z0-9_]+)?|\S+\/|\.\/\S+))*)/i
+  );
+  if (pytestMatch && pytestMatch[1].trim() !== "pytest") {
+    return pytestMatch[1].trim();
   }
   const embedded = t.match(
     /((?:cd\s+\S+\s*&&\s*)?(?:uv run pytest|npm test|pnpm test|yarn test|bun test|cargo test|go test|make test)[^\n]*)/i

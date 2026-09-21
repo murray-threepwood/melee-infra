@@ -417,9 +417,7 @@ export function createCodingSession({
     const instruction = (
       userIsShort
         ? sess.lastMission || lastAssistant || text
-        : extractTestCommand(text)
-          ? text
-          : sess.lastMission || lastAssistant || text
+        : text
     ).trim();
     if (!instruction || instruction.length < 8) {
       return null;

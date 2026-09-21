@@ -159,6 +159,24 @@ test("extractTestCommand: Comando: explícito; no dispara por mencionar pytest",
   assert.equal(extractTestCommand("mejorá el README y corré npm test"), "npm test");
   assert.equal(extractTestCommand("¿pytest está en el repo?"), "");
   assert.equal(extractTestCommand("agregá un healthcheck"), "");
+  assert.equal(
+    extractTestCommand("Corregí esos puntos, asegurate de que pytest backend/tests/test_numerical_purity.py dé verde posta"),
+    "pytest backend/tests/test_numerical_purity.py"
+  );
+  assert.equal(
+    extractTestCommand("probá con `pytest backend/tests/test_numerical_purity.py`"),
+    "pytest backend/tests/test_numerical_purity.py"
+  );
+});
+
+test("classify: instrucciones de código con palabras eliminá o borraba no disparan borrado de workspace", () => {
+  const codeFeedback = `Garfio: en el PR actual el revisor nos pidió lo siguiente:
+Eliminá _rag_context_similarity e import inline en chat.py.
+Comentaste que el clamping borraba micro-gaps. Eso es falso.
+Corregí esos 4 puntos, asegurate de que pytest backend/tests/test_numerical_purity.py dé verde posta.`;
+  const res = classifyUserText(codeFeedback, { hasSession: true });
+  assert.equal(res.action, "maybe_code_mission");
+  assert.notEqual(res.action, "clarify_delete_path");
 });
 
 test("looksLikeHitlCopy detecta prosa de Aprobar sin flag", () => {

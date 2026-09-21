@@ -1,6 +1,15 @@
 # Changelog
 
-## 0.1.23 — Apertura Automática de Pull Requests en GitHub + Flujo 1-Tap
+## 0.1.24 — Corrección de Falso Positivo DELETE_INTENT y Extracción de Pytest
+
+- **Corrección de Regex en DELETE_INTENT (`intent.mjs`)**:
+  - Se ancló estrictamente `DELETE_INTENT` a comandos destructivos dirigidos al workspace (`borrá todo el workspace`, `eliminá <path>`).
+  - Previene que mensajes de refactor o code reviews con palabras como *«eliminá la función»* o *«borraba micro-gaps»* sean secuestrados por el flujo de borrado de disco con la respuesta errónea *«¿Qué borro bajo ./workspace?»*.
+- **Extracción Resiliente de Tests (`intent.mjs` & `coding.mjs`)**:
+  - Soporte para ejecutores bare `pytest <path>` sin prefijo obligatorio `uv run`.
+  - Soporte para comandos delimitados por backticks (`` `pytest ...` ``).
+  - Filtrado de sufijos conversacionales en español (*«... dé verde posta, y volvé a subir»*).
+  - `recoverCodeHitl` ahora preserva el texto de la instrucción del usuario en lugar de sustituirla por la misión previa cuando el mensaje no es una afirmación corta.
 
 - **Apertura Automática de Pull Requests (Opción B)**:
   - Implementado `createOrGetPullRequest` en `workspace.mjs`: integración con GitHub REST API v3 (`POST /repos/:owner/:repo/pulls`).
