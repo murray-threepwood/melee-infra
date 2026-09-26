@@ -931,6 +931,8 @@ export function createCodingSession({
         operatorInbox,
         now,
         notifyJob,
+        approvals,
+        requireHitl: !shouldBypassHitl("ops", hitlBypass),
         retryStuck: (snapshot) => retryStuckFromSnapshot(job.chatId, snapshot),
       });
     } catch (err) {

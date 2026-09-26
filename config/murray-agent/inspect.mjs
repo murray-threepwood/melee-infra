@@ -354,8 +354,9 @@ export function parseInspectAnalysis(raw, snapshot) {
   };
 }
 
-export function planInspectActions(analysis, snapshot) {
+export function planInspectActions(analysis, snapshot, { requireHitl = true } = {}) {
   const run = [];
+  const hitl = [];
   const tasks = [];
   const skipped = [];
   const seen = new Set();
@@ -399,7 +400,11 @@ export function planInspectActions(analysis, snapshot) {
         continue;
       }
       seen.add("heal_openhands");
-      run.push({ type, reason: action.reason || "" });
+      if (requireHitl) {
+        hitl.push({ type, reason: action.reason || "" });
+      } else {
+        run.push({ type, reason: action.reason || "" });
+      }
       continue;
     }
     if (type === "restart" || type === "recreate") {
@@ -425,7 +430,11 @@ export function planInspectActions(analysis, snapshot) {
         continue;
       }
       seen.add("service_ops");
-      run.push({ type, service, reason: action.reason || "" });
+      if (requireHitl) {
+        hitl.push({ type, service, reason: action.reason || "" });
+      } else {
+        run.push({ type, service, reason: action.reason || "" });
+      }
       continue;
     }
     tasks.push({
@@ -439,7 +448,8 @@ export function planInspectActions(analysis, snapshot) {
   }
   const order = { heal_openhands: 0, restart: 1, recreate: 1, retry_stuck: 2 };
   run.sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9));
-  return { run, tasks, skipped };
+  hitl.sort((a, b) => (order[a.type] ?? 9) - (order[b.type] ?? 9));
+  return { run, hitl, tasks, skipped };
 }
 
 export async function analyzeInspectSnapshot(snapshot, { llm, model } = {}) {
@@ -514,13 +524,20 @@ export function formatInspectReply({ analysis, plan, results, inboxPath }) {
     }
     return `${row.type} ${row.ok ? "ok" : row.error || "fail"}`;
   });
-  const tasks = (plan.tasks || []).map((task) => `• ${task.title} (${task.why})`);
+  const pendingHitl = (plan?.hitl || []).map((row) => {
+    if (row.service) {
+      return `${row.type} ${row.service}${row.reason ? ` (${row.reason})` : ""}`;
+    }
+    return `${row.type}${row.reason ? ` (${row.reason})` : ""}`;
+  });
+  const tasks = (plan?.tasks || []).map((task) => `• ${task.title} (${task.why})`);
   const gaps = [...new Set((results || []).map((row) => webhookGapWarning(row.service || "")).filter(Boolean))];
   return [
     `🔍 ${analysis.summary}`,
     analysis.what_happened ? `<b>Qué pasó:</b> ${analysis.what_happened}` : "",
     analysis.what_did_not ? `<b>Qué no:</b> ${analysis.what_did_not}` : "",
     ran.length ? `<b>Auto-fix:</b> ${ran.join("; ")}` : "<b>Auto-fix:</b> nada en allowlist.",
+    pendingHitl.length ? `<b>Requiere aprobación HITL:</b>\n${pendingHitl.map((p) => `• ${p}`).join("\n")}` : "",
     tasks.length ? `<b>Tareas humanas:</b>\n${tasks.join("\n")}` : "",
     gaps.join("\n"),
     inboxPath ? `Notas en <code>${inboxPath}</code> (Cursor, no las commiteo yo).` : "",
@@ -541,6 +558,8 @@ export async function runInspectJob(job, {
   now = () => Date.now(),
   notifyJob,
   retryStuck,
+  approvals,
+  requireHitl = true,
 } = {}) {
   const snapshot = await collectSnapshot({
     chatId: job.chatId,
@@ -559,7 +578,7 @@ export async function runInspectJob(job, {
     llm,
     model: sess.active_model,
   });
-  const plan = planInspectActions(analysis, snapshot);
+  const plan = planInspectActions(analysis, snapshot, { requireHitl });
   const results = await executeInspectPlan(plan, {
     ops,
     retryStuck: typeof retryStuck === "function" ? () => retryStuck(snapshot) : undefined,
@@ -575,7 +594,7 @@ export async function runInspectJob(job, {
       body: [
         analysis.what_happened,
         analysis.what_did_not,
-        JSON.stringify({ tasks: plan.tasks, run: plan.run, results }, null, 2),
+        JSON.stringify({ tasks: plan.tasks, run: plan.run, hitl: plan.hitl, results }, null, 2),
       ]
         .filter(Boolean)
         .join("\n\n"),
@@ -586,8 +605,24 @@ export async function runInspectJob(job, {
   if (jobs && typeof jobs.update === "function") {
     jobs.update(job.id, { status: "done", error: "" });
   }
-  if (typeof notifyJob === "function") {
-    await notifyJob(job, reply, undefined, { terminal: true });
+  let buttons = undefined;
+  if (approvals && typeof approvals.issue === "function" && Array.isArray(plan.hitl) && plan.hitl.length > 0) {
+    buttons = [];
+    for (const act of plan.hitl) {
+      const approvalId = approvals.issue({
+        kind: "ops",
+        action: act.type,
+        service: act.service || undefined,
+      });
+      const label = act.service ? `${act.type} ${act.service}` : act.type;
+      buttons.push([
+        { text: `⚙️ Aprobar ${label}`, callback_data: `APPROVE_OPS:${approvalId}` },
+        { text: "❌ Rechazar", callback_data: `REJECT_OPS:${approvalId}` },
+      ]);
+    }
   }
-  return { snapshot, analysis, plan, results, reply, inboxPath };
+  if (typeof notifyJob === "function") {
+    await notifyJob(job, reply, buttons, { terminal: true });
+  }
+  return { snapshot, analysis, plan, results, reply, inboxPath, buttons };
 }

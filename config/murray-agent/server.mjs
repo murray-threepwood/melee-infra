@@ -16,7 +16,7 @@ import { createOpenHandsClient } from "./openhands.mjs";
 import { createOps } from "./ops.mjs";
 import { createSeenEmailStore } from "./seen-emails.mjs";
 import { createSessionStore } from "./session.mjs";
-import { createTelegramNotifier } from "./telegram.mjs";
+import { createTelegramNotifier, escapeTelegramHtml } from "./telegram.mjs";
 import { createSandboxJanitor } from "./sandbox-ttl.mjs";
 import { createWorkspace } from "./workspace.mjs";
 import { createGarfioStore } from "./garfio-store.mjs";
@@ -181,7 +181,28 @@ export function createEngineFromEnv() {
   const personaText = fs.readFileSync(personaPath, "utf8");
   const db = openMurrayDb();
   const ops = createOps();
-  const llm = createLlm();
+  const telegram = createTelegramNotifier();
+  const llm = createLlm({
+    onFallback: async ({ from, to, reason, chatId }) => {
+      try {
+        await telegram.send({
+          chat_id: chatId || undefined,
+          text: [
+            "🚨 <b>ALERTA DE SISTEMA: FALLBACK DE MODELO ACTIVADO</b> 🚨",
+            "",
+            `• <b>Origen:</b> <code>${escapeTelegramHtml(from)}</code>`,
+            `• <b>Destino (fallback):</b> <code>${escapeTelegramHtml(to)}</code>`,
+            `• <b>Diagnóstico:</b> <i>${escapeTelegramHtml(reason || "Fallo en modelo primario")}</i>`,
+            "",
+            "¡Atención CEO! El cluster cayó al modelo de respaldo para mantener la continuidad operativa.",
+          ].join("\n"),
+          terminal: true,
+        });
+      } catch (err) {
+        console.error("[murray-agent] error notifying fallback via telegram:", err?.message || err);
+      }
+    },
+  });
   const memory = createMemory({ db });
   const approvals = createApprovalStore({ db });
   const session = createSessionStore({ db });
@@ -189,7 +210,6 @@ export function createEngineFromEnv() {
   const workspace = createWorkspace();
   const jobs = createJobStore({ db });
   const openhands = createOpenHandsClient();
-  const telegram = createTelegramNotifier();
   const janitor = createSandboxJanitor({ ops, store: jobs });
   const garfio = createGarfioStore({ db });
   const operatorInbox = createOperatorInbox({ db });

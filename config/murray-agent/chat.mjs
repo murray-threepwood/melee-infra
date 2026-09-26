@@ -140,8 +140,8 @@ export function formatManual() {
     "• /triage (o «qué pasó» / «en qué andas murray»): inspect async (dump + modelo + auto-fix allowlist).",
     "",
     "2. Control de Cerebros (LLMs)",
-    "• /model [modelo]: Ver o cambiar el motor de Murray (chat). Óptimo: deepseek-chat (más barato y exacto).",
-    "• /garfio model [modelo] (o /cerebro [modelo]): Trasplante clandestino de cerebro a Garfio. Óptimo: deepseek-chat (mejor para codear).",
+    "• /model [modelo]: Ver o cambiar el motor de Murray (chat). Primario: deepseek-reasoner (razonamiento profundo, fallback inmediato a deepseek-chat).",
+    "• /garfio model [modelo] (o /cerebro [modelo]): Trasplante clandestino de cerebro a Garfio. Primario: deepseek-reasoner (fallback a deepseek-chat).",
     `• Modelos válidos: ${ALLOWED_GARFIO_MODELS.join(", ")}.`,
     "",
     "3. Espacio de Trabajo & Git (./workspace)",
@@ -533,6 +533,7 @@ export function createChatEngine({
         messages,
         tools: TOOL_DEFS,
         model: resolveChatModel(activeModel) || DEFAULT_CHAT_MODEL,
+        chatId,
       });
       if (out.tool_calls && out.tool_calls.length) {
         messages.push({
@@ -600,9 +601,12 @@ export function createChatEngine({
         memory.append(chatId, "assistant", refused.reply);
         return refused;
       }
-      const packed = packReply(
-        out.content || "No tengo nada útil. Peleás como un granjero de vacas."
-      );
+      let replyText =
+        out.content || "No tengo nada útil. Peleás como un granjero de vacas.";
+      if (out.fallback) {
+        replyText = `⚠️ <i>[Fallback activo: servido por ${escapeTelegramHtml(out.fallback.to)} debido a: ${escapeTelegramHtml(out.fallback.reason)}]</i>\n\n${replyText}`;
+      }
+      const packed = packReply(replyText);
       memory.append(chatId, "user", text);
       memory.append(chatId, "assistant", packed.reply);
       return packed;
