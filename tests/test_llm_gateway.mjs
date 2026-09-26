@@ -137,12 +137,14 @@ test("carta LiteLLM: 3.8 + lite, sin 2.5-flash, fallback en cadena", () => {
   assert.doesNotMatch(yaml, /gemini\/gemini-2\.5-flash[^-]/);
   assert.match(
     yaml,
-    /murray-chat: \[deepseek-chat, gemini-3\.8-flash, gemini-2\.5-flash-lite\]/
+    /murray-chat: \[deepseek-flash, deepseek-chat, gemini-3\.8-flash, gemini-2\.5-flash-lite\]/
   );
   assert.match(
     yaml,
-    /murray-worker: \[deepseek-chat, gemini-3\.8-flash, gemini-2\.5-flash-lite\]/
+    /murray-worker: \[deepseek-flash, deepseek-chat, gemini-3\.8-flash, gemini-2\.5-flash-lite\]/
   );
+  assert.ok(ALLOWED_MODELS.includes("deepseek-v4-pro"));
+  assert.ok(ALLOWED_MODELS.includes("deepseek-flash"));
   assert.ok(ALLOWED_MODELS.includes("deepseek-reasoner"));
   assert.ok(ALLOWED_MODELS.includes("deepseek-chat"));
   assert.ok(ALLOWED_MODELS.includes("gemini-3.8-flash"));
@@ -155,27 +157,27 @@ test("complete() detecta router fallback de LiteLLM y dispara onFallback inmedia
   const llm = createLlm({
     apiKey: "sk-test-master-not-a-placeholder",
     baseUrl: "http://litellm:4000",
-    model: "deepseek-reasoner",
+    model: "deepseek-v4-pro",
     onFallback: async (info) => {
       fallbackEvents.push(info);
     },
     fetchImpl: async () => ({
       ok: true,
       json: async () => ({
-        model: "deepseek-chat",
-        choices: [{ message: { content: "respuesta de respaldo", tool_calls: [] } }],
+        model: "deepseek-flash",
+        choices: [{ message: { content: "respuesta de respaldo flash", tool_calls: [] } }],
       }),
     }),
   });
 
   const out = await llm.complete({ messages: [{ role: "user", content: "test" }], chatId: "12345" });
-  assert.equal(out.content, "respuesta de respaldo");
+  assert.equal(out.content, "respuesta de respaldo flash");
   assert.ok(out.fallback);
-  assert.equal(out.fallback.from, "deepseek-reasoner");
-  assert.equal(out.fallback.to, "deepseek-chat");
+  assert.equal(out.fallback.from, "deepseek-v4-pro");
+  assert.equal(out.fallback.to, "deepseek-flash");
   assert.equal(out.fallback.chatId, "12345");
   assert.equal(fallbackEvents.length, 1);
-  assert.equal(fallbackEvents[0].to, "deepseek-chat");
+  assert.equal(fallbackEvents[0].to, "deepseek-flash");
 });
 
 test("complete() ante falla HTTP de modelo primario cae a fallbackModel y avisa en seguida", async () => {

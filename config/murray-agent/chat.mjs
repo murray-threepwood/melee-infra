@@ -123,8 +123,10 @@ async function formatHealth(fetchImpl) {
 
 export const ALLOWED_GARFIO_MODELS = [
   "garfio-worker",
-  "deepseek-chat",
+  "deepseek-v4-pro",
+  "deepseek-flash",
   "deepseek-reasoner",
+  "deepseek-chat",
   "gemini-3.8-flash",
   "gemini-2.5-flash-lite",
 ];
@@ -140,8 +142,8 @@ export function formatManual() {
     "• /triage (o «qué pasó» / «en qué andas murray»): inspect async (dump + modelo + auto-fix allowlist).",
     "",
     "2. Control de Cerebros (LLMs)",
-    "• /model [modelo]: Ver o cambiar el motor de Murray (chat). Primario: deepseek-reasoner (razonamiento profundo, fallback inmediato a deepseek-chat).",
-    "• /garfio model [modelo] (o /cerebro [modelo]): Trasplante clandestino de cerebro a Garfio. Primario: deepseek-reasoner (fallback a deepseek-chat).",
+    "• /model [modelo]: Ver o cambiar el motor de Murray (chat). Primario: deepseek-v4-pro (1M tokens, razonamiento supremo, fallback inmediato a deepseek-flash).",
+    "• /garfio model [modelo] (o /cerebro [modelo]): Trasplante clandestino de cerebro a Garfio. Primario: deepseek-v4-pro (fallback a deepseek-flash).",
     `• Modelos válidos: ${ALLOWED_GARFIO_MODELS.join(", ")}.`,
     "",
     "3. Espacio de Trabajo & Git (./workspace)",
