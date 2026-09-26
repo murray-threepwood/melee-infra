@@ -17,20 +17,20 @@ model_list:
       api_key: os.environ/GEMINI_API_KEY
   - model_name: murray-worker
     litellm_params:
-      model: deepseek/deepseek-chat
+      model: deepseek/deepseek-reasoner
       api_key: os.environ/DEEPSEEK_API_KEY
   - model_name: garfio-worker
     litellm_params:
-      model: deepseek/deepseek-chat
+      model: deepseek/deepseek-reasoner
       api_key: os.environ/DEEPSEEK_API_KEY
   - model_name: murray-chat
     litellm_params:
-      model: deepseek/deepseek-chat
+      model: deepseek/deepseek-reasoner
       api_key: os.environ/DEEPSEEK_API_KEY
   # OpenHands SDK manda a veces el prefijo openai/ entero como model name.
   - model_name: openai/garfio-worker
     litellm_params:
-      model: deepseek/deepseek-chat
+      model: deepseek/deepseek-reasoner
       api_key: os.environ/DEEPSEEK_API_KEY
       drop_params: true
   - model_name: openai/deepseek-chat
@@ -38,16 +38,20 @@ model_list:
       model: deepseek/deepseek-chat
       api_key: os.environ/DEEPSEEK_API_KEY
       drop_params: true
+  - model_name: openai/deepseek-reasoner
+    litellm_params:
+      model: deepseek/deepseek-reasoner
+      api_key: os.environ/DEEPSEEK_API_KEY
+      drop_params: true
 
 router_settings:
   fallbacks:
-    - garfio-worker: [gemini-3.8-flash, gemini-2.5-flash-lite]
-    - openai/garfio-worker: [gemini-3.8-flash, gemini-2.5-flash-lite]
-    - murray-worker: [gemini-3.8-flash, gemini-2.5-flash-lite]
-    - murray-chat: [gemini-3.8-flash, gemini-2.5-flash-lite]
+    - garfio-worker: [deepseek-chat, gemini-3.8-flash, gemini-2.5-flash-lite]
+    - openai/garfio-worker: [deepseek-chat, gemini-3.8-flash, gemini-2.5-flash-lite]
+    - murray-worker: [deepseek-chat, gemini-3.8-flash, gemini-2.5-flash-lite]
+    - murray-chat: [deepseek-chat, gemini-3.8-flash, gemini-2.5-flash-lite]
+    - deepseek-reasoner: [deepseek-chat, gemini-3.8-flash, gemini-2.5-flash-lite]
     - deepseek-chat: [gemini-3.8-flash, gemini-2.5-flash-lite]
-    - openai/deepseek-chat: [gemini-3.8-flash, gemini-2.5-flash-lite]
-    - deepseek-reasoner: [gemini-3.8-flash, gemini-2.5-flash-lite]
     - gemini-3.8-flash: [gemini-2.5-flash-lite]
 
 general_settings:

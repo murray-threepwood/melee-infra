@@ -264,9 +264,11 @@ export const TOOL_DEFS = [
 ];
 
 export const DEFAULT_CHAT_MODEL = "murray-chat";
+export const BEST_AVAILABLE_MODEL = "deepseek-reasoner";
+export const FALLBACK_CHAT_MODEL = "deepseek-chat";
 export const ALLOWED_MODELS = Object.freeze([
-  "deepseek-chat",
   "deepseek-reasoner",
+  "deepseek-chat",
   "gemini-3.8-flash",
   "gemini-2.5-flash-lite",
 ]);
@@ -287,13 +289,16 @@ export function createLlm({
   apiKey = process.env.LITELLM_MASTER_KEY || process.env.DEEPSEEK_API_KEY || "",
   baseUrl = process.env.LITELLM_BASE_URL || "http://litellm:4000",
   model = process.env.DEEPSEEK_MODEL || DEFAULT_CHAT_MODEL,
+  fallbackModel = process.env.DEEPSEEK_FALLBACK_MODEL || FALLBACK_CHAT_MODEL,
   timeoutMs = 45000,
+  onFallback = null,
 } = {}) {
   async function complete({
     messages,
     tools = TOOL_DEFS,
     model: requestModel,
     temperature,
+    chatId = "",
   } = {}) {
     if (!apiKey || /CAMBIAR_POR|REEMPLAZAR|sk-deepseek-api-key-aqui|clave_aleatoria_litellm/i.test(apiKey)) {
       const err = new Error("LITELLM_MASTER_KEY ausente o placeholder");
@@ -302,37 +307,109 @@ export function createLlm({
       throw err;
     }
     const chosen = requestModel || model || DEFAULT_CHAT_MODEL;
-    const payload = {
-      model: chosen,
-      messages,
-      temperature: Number.isFinite(temperature) ? temperature : 0.4,
-    };
-    if (Array.isArray(tools) && tools.length > 0) {
-      payload.tools = tools;
-      payload.tool_choice = "auto";
+
+    async function sendRequest(targetModel) {
+      const payload = {
+        model: targetModel,
+        messages,
+        temperature: Number.isFinite(temperature) ? temperature : 0.4,
+      };
+      if (Array.isArray(tools) && tools.length > 0) {
+        payload.tools = tools;
+        payload.tool_choice = "auto";
+      }
+      const res = await fetchImpl(`${String(baseUrl).replace(/\/+$/, "")}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      const body = await res.json().catch(() => ({}));
+      return { res, body };
     }
-    const res = await fetchImpl(`${String(baseUrl).replace(/\/+$/, "")}/chat/completions`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    const body = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      const err = new Error(body.error?.message || `llm_http_${res.status}`);
-      err.code = "llm_failed";
-      err.status = 502;
-      throw err;
+
+    let result;
+    let fallbackHappened = false;
+    let fallbackInfo = null;
+
+    try {
+      const { res, body } = await sendRequest(chosen);
+      if (!res.ok) {
+        throw new Error(body.error?.message || `llm_http_${res.status}`);
+      }
+
+      // Detección de fallback ejecutado internamente por el router de LiteLLM
+      const returnedModel = String(body.model || "");
+      const isReasonerRequested =
+        chosen === "deepseek-reasoner" ||
+        chosen === "murray-chat" ||
+        chosen === "garfio-worker";
+      const isFallbackReturned =
+        returnedModel.includes("chat") ||
+        returnedModel.includes("gemini") ||
+        returnedModel.includes("flash-lite");
+
+      if (isReasonerRequested && isFallbackReturned && !returnedModel.includes("reasoner")) {
+        fallbackHappened = true;
+        fallbackInfo = {
+          from: chosen,
+          to: returnedModel,
+          reason: "LiteLLM router auto-fallback",
+          chatId,
+        };
+      }
+
+      result = body;
+    } catch (primaryErr) {
+      if (chosen !== fallbackModel) {
+        try {
+          const { res: fbRes, body: fbBody } = await sendRequest(fallbackModel);
+          if (!fbRes.ok) {
+            throw new Error(fbBody.error?.message || `llm_http_${fbRes.status}`);
+          }
+          fallbackHappened = true;
+          fallbackInfo = {
+            from: chosen,
+            to: fallbackModel,
+            reason: primaryErr.message || "Fallo en modelo primario",
+            chatId,
+          };
+          result = fbBody;
+        } catch (fbErr) {
+          const err = new Error(`Fallo en modelo primario y fallback: ${primaryErr.message} | ${fbErr.message}`);
+          err.code = "llm_failed";
+          err.status = 502;
+          throw err;
+        }
+      } else {
+        const err = new Error(primaryErr.message || "llm_failed");
+        err.code = "llm_failed";
+        err.status = 502;
+        throw err;
+      }
     }
-    const choice = body.choices?.[0]?.message || {};
+
+    if (fallbackHappened && fallbackInfo && typeof onFallback === "function") {
+      try {
+        const p = onFallback(fallbackInfo);
+        if (p && typeof p.catch === "function") {
+          p.catch((err) => console.error("[onFallback error]", err?.message || err));
+        }
+      } catch (err) {
+        console.error("[onFallback error]", err?.message || err);
+      }
+    }
+
+    const choice = result.choices?.[0]?.message || {};
     return {
       content: choice.content || "",
       tool_calls: choice.tool_calls || [],
+      fallback: fallbackInfo,
     };
   }
 
-  return { complete, model };
+  return { complete, model, fallbackModel };
 }

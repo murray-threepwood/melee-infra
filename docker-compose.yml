@@ -139,7 +139,8 @@ services:
     environment:
       - LITELLM_BASE_URL=http://litellm:4000
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-}
-      - DEEPSEEK_MODEL=deepseek-chat
+      - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-reasoner}
+      - DEEPSEEK_FALLBACK_MODEL=${DEEPSEEK_FALLBACK_MODEL:-deepseek-chat}
       - MURRAY_AGENT_PORT=8080
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-murray-infra}
       - COMPOSE_FILE=/opt/stack/docker-compose.yml

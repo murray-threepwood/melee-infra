@@ -137,13 +137,110 @@ test("carta LiteLLM: 3.8 + lite, sin 2.5-flash, fallback en cadena", () => {
   assert.doesNotMatch(yaml, /gemini\/gemini-2\.5-flash[^-]/);
   assert.match(
     yaml,
-    /murray-chat: \[gemini-3\.8-flash, gemini-2\.5-flash-lite\]/
+    /murray-chat: \[deepseek-chat, gemini-3\.8-flash, gemini-2\.5-flash-lite\]/
   );
   assert.match(
     yaml,
-    /murray-worker: \[gemini-3\.8-flash, gemini-2\.5-flash-lite\]/
+    /murray-worker: \[deepseek-chat, gemini-3\.8-flash, gemini-2\.5-flash-lite\]/
   );
+  assert.ok(ALLOWED_MODELS.includes("deepseek-reasoner"));
+  assert.ok(ALLOWED_MODELS.includes("deepseek-chat"));
   assert.ok(ALLOWED_MODELS.includes("gemini-3.8-flash"));
   assert.ok(ALLOWED_MODELS.includes("gemini-2.5-flash-lite"));
   assert.ok(!ALLOWED_MODELS.includes("gemini-2.5-flash"));
+});
+
+test("complete() detecta router fallback de LiteLLM y dispara onFallback inmediatamente", async () => {
+  const fallbackEvents = [];
+  const llm = createLlm({
+    apiKey: "sk-test-master-not-a-placeholder",
+    baseUrl: "http://litellm:4000",
+    model: "deepseek-reasoner",
+    onFallback: async (info) => {
+      fallbackEvents.push(info);
+    },
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        model: "deepseek-chat",
+        choices: [{ message: { content: "respuesta de respaldo", tool_calls: [] } }],
+      }),
+    }),
+  });
+
+  const out = await llm.complete({ messages: [{ role: "user", content: "test" }], chatId: "12345" });
+  assert.equal(out.content, "respuesta de respaldo");
+  assert.ok(out.fallback);
+  assert.equal(out.fallback.from, "deepseek-reasoner");
+  assert.equal(out.fallback.to, "deepseek-chat");
+  assert.equal(out.fallback.chatId, "12345");
+  assert.equal(fallbackEvents.length, 1);
+  assert.equal(fallbackEvents[0].to, "deepseek-chat");
+});
+
+test("complete() ante falla HTTP de modelo primario cae a fallbackModel y avisa en seguida", async () => {
+  const fallbackEvents = [];
+  const calls = [];
+  const llm = createLlm({
+    apiKey: "sk-test-master-not-a-placeholder",
+    baseUrl: "http://litellm:4000",
+    model: "deepseek-reasoner",
+    fallbackModel: "deepseek-chat",
+    onFallback: async (info) => {
+      fallbackEvents.push(info);
+    },
+    fetchImpl: async (_url, opts) => {
+      const payload = JSON.parse(opts.body);
+      calls.push(payload.model);
+      if (payload.model === "deepseek-reasoner") {
+        return {
+          ok: false,
+          status: 502,
+          json: async () => ({ error: { message: "upstream timeout en reasoner" } }),
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          model: "deepseek-chat",
+          choices: [{ message: { content: "salvado por deepseek-chat", tool_calls: [] } }],
+        }),
+      };
+    },
+  });
+
+  const out = await llm.complete({ messages: [{ role: "user", content: "test" }] });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[0], "deepseek-reasoner");
+  assert.equal(calls[1], "deepseek-chat");
+  assert.equal(out.content, "salvado por deepseek-chat");
+  assert.ok(out.fallback);
+  assert.equal(out.fallback.from, "deepseek-reasoner");
+  assert.equal(out.fallback.to, "deepseek-chat");
+  assert.match(out.fallback.reason, /upstream timeout en reasoner/);
+  assert.equal(fallbackEvents.length, 1);
+});
+
+test("complete() no dispara onFallback si el primario responde exitosamente sin fallback", async () => {
+  const fallbackEvents = [];
+  const llm = createLlm({
+    apiKey: "sk-test-master-not-a-placeholder",
+    baseUrl: "http://litellm:4000",
+    model: "deepseek-reasoner",
+    onFallback: async (info) => {
+      fallbackEvents.push(info);
+    },
+    fetchImpl: async () => ({
+      ok: true,
+      json: async () => ({
+        model: "deepseek-reasoner",
+        choices: [{ message: { content: "éxito reasoner", tool_calls: [] } }],
+      }),
+    }),
+  });
+
+  const out = await llm.complete({ messages: [{ role: "user", content: "test" }] });
+  assert.equal(out.content, "éxito reasoner");
+  assert.equal(out.fallback, null);
+  assert.equal(fallbackEvents.length, 0);
 });
