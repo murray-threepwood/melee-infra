@@ -141,6 +141,8 @@ services:
       - LITELLM_MASTER_KEY=${LITELLM_MASTER_KEY:-}
       - DEEPSEEK_MODEL=${DEEPSEEK_MODEL:-deepseek-v4-pro}
       - DEEPSEEK_FALLBACK_MODEL=${DEEPSEEK_FALLBACK_MODEL:-deepseek-flash}
+      - EDITOR=vim
+      - VISUAL=vim
       - MURRAY_AGENT_PORT=8080
       - COMPOSE_PROJECT_NAME=${COMPOSE_PROJECT_NAME:-murray-infra}
       - COMPOSE_FILE=/opt/stack/docker-compose.yml

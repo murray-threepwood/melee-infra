@@ -108,9 +108,9 @@ Si tienes la audacia de operar esta maquinaria en tu terminal, sigue estos pasos
 # Copiar el template de variables de entorno
 cp .env.example .env
 
-# Editar .env con tus tokens reales (Telegram, Cloudflare, DeepSeek, Postgres)
+# Editar .env con tus tokens reales (¡con VIM y sus colorcitos, acá somos de VI/vim, nada de nano!)
 # ¡ADVERTENCIA: Si dejas contraseñas por defecto, tu alma sufrirá en el averno!
-nano .env
+vim .env
 ```
 
 ### 2. Invocar a las Legiones de Docker
