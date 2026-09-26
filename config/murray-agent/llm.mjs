@@ -264,9 +264,11 @@ export const TOOL_DEFS = [
 ];
 
 export const DEFAULT_CHAT_MODEL = "murray-chat";
-export const BEST_AVAILABLE_MODEL = "deepseek-reasoner";
-export const FALLBACK_CHAT_MODEL = "deepseek-chat";
+export const BEST_AVAILABLE_MODEL = "deepseek-v4-pro";
+export const FALLBACK_CHAT_MODEL = "deepseek-flash";
 export const ALLOWED_MODELS = Object.freeze([
+  "deepseek-v4-pro",
+  "deepseek-flash",
   "deepseek-reasoner",
   "deepseek-chat",
   "gemini-3.8-flash",
@@ -343,16 +345,23 @@ export function createLlm({
 
       // Detección de fallback ejecutado internamente por el router de LiteLLM
       const returnedModel = String(body.model || "");
-      const isReasonerRequested =
+      const isTopTierRequested =
+        chosen === "deepseek-v4-pro" ||
         chosen === "deepseek-reasoner" ||
         chosen === "murray-chat" ||
         chosen === "garfio-worker";
       const isFallbackReturned =
+        returnedModel.includes("flash") ||
         returnedModel.includes("chat") ||
         returnedModel.includes("gemini") ||
-        returnedModel.includes("flash-lite");
+        returnedModel.includes("lite");
 
-      if (isReasonerRequested && isFallbackReturned && !returnedModel.includes("reasoner")) {
+      if (
+        isTopTierRequested &&
+        isFallbackReturned &&
+        !returnedModel.includes("v4-pro") &&
+        !returnedModel.includes("reasoner")
+      ) {
         fallbackHappened = true;
         fallbackInfo = {
           from: chosen,

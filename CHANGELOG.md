@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.28 — Despliegue de DeepSeek-V4-Pro Flagship y Fallback Inmediato a DeepSeek-Flash
+
+- **Cerebro Flagship DeepSeek-V4-Pro (1M Contexto)**:
+  - Configurado `deepseek-v4-pro` como el modelo primario supremo para `murray-chat`, `garfio-worker`, `murray-worker` y `openai/garfio-worker` en `config/litellm/config.yaml`.
+  - Habilitados 1.048.576 tokens de contexto con razonamiento profundo Pro nativo y soporte de function calling verificado en vivo.
+- **Cadena de Rescate y Fallback Ultrarrápido (`deepseek-flash`)**:
+  - `deepseek-flash` configurado como el primer modelo de fallback ante saturación o indisponibilidad del modelo Pro.
+  - LiteLLM router configurado con fallback descendente: `deepseek-v4-pro` → `deepseek-flash` → `deepseek-chat` → `gemini-3.8-flash` → `gemini-2.5-flash-lite`.
+- **Alertas Inmediatas en Telegram (`terminal: true`)**:
+  - `murray-agent/llm.mjs` detecta automáticamente si el router de LiteLLM degrada la consulta o si ocurre un fallo HTTP en el primario, activando el hook `onFallback`.
+  - Notificación prioritaria por Telegram con diagnóstico del incidente enviada de forma inmediata al CEO.
+
 ## 0.1.27 — Hardening de la Ventana Permisiva (Roadmap 91)
 
 - **Confinamiento de LiteLLM a `agent-net` (P1 & P2)**:
