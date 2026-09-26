@@ -105,9 +105,7 @@ services:
     security_opt:
       - "no-new-privileges:true"
     command: ["--config", "/app/config.yaml", "--port", "4000"]
-    ports:
-      # PERMISSIVE (roadmap/91): el sandbox oh-agent-server vive en bridge y no resuelve `litellm`.
-      - "127.0.0.1:${LITELLM_PORT:-4000}:4000"
+    # Hardening P1: Sin ports hacia el host. LiteLLM vive exclusivamente dentro de agent-net.
     environment:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY}
       - GEMINI_API_KEY=${GEMINI_API_KEY:-}
@@ -157,8 +155,9 @@ services:
       - MURRAY_WORKSPACE_ROOT=/opt/workspace
       - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - MURRAY_HITL_BYPASS=${MURRAY_HITL_BYPASS:-code,clone}
-      - MURRAY_TELEGRAM_QUIET=${MURRAY_TELEGRAM_QUIET:-1}
+      # Hardening P6 & P7: Valores de producción normalizados (HITL activo por default, notify sin silenciar)
+      - MURRAY_HITL_BYPASS=${MURRAY_HITL_BYPASS:-}
+      - MURRAY_TELEGRAM_QUIET=${MURRAY_TELEGRAM_QUIET:-0}
       - GITHUB_TOKEN=${GITHUB_TOKEN:-}
       - GITLAB_TOKEN=${GITLAB_TOKEN:-}
       - MURRAY_GIT_NAME=${MURRAY_GIT_NAME:-}
@@ -205,21 +204,13 @@ services:
       - "no-new-privileges:true"
     environment:
       - SANDBOX_RUNTIME_CONTAINER_IMAGE=ghcr.io/openhands/runtime:latest
-      # PERMISSIVE (roadmap/91): path absoluto. `./workspace` deja el sandbox SIN mounts.
-      - WORKSPACE_MOUNT_PATH=${WORKSPACE_HOST_PATH:-${PWD}/workspace}
-      - SANDBOX_VOLUMES=${WORKSPACE_HOST_PATH:-${PWD}/workspace}:/workspace/project:rw
+      # Hardening P5: Aislamiento de Montajes. Monte únicamente el slug de trabajo activo
+      - WORKSPACE_MOUNT_PATH=${WORKSPACE_HOST_PATH:-${PWD}/workspace}/${WORKSPACE_SLUG:-active}
+      - SANDBOX_VOLUMES=${WORKSPACE_HOST_PATH:-${PWD}/workspace}/${WORKSPACE_SLUG:-active}:/workspace/project:rw
       - LLM_MODEL=openai/garfio-worker
-      # PERMISSIVE (roadmap/91): oh-agent-server no resuelve DNS `litellm`. Loopback vía Desktop.
-      - LLM_BASE_URL=http://host.docker.internal:${LITELLM_PORT:-4000}
+      # Hardening P2: Confinamiento en agent-net hacia el gateway interno litellm
+      - LLM_BASE_URL=http://litellm:4000
       - LLM_API_KEY=${LITELLM_MASTER_KEY:-}
-      - OPENAI_API_KEY=${LITELLM_MASTER_KEY:-}
-      - OPENAI_BASE_URL=http://host.docker.internal:${LITELLM_PORT:-4000}
-      # OpenHands 1.36 solo reenvía LLM_* al sandbox. openai/ exige OPENAI_API_KEY ahí.
-      - OH_AGENT_SERVER_ENV={"OPENAI_API_KEY":"${LITELLM_MASTER_KEY:-}","OPENAI_BASE_URL":"http://host.docker.internal:${LITELLM_PORT:-4000}","LITELLM_PROXY_API_KEY":"${LITELLM_MASTER_KEY:-}"}
-      - SANDBOX_ENV_OPENAI_API_KEY=${LITELLM_MASTER_KEY:-}
-      - SANDBOX_ENV_OPENAI_BASE_URL=http://host.docker.internal:${LITELLM_PORT:-4000}
-      - SANDBOX_ENV_LLM_API_KEY=${LITELLM_MASTER_KEY:-}
-      - SANDBOX_ENV_LLM_BASE_URL=http://host.docker.internal:${LITELLM_PORT:-4000}
       # Unificación de Red Sandboxes (Fase 12 Tarea 2.3)
       - SANDBOX_NETWORK=agent-net
       - SANDBOX_NETWORK_MODE=agent-net

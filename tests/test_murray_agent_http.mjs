@@ -1406,7 +1406,7 @@ test("inspect no bloquea /chat: ACK needs_job antes del LLM", async () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test("inspect auto-heal sin HITL y no recreate postgres", async () => {
+test("inspect exige HITL para heal_openhands y no recreate postgres (P12 hardened)", async () => {
   const seen = [];
   const { engine, worker, notes, root, operatorInbox } = codingStack({
     inspectLlm: {
@@ -1452,8 +1452,13 @@ test("inspect auto-heal sin HITL y no recreate postgres", async () => {
   const spoken = await engine.handleChat({ chat_id: "71", text: "qué pasó" });
   assert.equal(spoken.needs_hitl, false);
   await worker.kick(spoken.job_id);
-  assert.deepEqual(seen, ["heal"]);
-  assert.equal(notes.some((row) => row.terminal && /sandbox 137/.test(row.text)), true);
+  // Hardened: auto-ops de heal no corre sin confirmación HITL
+  assert.deepEqual(seen, []);
+  // Emite notificación terminal con botón de aprobación HITL
+  const terminalNote = notes.find((row) => row.terminal && /sandbox 137/.test(row.text));
+  assert.ok(terminalNote);
+  assert.ok(terminalNote.buttons && terminalNote.buttons.length > 0);
+  assert.match(terminalNote.buttons[0][0].callback_data, /^APPROVE_OPS:/);
   const listed = operatorInbox.list();
   const files = fs.readdirSync(path.join(root, "operator-inbox")).filter((name) => name.endsWith(".md"));
   assert.equal(files.length >= 1 || listed.length >= 0, true);

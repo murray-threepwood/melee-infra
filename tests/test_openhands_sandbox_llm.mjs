@@ -10,32 +10,31 @@ import {
   sandboxLlmBaseUrl,
 } from "../config/murray-agent/openhands.mjs";
 
-test("assertSandboxReachableLlmBaseUrl rechaza DNS de agent-net", () => {
-  assert.throws(
-    () => assertSandboxReachableLlmBaseUrl("http://litellm:4000"),
-    /sandbox_llm_unreachable/
+test("assertSandboxReachableLlmBaseUrl acepta litellm en agent-net y rechaza hosts invalidos", () => {
+  assert.equal(
+    assertSandboxReachableLlmBaseUrl("http://litellm:4000"),
+    "http://litellm:4000"
   );
-  assert.throws(
-    () => assertSandboxReachableLlmBaseUrl("http://litellm:4000/v1"),
-    /sandbox_llm_unreachable/
+  assert.equal(
+    assertSandboxReachableLlmBaseUrl("http://litellm:4000/v1"),
+    "http://litellm:4000/v1"
   );
   assert.equal(
     assertSandboxReachableLlmBaseUrl("http://host.docker.internal:4000"),
     "http://host.docker.internal:4000"
   );
-  assert.equal(
-    assertSandboxReachableLlmBaseUrl("http://host.docker.internal:4000/v1"),
-    "http://host.docker.internal:4000/v1"
+  assert.throws(
+    () => assertSandboxReachableLlmBaseUrl("http://postgres_db:5432"),
+    /sandbox_llm_unreachable/
   );
 });
 
-test("sandboxLlmBaseUrl default es host.docker.internal, no litellm", () => {
+test("sandboxLlmBaseUrl default es litellm en agent-net", () => {
   const url = sandboxLlmBaseUrl({});
-  assert.match(url, /host\.docker\.internal/);
-  assert.doesNotMatch(url, /litellm/);
+  assert.match(url, /litellm/);
 });
 
-test("OpenHands 1.36 rechaza secretos LLM_*; conversationSecrets no los emite", () => {
+test("OpenHands 1.36 rechaza secretos LLM_*; conversationSecrets no propaga master key en cleartext", () => {
   assert.throws(
     () => assertNoReservedSecretNames({ LLM_API_KEY: "sk-test" }),
     /reserved_secret_name/
@@ -44,13 +43,19 @@ test("OpenHands 1.36 rechaza secretos LLM_*; conversationSecrets no los emite", 
     () => assertNoReservedSecretNames({ LLM_BASE_URL: "http://x" }),
     /reserved_secret_name/
   );
-  const secrets = conversationSecrets("sk-test-master-not-a-placeholder");
-  assert.deepEqual(secrets, { OPENAI_API_KEY: "sk-test-master-not-a-placeholder" });
+  // Hardening: string api key (master key) returns undefined
+  assert.equal(conversationSecrets("sk-test-master-not-a-placeholder"), undefined);
   assert.equal(conversationSecrets("  "), undefined);
-  assert.doesNotThrow(() => assertNoReservedSecretNames(secrets));
+  // Custom secrets without LLM_* are preserved
+  const secrets = conversationSecrets({ CUSTOM_SECRET: "sec123" });
+  assert.deepEqual(secrets, { CUSTOM_SECRET: "sec123" });
+  assert.throws(
+    () => conversationSecrets({ LLM_API_KEY: "sk-bad" }),
+    /reserved_secret_name/
+  );
 });
 
-test("startConversation manda secrets OPENAI_API_KEY al sandbox, sin prefijo LLM_", async () => {
+test("startConversation no propaga master key en cleartext en el body", async () => {
   const seen = [];
   const client = createOpenHandsClient({
     baseUrl: "http://openhands:3000",
@@ -71,34 +76,33 @@ test("startConversation manda secrets OPENAI_API_KEY al sandbox, sin prefijo LLM
     llmModel: "deepseek-chat",
   });
   assert.equal(seen[0].body.llm_model, openHandsLlmModel("deepseek-chat"));
-  assert.equal(seen[0].body.secrets.OPENAI_API_KEY, "sk-test-master-not-a-placeholder");
-  assert.equal(seen[0].body.secrets.LLM_API_KEY, undefined);
+  assert.equal(seen[0].body.secrets, undefined);
 });
 
-test("compose: LiteLLM sale a loopback y OpenHands no usa DNS litellm hacia el sandbox", () => {
+test("compose: LiteLLM confinado a agent-net sin ports host, OpenHands usa litellm y montajes aislados", () => {
   const compose = fs.readFileSync(
     new URL("../docker-compose.yml", import.meta.url),
     "utf8"
   );
-  assert.match(compose, /127\.0\.0\.1:\$\{LITELLM_PORT:-4000\}:4000/);
-  assert.match(compose, /LLM_BASE_URL=http:\/\/host\.docker\.internal:\$\{LITELLM_PORT:-4000\}/);
-  assert.match(compose, /OPENAI_API_KEY=\$\{LITELLM_MASTER_KEY/);
-  assert.match(compose, /OH_AGENT_SERVER_ENV=/);
-  assert.match(compose, /OPENAI_API_KEY":"\$\{LITELLM_MASTER_KEY/);
-  assert.match(compose, /SANDBOX_ENV_OPENAI_BASE_URL=http:\/\/host\.docker\.internal:\$\{LITELLM_PORT:-4000\}/);
-  assert.match(compose, /OPENAI_BASE_URL=http:\/\/host\.docker\.internal:\$\{LITELLM_PORT:-4000\}/);
+  // P1: Sin mapeo de puertos hacia el host
+  assert.doesNotMatch(compose, /127\.0\.0\.1:\$\{LITELLM_PORT:-4000\}:4000/);
+  // P2: URL interna litellm en agent-net
+  assert.match(compose, /LLM_BASE_URL=http:\/\/litellm:4000/);
+  // P3, P10, P11: Sin variables superfluas propagando master key
+  assert.doesNotMatch(compose, /OH_AGENT_SERVER_ENV=/);
+  assert.doesNotMatch(compose, /SANDBOX_ENV_OPENAI_BASE_URL=/);
+  // P5: Montaje de workspace aislado por slug
   assert.match(
     compose,
-    /WORKSPACE_MOUNT_PATH=\$\{WORKSPACE_HOST_PATH:-\$\{PWD\}\/workspace\}/
+    /WORKSPACE_MOUNT_PATH=\$\{WORKSPACE_HOST_PATH:-\$\{PWD\}\/workspace\}\/\$\{WORKSPACE_SLUG:-active\}/
   );
   assert.match(
     compose,
-    /SANDBOX_VOLUMES=\$\{WORKSPACE_HOST_PATH:-\$\{PWD\}\/workspace\}:\/workspace\/project:rw/
+    /SANDBOX_VOLUMES=\$\{WORKSPACE_HOST_PATH:-\$\{PWD\}\/workspace\}\/\$\{WORKSPACE_SLUG:-active\}:\/workspace\/project:rw/
   );
-  assert.doesNotMatch(
-    compose,
-    /openhands:[\s\S]*LLM_BASE_URL=http:\/\/litellm:4000/
-  );
+  // P6 & P7: Normalizados
+  assert.match(compose, /MURRAY_HITL_BYPASS=\$\{MURRAY_HITL_BYPASS:-\}/);
+  assert.match(compose, /MURRAY_TELEGRAM_QUIET=\$\{MURRAY_TELEGRAM_QUIET:-0\}/);
 });
 
 test("litellm acepta openai/garfio-worker y openai/deepseek-chat", () => {

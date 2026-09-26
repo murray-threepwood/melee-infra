@@ -130,16 +130,22 @@ test("schema rechaza docker exec; postgres no corre; heal sí si hay finding", a
     sandboxes: [{ name: "oh-agent-server-z" }],
     openhands: { conversation: { sandbox_status: "ERROR" } },
   };
+  // Hardening P12: Por default requireHitl es true, las ops van a plan.hitl y no a plan.run
   const plan = planInspectActions(analysis, snapshot);
-  assert.equal(plan.run.some((row) => row.type === "heal_openhands"), true);
-  assert.equal(plan.run.some((row) => row.service === "postgres_db"), false);
-  assert.equal(plan.run.filter((row) => row.type === "restart" || row.type === "recreate").length, 1);
+  assert.equal(plan.run.some((row) => row.type === "heal_openhands"), false);
+  assert.equal(plan.hitl.some((row) => row.type === "heal_openhands"), true);
+  assert.equal(plan.hitl.some((row) => row.service === "postgres_db"), false);
+  assert.equal(plan.hitl.filter((row) => row.type === "restart" || row.type === "recreate").length, 1);
   assert.equal(
     plan.tasks.some((task) => /postgres/i.test(task.title)),
     true
   );
+
+  // Con requireHitl: false (aprobado o bypass) se colocan en plan.run y se ejecutan
+  const unblockedPlan = planInspectActions(analysis, snapshot, { requireHitl: false });
+  assert.equal(unblockedPlan.run.some((row) => row.type === "heal_openhands"), true);
   const seen = [];
-  const results = await executeInspectPlan(plan, {
+  const results = await executeInspectPlan(unblockedPlan, {
     ops: {
       healOpenHands: async () => {
         seen.push("heal");

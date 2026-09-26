@@ -19,21 +19,21 @@ Síntomas reproducidos:
 | `WORKSPACE_MOUNT_PATH=./workspace` relativo | OpenHands no bind-monta el repo clonado |
 | `Secret name 'LLM_API_KEY' starts with reserved prefix 'LLM_'` | start-task ERROR; poll `start_error`; job `71651762dd784273` |
 
-## Relajos vivos (revertir)
+## Relajos y Estado de Hardening (Reversión Completada)
 
-| ID | Qué se relajó | Archivo | Revertir a |
+| ID | Qué se relajó | Archivo | Estado / Resolución |
 | :--- | :--- | :--- | :--- |
-| P1 | LiteLLM publicado en `127.0.0.1:4000` | `docker-compose.yml` `ports` de `litellm` | Sin `ports`. Solo `agent-net`. |
-| P2 | `LLM_BASE_URL` / `OPENAI_BASE_URL` = `http://host.docker.internal:4000` | `openhands` env | URL interna `http://litellm:4000` **si** el sandbox está en `agent-net`. |
-| P3 | `OPENAI_API_KEY=${LITELLM_MASTER_KEY}` duplicada en OpenHands | `openhands` env | Quitar `OPENAI_*` cuando el SDK reciba `api_key`+`base_url` bien. |
-| P4 | `startConversation` manda `secrets.OPENAI_API_KEY` (master) | `openhands.mjs` | No mandar master key en el body; inyectar por red interna. **Nunca** `LLM_API_KEY`: OpenHands 1.36 `validate_secret_name` rechaza prefijo `LLM_` → start_error. |
-| P5 | `WORKSPACE_MOUNT_PATH` absoluto + `SANDBOX_VOLUMES` RW de todo `./workspace` | `openhands` env | Mount por slug, RO donde se pueda, o red `agent-net` + bind explícito. |
-| P6 | `MURRAY_HITL_BYPASS=code,clone` (default compose) | `murray-agent` env | Default vacío. Clone/código vuelven a teclado Aprobar. **Push/delete/ops no se bypassearon.** |
-| P7 | `MURRAY_TELEGRAM_QUIET=1` (default compose) silencia **progreso**; pausa/tranca/fin sí suenan | `telegram.mjs` `terminal` | Default `0`. El inbound de n8n (`/chat` → Responder Murray) sigue vivo. |
-| P8 | `MAX_ITERATIONS=80` | `openhands` env | Volver a 30 si el presupuesto de tokens duele. |
-| P10 | `OH_AGENT_SERVER_ENV` inyecta `OPENAI_API_KEY` / `LITELLM_PROXY_API_KEY` en el sandbox | `openhands` env | OpenHands 1.36 solo auto-forward `LLM_*`. Sin esto el SDK pide `OPENAI_API_KEY` y muere. |
-| P11 | Relajo de nombres de secreto: `OPENAI_API_KEY` en body + env del sandbox | `openhands.mjs` + compose | El SDK `openai/` ignora `LLM_API_KEY`. `secrets.LLM_*` está **vedado** (reserved prefix). Hardening: meter sandbox en `agent-net` y dejar de pasar la master por `secrets`. |
-| P12 | Inspect auto-ops **sin HITL**: `retry_stuck`, `heal_openhands`, `restart`/`recreate` (allowlist, **nunca** `postgres_db`) cuando el JSON de inspect trae finding | `inspect.mjs` / `coding.mjs` | Volver a teclado HITL para heal/restart/recreate. El chat `propose_ops` **sigue** pidiendo Aprobar. Push a main y force siguen vedados. |
+| P1 | LiteLLM publicado en `127.0.0.1:4000` | `docker-compose.yml` `ports` de `litellm` | **Revertido**. Sin `ports`. Confinado exclusivamente a `agent-net`. |
+| P2 | `LLM_BASE_URL` = `http://host.docker.internal:4000` | `openhands` env | **Revertido**. Apunta a `http://litellm:4000` resolviendo en `agent-net`. |
+| P3 | `OPENAI_API_KEY` duplicada en OpenHands | `openhands` env | **Revertido**. Variables superfluas eliminadas del contenedor. |
+| P4 | `startConversation` mandaba master key | `openhands.mjs` | **Revertido**. No se propaga master key en body de startConversation. |
+| P5 | `WORKSPACE_MOUNT_PATH` absoluto de todo `./workspace` | `openhands` env | **Revertido**. Montaje restringido exclusivamente al slug activo (`${WORKSPACE_SLUG:-active}`). |
+| P6 | `MURRAY_HITL_BYPASS=code,clone` | `murray-agent` env | **Revertido**. Default normalizado a vacío (HITL estricto en clone, code, delete, push, ops). |
+| P7 | `MURRAY_TELEGRAM_QUIET=1` | `docker-compose.yml` | **Revertido**. Default normalizado a `0` para visibilidad de progreso en producción. |
+| P8 | `MAX_ITERATIONS=80` | `openhands` env | **Mantenido** en 80 para misiones complejas de Garfio. |
+| P10 | `OH_AGENT_SERVER_ENV` en sandbox | `openhands` env | **Revertido**. Eliminado; sandbox resuelve en `agent-net`. |
+| P11 | Nombres de secreto y env sandbox | `openhands.mjs` + compose | **Revertido**. Eliminados del env y saneados con `assertNoReservedSecretNames`. |
+| P12 | Inspect auto-ops sin HITL | `inspect.mjs` / `coding.mjs` | **Revertido**. Exige confirmación HITL (`APPROVE_OPS`) para heal/restart/recreate. |
 
 ## Qué NO se tocó (sigue en backlog 90)
 

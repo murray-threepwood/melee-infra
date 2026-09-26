@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.1.27 — Hardening de la Ventana Permisiva (Roadmap 91)
+
+- **Confinamiento de LiteLLM a `agent-net` (P1 & P2)**:
+  - Eliminado el mapeo de puertos de LiteLLM hacia el host (`127.0.0.1:4000`) en `docker-compose.yml`. LiteLLM vive exclusivamente dentro de `agent-net`.
+  - OpenHands apunta `LLM_BASE_URL` a `http://litellm:4000`, resolviendo internamente vía `agent-net`.
+- **Saneamiento de Secretos y Master Key (P3, P4, P10, P11)**:
+  - La master key de LiteLLM ya no se propaga en texto claro a través del body de `startConversation` en `openhands.mjs`.
+  - Eliminadas las variables de entorno superfluas en el servicio `openhands` (`OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OH_AGENT_SERVER_ENV`, `SANDBOX_ENV_*`).
+  - Validación con `assertNoReservedSecretNames` respetando la regla `validate_secret_name` de OpenHands 1.36 (rechazo de prefijo `LLM_*`).
+- **Aislamiento de Montajes de Workspace (P5)**:
+  - `WORKSPACE_MOUNT_PATH` y `SANDBOX_VOLUMES` en `docker-compose.yml` restringen el bind mount al slug de trabajo activo (`${WORKSPACE_SLUG:-active}`) en lugar de montar `./workspace` completo.
+- **Normalización de Políticas HITL y Silenciamiento (P6 & P7)**:
+  - `MURRAY_HITL_BYPASS` normalizado a default vacío (HITL estricto en clone, code, delete, push y ops).
+  - `MURRAY_TELEGRAM_QUIET` normalizado a `0` para garantizar visibilidad de progreso en producción.
+- **Auditoría de Auto-Ops en Inspect (P12)**:
+  - `inspect.mjs` ya no auto-ejecuta `heal_openhands`, `restart` o `recreate` sin supervisión humana.
+  - Las acciones operacionales generan botones inline de aprobación HITL (`APPROVE_OPS:<hex>`) en la notificación de Telegram.
+
 ## 0.1.26 — Fase 12 (Tarea 1.1): Sanitización Universal Telegram HTML y Resiliencia HTTP 400
 
 - **Sanitización HTML y Exportación Centralizada (`telegram.mjs`)**:

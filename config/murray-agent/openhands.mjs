@@ -22,7 +22,6 @@ function deny(code, message, status = 502) {
 }
 
 const SANDBOX_UNREACHABLE_LLM_HOSTS = new Set([
-  "litellm",
   "openhands",
   "murray-agent",
   "n8n",
@@ -40,8 +39,7 @@ export function openHandsLlmModel(llmModel) {
 }
 
 export function sandboxLlmBaseUrl({
-  baseUrl = process.env.OPENHANDS_SANDBOX_LLM_BASE_URL ||
-    "http://host.docker.internal:4000",
+  baseUrl = process.env.OPENHANDS_SANDBOX_LLM_BASE_URL || "http://litellm:4000",
 } = {}) {
   return assertSandboxReachableLlmBaseUrl(baseUrl);
 }
@@ -58,7 +56,7 @@ export function assertSandboxReachableLlmBaseUrl(url) {
   }
   if (SANDBOX_UNREACHABLE_LLM_HOSTS.has(parsed.hostname)) {
     const err = new Error(
-      `sandbox_llm_unreachable: ${parsed.hostname} no resuelve en oh-agent-server (bridge). Usá host.docker.internal.`
+      `sandbox_llm_unreachable: ${parsed.hostname} no resuelve en oh-agent-server (bridge). Usá litellm en agent-net.`
     );
     err.code = "sandbox_llm_unreachable";
     throw err;
@@ -68,12 +66,27 @@ export function assertSandboxReachableLlmBaseUrl(url) {
 
 const RESERVED_SECRET_PREFIXES = ["LLM_"];
 
-export function conversationSecrets(llmApiKey) {
-  const key = String(llmApiKey || "").trim();
-  if (!key) {
+export function conversationSecrets(secrets) {
+  if (!secrets) {
     return undefined;
   }
-  return assertNoReservedSecretNames({ OPENAI_API_KEY: key });
+  // Hardening P4: no propagar master key en texto claro a través de secrets
+  if (typeof secrets === "string") {
+    return undefined;
+  }
+  if (typeof secrets === "object") {
+    const clean = {};
+    for (const [k, v] of Object.entries(secrets)) {
+      if (v !== undefined && v !== null && String(v).trim()) {
+        clean[k] = String(v).trim();
+      }
+    }
+    if (!Object.keys(clean).length) {
+      return undefined;
+    }
+    return assertNoReservedSecretNames(clean);
+  }
+  return undefined;
 }
 
 export function assertNoReservedSecretNames(secrets) {
@@ -523,7 +536,7 @@ export function createOpenHandsClient({
     return { ok: res.ok, status: res.status, body: text.slice(0, 80) };
   }
 
-  async function startConversation({ title, text, llmModel }) {
+  async function startConversation({ title, text, llmModel, secrets } = {}) {
     const mission = String(text || "");
     const body = {
       title: String(title || "garfio-code").slice(0, 80),
@@ -537,9 +550,9 @@ export function createOpenHandsClient({
     if (prefixed) {
       body.llm_model = prefixed;
     }
-    const secrets = conversationSecrets(llmApiKey);
-    if (secrets) {
-      body.secrets = secrets;
+    const sec = conversationSecrets(secrets);
+    if (sec) {
+      body.secrets = sec;
     }
     return request("POST", "/api/v1/app-conversations", { body });
   }
