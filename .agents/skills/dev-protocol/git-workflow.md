@@ -20,6 +20,7 @@ Commit Message: <type>(<scope>): <descripción técnica precisa sazonada con des
 - `fix(postgres): aniquilar fuga en el pool de conexiones porque estos mortales ineptos olvidaron cerrar cursores transaccionales`
 - `refactor(n8n): purgar workflows espagueti y levantar barricada vudú con validación estricta de ChatID`
 
+Do NOT add any `Co-authored-by` trailer or AI attribution (e.g. Cursor, Copilot, or any agent). All commits belong exclusively to the human author.
 
 ---
 
@@ -56,7 +57,7 @@ The agent **owns the full git lifecycle and executes it automatically** — bran
 Default sequence once the user approves:
 1. `git checkout -b <type>/<short-name>` — if not already on a dedicated task branch.
 2. Stage **only files relevant to the task**. Leave unrelated untracked/modified files alone; if scope is unclear, ask (see §3.3).
-3. `git commit` using the metadata format from §1, ending with the `Co-Authored-By` trailer.
+3. `git commit` using the metadata format from §1 (never include Co-authored-by trailers or AI attribution).
 4. `git push -u origin <branch>`.
 5. `git checkout <base>` → `git merge --no-ff <branch>` → `git push origin <base>`. (`<base>` is usually `main`.)
 6. *(Optional, ask first)* delete the merged branch locally and on the remote.
@@ -80,5 +81,5 @@ These are **not** part of the normal flow and risk irreversible data loss. Never
 - `git checkout .` / `git restore .` (reverting the entire working directory).
 - Any history rewrite on an already-pushed branch (`rebase`, `commit --amend` after push, force-push).
 
-### 3.5. Claude Code Integration
-Optionally register a `PreToolUse` matcher hook (e.g., `.claude/hooks/block-dangerous-git.sh`) that intercepts **only the §3.4 destructive commands**. `git push` and `git merge` must **not** be blocked — they are governed by the approval gate (§3.1), not by a hook.
+### 3.5. Automated Tooling Integration
+Optionally register a `PreToolUse` matcher hook that intercepts **only the §3.4 destructive commands**. `git push` and `git merge` must **not** be blocked — they are governed by the approval gate (§3.1), not by a hook.

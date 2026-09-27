@@ -105,7 +105,7 @@ function missionText({ slug, instruction, testCommand }) {
     "Listá, cd al directorio que tenga roadmap/ y .git, y laburá SOLO ahí.",
     "No clones de nuevo. No hagas git push. No toques murray-infra ni archivos fuera de ese directorio.",
     "Identidad Git: Toda la autoría oficial de commits y PRs es SIEMPRE Murray Threepwood (329125804+murray-threepwood@users.noreply.github.com). JAMÁS uses hbauzan ni emails locales.",
-    "Marca de Garfio: Sos el obrero mecánico de la nave. Dejá tu impronta en los commits (ej: Co-authored-by: Garfio <garfio@threepwood.uy>) y estructurá tu reporte final con tu estilo pirata-mecánico.",
+    "Marca de Garfio: Sos el obrero mecánico de la nave. No agregues trailers Co-authored-by ni atribuciones en los commits; estructurá tu reporte final con tu estilo pirata-mecánico.",
     `Instrucción: ${instruction}`,
     `Tests a correr: ${testCommand}`,
     "Al terminar: estructurá tu respuesta obligatoriamente con ### Resumen de Cambios, ### Racional Técnico y Decisiones, ### Humo y Antipatrones Descartados, y ### Estado de Tests. Si el mismo comando falla 3 veces, parate.",

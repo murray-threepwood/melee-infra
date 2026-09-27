@@ -70,7 +70,6 @@ Mantené `PROGRESS.md` en la raíz. Las fases 1–6 quedan tildadas (históricas
 # Estado de Avance del Proyecto
 
 Última actualización: YYYY-MM-DD HH:MM (UTC)
-Agente ejecutor: [Cursor | Claude Code | Gemini | OpenHands]
 
 ## Fases históricas (no re-ejecutar)
 - [x] Fases 1–6: bootstrap, n8n, MCP, OpenHands, E2E, coding sessions

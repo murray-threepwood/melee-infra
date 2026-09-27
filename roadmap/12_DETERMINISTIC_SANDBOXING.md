@@ -29,7 +29,7 @@ Corré verificación y dejá la suite en verde (DoD) antes de dar por concluida 
 ## 2. Decisiones Cerradas
 
 1. **Gestión de Esquemas en `murray-agent`**: Se inicializa un `package.json` ligero en `config/murray-agent` con **solo `zod`** como dependencia de producción (cero dependencias anidadas de terceros). Se utiliza `z.discriminatedUnion` para hacer que los Ghost Keyboards sean sintácticamente imposibles (`needsHitl: true` exige obligatoriamente `hitlPayload`).
-2. **Alcance y Delimitación de Repositorios**: La integración Git (`GIT_ASKPASS`, worktrees, commits con trailers `Co-authored-by`, push y PRs) opera **únicamente sobre repositorios de trabajo clonados bajo `./workspace/<slug>`**. `murray-infra` permanece vedado e inmutable para el bot.
+2. **Alcance y Delimitación de Repositorios**: La integración Git (`GIT_ASKPASS`, worktrees, commits, push y PRs) opera **únicamente sobre repositorios de trabajo clonados bajo `./workspace/<slug>`**. `murray-infra` permanece vedado e inmutable para el bot.
 3. **Ejecución Local + Sensor de Recursos (E2B Breaker)**:
    - Ejecución 100% en Docker Desktop local en macOS ARM64.
    - Si un sandbox colapsa por `exit code 137` (OOM), si la memoria total supera los 4.2 GB o si una tarea excede 20 min continuos:
