@@ -1,7 +1,6 @@
 # Estado de Avance del Proyecto
 
 Última actualización: 2026-09-18 22:10 (UTC-3)
-Agente ejecutor: Cursor
 
 ## Fases históricas (no re-ejecutar)
 
